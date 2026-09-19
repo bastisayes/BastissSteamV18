@@ -115,6 +115,34 @@ function Get-MachineId {
     catch { try { return (Get-CimInstance Win32_BIOS).SerialNumber.Trim() } catch {} }
     return "UNKNOWN"
 }
+# --- Vigencia de codigos (server-authoritative) ---------------------------
+function Get-CodeExpiry($info) {
+    try {
+        if ([int]$info.duration -le 0) { return $null }   # Permanente
+        if (-not ($info.PSObject.Properties.Name -contains 'activated_at')) { return $null }
+        $aa = $info.activated_at
+        if (-not $aa) { return $null }
+        return ([datetime]::Parse([string]$aa).ToUniversalTime()).AddSeconds([int]$info.duration)
+    } catch { return $null }
+}
+function Get-CodeExpired($info) {
+    try {
+        $exp = Get-CodeExpiry $info
+        if (-not $exp) { return $false }
+        return ([DateTime]::UtcNow -gt $exp)
+    } catch { return $false }
+}
+function Ensure-CodeActivation($info) {
+    try {
+        $dur = 0; try { $dur = [int]$info.duration } catch { $dur = 0 }
+        if (-not ($info.PSObject.Properties.Name -contains 'activated_at')) { $info | Add-Member NoteProperty activated_at $null -Force }
+        $mids = @(); try { $mids = @($info.machine_ids) } catch {}
+        # codigo viejo ya canjeado sin vigencia registrada -> contar como vencido
+        if ($mids.Count -gt 0 -and -not $info.activated_at) {
+            $info.activated_at = [DateTime]::UtcNow.AddSeconds(-$dur).ToString('o')
+        }
+    } catch {}
+}
 $pageHtml = @'
 <!DOCTYPE html>
 <html lang="es">
@@ -553,7 +581,7 @@ while ($true) {
                     }
                     $cat=""; try { $cat=([string]$bodyData.category).ToLower().Trim() } catch { $cat="" }; if ($cat -ne "cliente" -and $cat -ne "cotidiano") { $cat="cotidiano" }
                     $nm=""; try { $nm=([string]$bodyData.name).Trim() } catch { $nm="" }
-                    $d.codes | Add-Member NoteProperty $code @{links=@($bodyData.links);max_uses=[int]$bodyData.max_uses;duration=[int]$bodyData.duration;used_count=0;redeemed_by=@();pinned=$false;per_ip=[int]$bodyData.per_ip;mode=$newMode;category=$cat;name=$nm;machine_ids=@();tokens=@()}
+                    $d.codes | Add-Member NoteProperty $code @{links=@($bodyData.links);max_uses=[int]$bodyData.max_uses;duration=[int]$bodyData.duration;used_count=0;redeemed_by=@();pinned=$false;per_ip=[int]$bodyData.per_ip;mode=$newMode;category=$cat;name=$nm;machine_ids=@();tokens=@();activated_at=$null;created_at=[DateTime]::UtcNow.ToString('o')}
                     Save-Db $d
                     $respBody = @{ok=$true;code=$code} | ConvertTo-Json
                 }
@@ -582,7 +610,10 @@ while ($true) {
                         if (-not $mode) { $mode = 'normal' }
                     }
                     $tokenOk = ($boundToken -and (Test-BsaToken $boundToken $code $cid))
-                    if ($alreadyBound) {
+                    Ensure-CodeActivation $info
+                    if (Get-CodeExpired $info) {
+                        $respBody = @{ok=$false;err="Codigo expirado (la vigencia ya termino)"} | ConvertTo-Json
+                    } elseif ($alreadyBound) {
                         $respBody = @{ok=$false;err="Codigo usado"} | ConvertTo-Json
                     } elseif (($mode -eq 'ar') -and ($mids.Count -gt 0)) {
                         $respBody = @{ok=$false;err="Codigo ya usado"} | ConvertTo-Json
@@ -597,6 +628,7 @@ while ($true) {
                         $respBody = @{ok=$false;err="Limite por IP alcanzado ($usedByIp/$perIp)"} | ConvertTo-Json
                     } else {
                         if (-not $alreadyBound) {
+                            if (-not $info.activated_at) { $info.activated_at = [DateTime]::UtcNow.ToString('o') }
                             $info.machine_ids = @($mids + $cid)
                             $info.used_count = @($info.machine_ids).Count
                             if ($cid -and -not ($info.redeemed_by -contains $cid)) { $info.redeemed_by += $cid }
@@ -621,7 +653,10 @@ while ($true) {
                             if ($mode -eq 'ar') { try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] AR-USADO Codigo=$code PC=$cid" -Encoding UTF8 } catch {} }
                         }
                         Save-Db $d
-                        $respBody = @{ok=$true;links=@($info.links);duration=[int]$info.duration;mode=$mode;token=$tok;machine_bound=$true;machines=@($info.machine_ids).Count} | ConvertTo-Json
+                        $respObj = @{ok=$true;links=@($info.links);duration=[int]$info.duration;mode=$mode;token=$tok;machine_bound=$true;machines=@($info.machine_ids).Count}
+                        $expOut = Get-CodeExpiry $info
+                        if ($expOut) { $respObj.expires_at = $expOut.ToString('o') }
+                        $respBody = $respObj | ConvertTo-Json
                         }
                     }
                 }
@@ -637,8 +672,16 @@ while ($true) {
                 } elseif (-not (Test-BsaToken $tok $tcode $cid)) {
                     $respBody = @{ok=$false;err="Token invalido o de otra maquina"} | ConvertTo-Json
                 } else {
+                    Ensure-CodeActivation $d.codes.$tcode
+                    if (Get-CodeExpired $d.codes.$tcode) {
+                        $respBody = @{ok=$false;err="Codigo expirado (la vigencia ya termino)"} | ConvertTo-Json
+                    } else {
                     try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TOKEN-LINKS Codigo=$tcode PC=$cid" -Encoding UTF8 } catch {}
-                    $respBody = @{ok=$true;links=@($d.codes.$tcode.links);duration=[int]$d.codes.$tcode.duration;code=$tcode;machine_bound=$true} | ConvertTo-Json
+                    $respObj = @{ok=$true;links=@($d.codes.$tcode.links);duration=[int]$d.codes.$tcode.duration;code=$tcode;machine_bound=$true}
+                    $expOut = Get-CodeExpiry $d.codes.$tcode
+                    if ($expOut) { $respObj.expires_at = $expOut.ToString('o') }
+                    $respBody = $respObj | ConvertTo-Json
+                    }
                 }
             } elseif ($path -eq "/api/token-info" -and $bodyData) {
                 $d = Load-Db
@@ -651,7 +694,15 @@ while ($true) {
                 elseif (-not (Test-BsaToken $tok $tcode $cid)) { $respBody = @{ok=$false;err="Token invalido o de otra maquina"} | ConvertTo-Json }
                 else {
                     $ti = $d.codes.$tcode
-                    $respBody = @{ok=$true;code=$tcode;duration=[int]$ti.duration;links=@($ti.links).Count;machines=@($ti.machine_ids).Count;name=[string]$ti.name} | ConvertTo-Json
+                    Ensure-CodeActivation $ti
+                    if (Get-CodeExpired $ti) {
+                        $respBody = @{ok=$false;err="Codigo expirado (la vigencia ya termino)"} | ConvertTo-Json
+                    } else {
+                    $respObj = @{ok=$true;code=$tcode;duration=[int]$ti.duration;links=@($ti.links).Count;machines=@($ti.machine_ids).Count;name=[string]$ti.name}
+                    $expOut = Get-CodeExpiry $ti
+                    if ($expOut) { $respObj.expires_at = $expOut.ToString('o') }
+                    $respBody = $respObj | ConvertTo-Json
+                    }
                 }
             } elseif ($path -eq "/api/delete-code" -and $bodyData) {
                 $d = Load-Db
@@ -685,10 +736,13 @@ while ($true) {
             } elseif ($path -eq "/api/renew-code" -and $bodyData) {
                 $d = Load-Db
                 $code = $bodyData.code.ToUpper().Trim()
-                if ($d.codes.$code) {
+if ($d.codes.$code) {
                     $d.codes.$code.used_count = 0
                     $d.codes.$code.redeemed_by = @()
+                    try { $d.codes.$code.machine_ids = @() } catch {}
+                    try { $d.codes.$code.tokens = @() } catch {}
                     try { $d.codes.$code | Add-Member NoteProperty redeemed_ips @{} -Force } catch {}
+                    try { $d.codes.$code | Add-Member NoteProperty activated_at $null -Force } catch {}
                     try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] RESET Codigo=$code" -Encoding UTF8 } catch {}
                     Save-Db $d
                     $respBody = @{ok=$true} | ConvertTo-Json

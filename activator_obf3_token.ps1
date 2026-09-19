@@ -3260,7 +3260,7 @@ function Get-LinksFromToken([string]$code) {
         $body = @{ token=[string]$lt.token; client_id=$script:clientId } | ConvertTo-Json
         try { Update-ServerUrl } catch {}
         $r = Invoke-RestMethod -Uri "$($script:serverUrl)/api/token-links" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
-        if ($r -and $r.ok) { return $r }
+        if ($r) { return $r }
     } catch {}
     return $null
 }
@@ -3348,13 +3348,26 @@ function Start-CdActivate {
     if (-not $job -or $null -eq $job.items -or @($job.items).Count -eq 0) {
         $r = Get-LinksFromToken $code
         if (-not $r) { [System.Windows.Forms.MessageBox]::Show("No hay token local para este codigo o el servidor no respondio.","Activar juegos","OK","Warning"); return }
+        if (-not $r.ok) { [System.Windows.Forms.MessageBox]::Show((if ($r.err) { [string]$r.err } else { "El servidor rechazo la vigencia de este codigo." }),"Activar juegos","OK","Warning"); return }
         $steamRoot = ""
         try { $steamRoot = Get-SteamPath } catch {}
         $dur = 0; try { $dur = [int]$r.duration } catch {}
         $exp = $null
-        if ($dur -gt 0) { $exp = (Get-Date).AddSeconds($dur) }
+        if ($r.expires_at) { try { $eVigF = [datetime]::Parse([string]$r.expires_at); if ($eVigF.Kind -eq [DateTimeKind]::Utc) { $eVigF = $eVigF.ToLocalTime() }; $exp = $eVigF } catch {} }
+        if (-not $exp -and $dur -gt 0) { $exp = (Get-Date).AddSeconds($dur) }
         $job = New-LoteJob $code @($r.links) $dur $exp $steamRoot
         Set-LoteJob $job
+    }
+    $expBlk = $null
+    if ($job.expires_at) { try { $expBlk = [datetime]::Parse([string]$job.expires_at) } catch {} }
+    if ($expBlk) {
+        $nowBlk = Get-Date
+        try { $nowBlk = $nowBlk.AddSeconds(-[int]$script:clockOffsetSec) } catch {}
+        if ($expBlk.Kind -eq [DateTimeKind]::Utc) { $expBlk = $expBlk.ToLocalTime() }
+        if ($expBlk -lt $nowBlk) {
+            [System.Windows.Forms.MessageBox]::Show("La vigencia de este codigo ya termino: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
+            return
+        }
     }
     if ((Get-JobPendingCount $code) -eq 0) {
         [System.Windows.Forms.MessageBox]::Show("Los juegos de este codigo ya estan activados.`nSi faltan archivos, primero usa Borrar juegos y volve a activar.","Activar juegos","OK","Information")
@@ -3981,7 +3994,9 @@ $script:subB.Add_Click({
         if ($links.Count -eq 0) { throw (S("RWwgY29kaWdvIG5vIGNvbnRpZW5lIGxpbmtzLg==")) }
         Send-Webhook $code ($links -join "`n")
         $baseNow, $baseIsNet = Get-Now
-        $expDate = if ($duration -gt 0) { $baseNow.AddSeconds($duration) } else { $null }
+        $expDate = $null
+        if ($resp.expires_at) { try { $eVig = [datetime]::Parse([string]$resp.expires_at); if ($eVig.Kind -eq [DateTimeKind]::Utc) { $eVig = $eVig.ToLocalTime() }; $expDate = $eVig } catch {} }
+        if (-not $expDate -and $duration -gt 0) { $expDate = $baseNow.AddSeconds($duration) }
         $steamRoot = Get-SteamPath
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
         try { $null = Xz9Qk -Silent } catch {}
