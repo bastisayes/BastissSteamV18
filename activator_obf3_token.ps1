@@ -1966,6 +1966,11 @@ function Rm9xExp {
             St7Xb $remaining2
             $remaining = $remaining2
         }
+        $expCodes = @($expired | Where-Object { try { [int]$_.duration -gt 0 } catch { $false } } | ForEach-Object { $_.redeem_code } | Where-Object { $_ } | Select-Object -Unique)
+        $stillCodes = @($remaining | Where-Object { $_.redeem_code } | ForEach-Object { $_.redeem_code } | Where-Object { $_ } | Select-Object -Unique)
+        foreach ($ec in $expCodes) {
+            if ($stillCodes -notcontains $ec) { Clear-CdExpiredData $ec }
+        }
     }
     return $remaining
 }
@@ -3333,6 +3338,19 @@ function Toggle-CdPause {
     try { Update-CdPanelText } catch {}
 }
 
+function Clear-CdExpiredData([string]$code) {
+    if (-not $code) { return }
+    try {
+        $lt = Get-LocalToken
+        if ($lt -and [string]$lt.code -eq [string]$code) { Set-LocalToken '' $code }
+    } catch {}
+    try {
+        $q = @(Get-LoteQueue)
+        $left = @($q | Where-Object { [string]$_.code -ne [string]$code })
+        if ($left.Count -ne $q.Count) { Save-LoteQueue $left }
+    } catch {}
+}
+
 function Start-CdActivate {
     $code = [string]$script:cdCode
     if ($script:cdRunning) {
@@ -3360,13 +3378,23 @@ function Start-CdActivate {
     }
     $expBlk = $null
     if ($job.expires_at) { try { $expBlk = [datetime]::Parse([string]$job.expires_at) } catch {} }
+    $jobDur = 0
+    try { $jobDur = [int]$job.duration } catch {}
     if ($expBlk) {
         $nowBlk = Get-Date
         try { $nowBlk = $nowBlk.AddSeconds(-[int]$script:clockOffsetSec) } catch {}
         if ($expBlk.Kind -eq [DateTimeKind]::Utc) { $expBlk = $expBlk.ToLocalTime() }
         if ($expBlk -lt $nowBlk) {
+            if ($jobDur -gt 0) { Clear-CdExpiredData $code }
             [System.Windows.Forms.MessageBox]::Show("La vigencia de este codigo ya termino: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
             return
+        }
+        if ($jobDur -gt 0) {
+            $leftSpan = New-TimeSpan -Start $nowBlk -End $expBlk
+            if ($leftSpan.TotalHours -le 1) {
+                [System.Windows.Forms.MessageBox]::Show("Queda menos de 1 hora de vigencia para este codigo: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
+                return
+            }
         }
     }
     if ((Get-JobPendingCount $code) -eq 0) {

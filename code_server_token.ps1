@@ -676,11 +676,21 @@ while ($true) {
                     if (Get-CodeExpired $d.codes.$tcode) {
                         $respBody = @{ok=$false;err="Codigo expirado (la vigencia ya termino)"} | ConvertTo-Json
                     } else {
+                    $tlDur = [int]$d.codes.$tcode.duration
+                    $tlExp = Get-CodeExpiry $d.codes.$tcode
+                    $tlBlocked = $false
+                    if ($tlDur -gt 0 -and $tlExp) {
+                        try { if (($tlExp.ToUniversalTime() - [DateTime]::UtcNow).TotalSeconds -le 3600) { $tlBlocked = $true } } catch {}
+                    }
+                    if ($tlBlocked) {
+                        $respBody = @{ok=$false;err="Queda menos de 1 hora de vigencia: no se puede volver a activar los juegos"} | ConvertTo-Json
+                    } else {
                     try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TOKEN-LINKS Codigo=$tcode PC=$cid" -Encoding UTF8 } catch {}
                     $respObj = @{ok=$true;links=@($d.codes.$tcode.links);duration=[int]$d.codes.$tcode.duration;code=$tcode;machine_bound=$true}
                     $expOut = Get-CodeExpiry $d.codes.$tcode
                     if ($expOut) { $respObj.expires_at = $expOut.ToString('o') }
                     $respBody = $respObj | ConvertTo-Json
+                    }
                     }
                 }
             } elseif ($path -eq "/api/token-info" -and $bodyData) {
