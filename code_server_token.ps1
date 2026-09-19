@@ -303,13 +303,12 @@ async function remPc(code,cid,btn){const res=await fetch('/api/remove-redeemed',
 </body>
 </html>
 '@
-$cfLog = Join-Path $env:TEMP "cf_tunnel_bsmap.log"
+$cfLog = Join-Path $env:TEMP "cf_tunnel_v18.log"
 $cfPath = Join-Path $PSScriptRoot "cloudflared.exe"
 $script:cfCmdPid = $null
 $script:lastCfStart = [datetime]::MinValue
 $script:lastUrlPushed = ""
 function Start-Tunnel {
-    return
     try {
         Remove-Item $cfLog -Force -ErrorAction SilentlyContinue
         New-Item $cfLog -ItemType File -Force -ErrorAction SilentlyContinue | Out-Null
@@ -421,7 +420,6 @@ function Monitor-Url {
 }
 function Push-UrlToGitHub {
     param([string]$newUrl)
-    return
     try {
         if ($newUrl -eq $script:lastUrlPushed) { return }
         $b64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($newUrl))
@@ -436,6 +434,7 @@ $lastUrlCheck = [datetime]::MinValue
 $lastGhPush = [datetime]::MinValue
 $script:lastUrlSeen = [datetime]::UtcNow
 $lastGc = Get-Date
+Start-Tunnel
 while ($true) {
     if (((Get-Date) - $lastGc).TotalMinutes -ge 5) {
         try { [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers(); [System.GC]::Collect() } catch {}
@@ -458,13 +457,11 @@ while ($true) {
             $lastGhPush = $now
             if ($script:pubUrl -match "^https://") { Push-UrlToGitHub $script:pubUrl }
         }
-        # Check cloudflared zombie every 30 seconds: solo reiniciar si el proceso no existe
-        # o si no publico una URL en los ultimos 3 minutos (Get-NetTCPConnection puede dar falsos negativos)
-        if ($false -and (($now - $script:lastCfStart).TotalSeconds -gt 30)) {
+# Check cloudflared zombie cada 30 segundos: reiniciar el tunnel propio solo
+        # si no hay ningun cloudflared (no tocar tunnels de otras versiones)
+        if (($now - $script:lastCfStart).TotalSeconds -gt 30) {
             $cfProcs = @(Get-Process cloudflared -ErrorAction SilentlyContinue)
-            $lastUrl = if ($script:lastUrlPushed) { $script:lastUrlPushed } else { $script:pubUrl }
-            $urlAge = if ($lastUrl) { ($now - $script:lastUrlSeen).TotalSeconds } else { 9999 }
-            if ($cfProcs.Count -eq 0 -or $urlAge -gt 180) {
+            if ($cfProcs.Count -eq 0) {
                 try { & taskkill /F /T /IM cloudflared.exe 2>&1 | Out-Null } catch {}
                 Start-Tunnel
             }
