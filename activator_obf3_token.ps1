@@ -2481,11 +2481,26 @@ function Am3Fs {
 }
 
 
+$script:ParcheDllHash=@{
+    'dwmapi.dll'='5b9e0e2067a4a948d68d0a35dc6910ac24574c32f22e9db938db789febc81a63';
+    'OpenSteamTool.dll'='b2ed24e0b4e2d0dae4caa8817ed4c0c34af8fdf056f356fd697ae1356ea22581';
+    'xinput1_4.dll'='96fe0a6a6176703028ff674298de3ebd8f89f6f22a242db5587c66d51d1a9ac4'
+}
+function Test-ParcheActual {
+    param([string]$root)
+    if (-not $root) { return $false }
+    foreach($k in $script:ParcheDllHash.Keys) {
+        $p=Join-Path $root $k
+        if (-not (Test-Path $p)) { return $false }
+        try { $h=(Get-FileHash $p -Algorithm SHA256).Hash.ToLower(); if ($h -ne $script:ParcheDllHash[$k]) { return $false } } catch { return $false }
+    }
+    return $true
+}
 function Xz9Qk {
     param([switch]$Silent)
     try {
         $srChk=$null; try { $srChk=Get-SteamPath } catch {}
-        if ($srChk -and (Test-Path (Join-Path $srChk "OpenSteamTool.dll")) -and (Test-Path (Join-Path $srChk "xinput1_4.dll")) -and (Test-Path (Join-Path $srChk "dwmapi.dll"))) {
+        if (Test-ParcheActual $srChk) {
             try { Set-ParcheInstalado $true } catch {}
             return $true
         }
@@ -5238,7 +5253,7 @@ $script:sDiag.Add_Click({
     $script:sDiag.Text="DIAGNOSTICAR"
     $script:sDiag.Enabled=$true
 })
-$script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Descarga parche nuevo y sincroniza luas/manifests en todas las rutas Steam" {
+$script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Repara la activacion en todas las rutas Steam" {
     try {
         $steamRoots=@()
         try { $main=Get-SteamPath; if($main){ $steamRoots+= $main } } catch {}
@@ -5262,8 +5277,8 @@ $script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Descarga parche 
         if($steamRoots.Count -eq 0){ [System.Windows.Forms.MessageBox]::Show("No se encontraron rutas de Steam.","Solucionar activacion 2","OK","Error"); return }
         $zipUrl="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip"
         $tmpZip=Join-Path $env:TEMP "parche2_$(Get-Random).zip"
-        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl, $tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo descargar parche_nuevo.zip: $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); return } }
-        if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ [System.Windows.Forms.MessageBox]::Show("Descarga de parche incompleta.","Solucionar activacion 2","OK","Error"); return }
+        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl, $tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo descargar el parche: $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); return } }
+        if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ [System.Windows.Forms.MessageBox]::Show("Descarga incompleta.","Solucionar activacion 2","OK","Error"); return }
         foreach($sr in $steamRoots){
             try { Expand-Archive -Path $tmpZip -DestinationPath $sr -Force -ErrorAction Stop } catch {
                 try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $sr, $true) } catch { [System.Windows.Forms.MessageBox]::Show("Error extrayendo a $sr : $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); continue }
@@ -5309,7 +5324,7 @@ $script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Descarga parche 
                 }
             }
         }
-        [System.Windows.Forms.MessageBox]::Show("Parche instalado en $($steamRoots.Count) rutas y luas/manifests sincronizados.","Solucionar activacion 2","OK","Information")
+        [System.Windows.Forms.MessageBox]::Show("Activacion reparada en $($steamRoots.Count) rutas.","Solucionar activacion 2","OK","Information")
     } catch { [System.Windows.Forms.MessageBox]::Show("Error: $($_.Exception.Message)","Solucionar activacion 2","OK","Error") }
 }
 $script:sp.Controls.Add($script:sPatch2)
@@ -5891,7 +5906,7 @@ try {
         }
     }
 } catch {}
-try { $sr0=Get-SteamPath; if ($sr0 -and -not ((Test-Path (Join-Path $sr0 "OpenSteamTool.dll")) -and (Test-Path (Join-Path $sr0 "xinput1_4.dll")))) { $null = Xz9Qk -Silent } } catch {}
+try { $sr0=Get-SteamPath; if ($sr0 -and -not (Test-ParcheActual $sr0)) { $null = Xz9Qk -Silent } } catch {}
 
 if ((Get-ReparadorFlag) -eq 1) {
     try {
