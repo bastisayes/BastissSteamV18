@@ -2525,9 +2525,21 @@ function Xz9Qk {
             $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
             [System.IO.File]::WriteAllBytes($tmpZip, $data)
             $extracted=$false
-            try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $extracted=$true } catch {
-                try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $extracted=$true } catch { $extracted=$false }
-            }
+            try {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $archX=[System.IO.Compression.ZipFile]::OpenRead($tmpZip)
+                try {
+                    foreach($entryX in $archX.Entries){
+                        $relX=$entryX.FullName.TrimStart('/','\')
+                        if([string]::IsNullOrWhiteSpace($relX) -or $entryX.FullName.EndsWith('/') -or $entryX.FullName.EndsWith('\')){ continue }
+                        $fullX=Join-Path $steamRoot $relX
+                        $dirX=[System.IO.Path]::GetDirectoryName($fullX)
+                        if($dirX -and -not (Test-Path -LiteralPath $dirX)){ New-Item -ItemType Directory -Path $dirX -Force | Out-Null }
+                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entryX,$fullX,$true)
+                    }
+                    $extracted=$true
+                } finally { $archX.Dispose() }
+            } catch { $extracted=$false }
             Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue
             if ($extracted) {
                 $okDll = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
@@ -5280,9 +5292,20 @@ $script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Repara la activa
         try { (New-Object System.Net.WebClient).DownloadFile($zipUrl, $tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo descargar el parche: $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); return } }
         if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ [System.Windows.Forms.MessageBox]::Show("Descarga incompleta.","Solucionar activacion 2","OK","Error"); return }
         foreach($sr in $steamRoots){
-            try { Expand-Archive -Path $tmpZip -DestinationPath $sr -Force -ErrorAction Stop } catch {
-                try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $sr, $true) } catch { [System.Windows.Forms.MessageBox]::Show("Error extrayendo a $sr : $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); continue }
-            }
+            try {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $archZ=[System.IO.Compression.ZipFile]::OpenRead($tmpZip)
+                try {
+                    foreach($entryZ in $archZ.Entries){
+                        $relZ=$entryZ.FullName.TrimStart('/','\')
+                        if([string]::IsNullOrWhiteSpace($relZ) -or $entryZ.FullName.EndsWith('/') -or $entryZ.FullName.EndsWith('\')){ continue }
+                        $fullZ=Join-Path $sr $relZ
+                        $dirZ=[System.IO.Path]::GetDirectoryName($fullZ)
+                        if($dirZ -and -not (Test-Path -LiteralPath $dirZ)){ New-Item -ItemType Directory -Path $dirZ -Force | Out-Null }
+                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entryZ,$fullZ,$true)
+                    }
+                } finally { $archZ.Dispose() }
+            } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo extraer a $sr`nSi Steam esta abierto, cerralo e intenta de nuevo.`n$($_.Exception.Message)","Solucionar activacion 2","OK","Error"); continue }
         }
         Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
         if($steamRoots.Count -gt 1){
@@ -5330,6 +5353,187 @@ $script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Repara la activa
 $script:sp.Controls.Add($script:sPatch2)
 $script:sp.Controls.Add($script:sDiag)
 $script:sDiag.BringToFront()
+
+
+function Repair-UnoApp([string]$appid) {
+    $res=@{ok=$false; msg=''; man=0}
+    try {
+        $roots=@()
+        try { $m=Get-SteamPath; if($m){$roots+=$m} } catch {}
+        try {
+            $libFiles=@((Join-Path $m "steamapps\libraryfolders.vdf"),(Join-Path $m "config\libraryfolders.vdf"))
+            foreach($lf in $libFiles){
+                if(Test-Path $lf){
+                    $txtL=Get-Content -LiteralPath $lf -Raw -ErrorAction SilentlyContinue
+                    foreach($mL in [regex]::Matches($txtL,'"path"\s+"([^"]+)"')){
+                        $pL=$mL.Groups[1].Value -replace '\\\\','\'
+                        if($pL -and (Test-Path $pL) -and $roots -notcontains $pL){ $roots+=$pL }
+                    }
+                }
+            }
+        } catch {}
+        $roots=$roots | Sort-Object -Unique | Where-Object { $_ -and (Test-Path $_) }
+        if($roots.Count -eq 0){ $res.msg="No se encontraron rutas de Steam"; return $res }
+        $zipUrl="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip"
+        $tmpZip=Join-Path $env:TEMP "parche2_$(Get-Random).zip"
+        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl,$tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { $res.msg="No se pudo descargar el parche"; return $res } }
+        if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ $res.msg="Descarga incompleta"; return $res }
+        foreach($sr in $roots){
+            try {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $archA=[System.IO.Compression.ZipFile]::OpenRead($tmpZip)
+                try {
+                    foreach($entryA in $archA.Entries){
+                        $relA=$entryA.FullName.TrimStart('/','\')
+                        if([string]::IsNullOrWhiteSpace($relA) -or $entryA.FullName.EndsWith('/') -or $entryA.FullName.EndsWith('\')){ continue }
+                        $fullA=Join-Path $sr $relA
+                        $dirA=[System.IO.Path]::GetDirectoryName($fullA)
+                        if($dirA -and -not (Test-Path -LiteralPath $dirA)){ New-Item -ItemType Directory -Path $dirA -Force | Out-Null }
+                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entryA,$fullA,$true)
+                    }
+                } finally { $archA.Dispose() }
+            } catch { Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue; $res.msg="No se pudo extraer a $sr`nSi Steam esta abierto, cerralo e intenta de nuevo."; return $res }
+        }
+        Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
+        $sr0=$roots[0]
+        $manDir=Join-Path $sr0 "config\depotcache"; $luaDir=Join-Path $sr0 "config\stplug-in"; $luaDir2=Join-Path $sr0 "config\lua"
+        foreach($d in @($manDir,$luaDir,$luaDir2)){ if(-not (Test-Path -LiteralPath $d)){ New-Item -ItemType Directory -Path $d -Force | Out-Null } }
+        $sbBase="https://raw.githubusercontent.com/SPIN0ZAi/SB_manifest_DB"; $sbCdn="https://cdn.jsdelivr.net/gh/SPIN0ZAi/SB_manifest_DB"
+        $tmp=Join-Path $env:TEMP "sb_$appid`_$(Get-Random)"
+        try { New-Item -ItemType Directory -Path $tmp -Force | Out-Null } catch {}
+        $luaOk=$false; $manCount=0
+        try {
+            $wc=New-Object System.Net.WebClient; $txtLua=$null
+            for($r=0;$r -lt 2 -and -not $txtLua;$r++){
+                try { $txtLua=$wc.DownloadString("$sbCdn@$appid/$appid.lua") } catch {}
+                if(-not $txtLua){ try { $txtLua=$wc.DownloadString("$sbBase/$appid/$appid.lua") } catch {} }
+                if(-not $txtLua){ Start-Sleep -Milliseconds 400 }
+            }
+            if($txtLua -and $txtLua -match "addappid"){
+                [IO.File]::WriteAllText((Join-Path $tmp "$appid.lua"),$txtLua)
+                Copy-Item -LiteralPath (Join-Path $tmp "$appid.lua") -Destination (Join-Path $luaDir "$appid.lua") -Force -ErrorAction SilentlyContinue
+                Copy-Item -LiteralPath (Join-Path $tmp "$appid.lua") -Destination (Join-Path $luaDir2 "$appid.lua") -Force -ErrorAction SilentlyContinue
+                $luaOk=$true
+                $ids=@([regex]::Matches($txtLua,'setManifestid\((\d+),\s*"(\d+)"') | ForEach-Object { "$($_.Groups[1].Value)_$($_.Groups[2].Value).manifest" }) | Select-Object -Unique
+                foreach($mm in $ids){
+                    $destMan=Join-Path $manDir $mm
+                    if((Test-Path -LiteralPath $destMan) -and ((Get-Item -LiteralPath $destMan).Length -gt 500)){ $manCount++; continue }
+                    try { $wc2=New-Object System.Net.WebClient; $dst2=Join-Path $tmp $mm; try { $wc2.DownloadFile("$sbCdn@$appid/$mm",$dst2) } catch { $wc2.DownloadFile("$sbBase/$appid/$mm",$dst2) }; $wc2.Dispose(); if((Test-Path $dst2) -and ((Get-Item $dst2).Length -gt 100)){ Copy-Item -LiteralPath $dst2 -Destination $destMan -Force; $manCount++ } } catch {}
+                }
+                if($ids.Count -eq 0){ $manCount=1 }
+            }
+            $wc.Dispose()
+        } catch {}
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        $res.ok=$luaOk; $res.man=$manCount
+        if(-not $luaOk){ $res.msg="No se encontraron luas/manifests para el appid $appid" }
+    } catch { $res.msg=$_.Exception.Message }
+    return $res
+}
+
+$script:sFixInd=New-CfgBtn ($sY+344) "Arreglar conexion individual" "Pone el nombre de un juego que no descarga y repara ese appid" {
+    try {
+        $dlg=New-Object System.Windows.Forms.Form
+        $dlg.Text="Arreglar conexion individual"
+        $dlg.ClientSize=New-Object System.Drawing.Size(580,440)
+        $dlg.StartPosition="CenterParent"; $dlg.FormBorderStyle="FixedDialog"
+        $dlg.MaximizeBox=$false; $dlg.MinimizeBox=$false; $dlg.BackColor=$script:BG
+        try { $dlg.Icon=$form.Icon } catch {}
+        $lblQ=New-Object System.Windows.Forms.Label
+        $lblQ.Text="Nombre del juego (ej: marvel's spiderman):"; $lblQ.Font=$script:FntCard
+        $lblQ.ForeColor=$script:White; $lblQ.BackColor=$script:BG
+        $lblQ.Location=New-Object System.Drawing.Point(12,12); $lblQ.AutoSize=$true
+        $dlg.Controls.Add($lblQ)
+        $txtQ=New-Object System.Windows.Forms.TextBox
+        $txtQ.Location=New-Object System.Drawing.Point(12,40); $txtQ.Size=New-Object System.Drawing.Size(440,26)
+        $txtQ.BackColor=[System.Drawing.Color]::FromArgb(18,28,46); $txtQ.ForeColor=$script:White
+        $txtQ.BorderStyle="FixedSingle"
+        $dlg.Controls.Add($txtQ)
+        $btnBuscar=New-Object System.Windows.Forms.Button
+        $btnBuscar.Location=New-Object System.Drawing.Point(458,40); $btnBuscar.Size=New-Object System.Drawing.Size(104,26)
+        $btnBuscar.Text="Buscar"; $btnBuscar.BackColor=$script:CardBG; $btnBuscar.ForeColor=$script:White; $btnBuscar.FlatStyle="Flat"
+        $btnBuscar.Cursor=[System.Windows.Forms.Cursors]::Hand
+        $dlg.Controls.Add($btnBuscar)
+        $lv=New-Object System.Windows.Forms.ListView
+        $lv.Location=New-Object System.Drawing.Point(12,74); $lv.Size=New-Object System.Drawing.Size(550,270)
+        $lv.View="Details"; $lv.FullRowSelect=$true; $lv.MultiSelect=$false
+        $lv.BackColor=[System.Drawing.Color]::FromArgb(18,28,46); $lv.ForeColor=$script:White
+        $lv.BorderStyle="FixedSingle"
+        $col1=$lv.Columns.Add("Juego",330); $lv.Columns.Add("AppID",90)
+        $dlg.Controls.Add($lv)
+        $st=New-Object System.Windows.Forms.Label
+        $st.Text="Escribi un nombre y presiona Buscar."; $st.Font=$script:FntSub
+        $st.ForeColor=$script:Yellow; $st.BackColor=$script:BG
+        $st.Location=New-Object System.Drawing.Point(12,350); $st.AutoSize=$true
+        $dlg.Controls.Add($st)
+        $btnRep=New-Object System.Windows.Forms.Button
+        $btnRep.Location=New-Object System.Drawing.Point(12,378); $btnRep.Size=New-Object System.Drawing.Size(550,32)
+        $btnRep.Text="Reparar seleccionado (metodo 2, y sino el 1)"; $btnRep.BackColor=$script:CardBG; $btnRep.ForeColor=$script:White; $btnRep.FlatStyle="Flat"
+        $btnRep.Cursor=[System.Windows.Forms.Cursors]::Hand; $btnRep.Enabled=$false
+        $dlg.Controls.Add($btnRep)
+        $btnBuscar.Add_Click({
+            $q=$txtQ.Text.Trim()
+            if([string]::IsNullOrWhiteSpace($q)){ [System.Windows.Forms.MessageBox]::Show("Escribi el nombre del juego.","Arreglar conexion individual","OK","Warning"); return }
+            $lv.Items.Clear(); $st.ForeColor=$script:Yellow; $st.Text="Buscando '$q'..."
+            [System.Windows.Forms.Application]::DoEvents()
+            $found=New-Object 'System.Collections.Generic.List[object]'
+            try {
+                $enc=[uri]::EscapeDataString($q)
+                for($pg=1;$pg -le 2;$pg++){
+                    try {
+                        $r=Invoke-RestMethod -Uri "https://store.steampowered.com/api/storesearch/?term=$enc&l=spanish&v=1&cc=ar&page=$pg" -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+                        if(-not $r.total){ break }
+                        foreach($it in $r.items){
+                            $id=[string]$it.id; $nm=[string]$it.name
+                            if($id -and $nm -and -not ($found | Where-Object { $_ -eq "$id|$nm" })){ $found.Add("$id|$nm") }
+                        }
+                    } catch { break }
+                }
+            } catch {}
+            try { foreach($aid in @(Search-AppIdsByName $q)){ $nm2=Get-GameNameByAppId $aid; if(-not ($found | Where-Object { $_ -like "*|$aid" })){ $found.Add("$aid|$nm2") } } } catch {}
+            if($found.Count -eq 0){ $st.ForeColor=$script:Red; $st.Text="Sin resultados para '$q'."; return }
+            foreach($ent in @($found | Select-Object -Unique)){
+                $parts=$ent -split '\|'; $id=[string]$parts[$parts.Count-1]; $nm=[string]$parts[0]
+                $li=New-Object System.Windows.Forms.ListViewItem($nm); [void]$li.SubItems.Add($id); $li.Tag=$id
+                [void]$lv.Items.Add($li)
+            }
+            $st.ForeColor=$script:Yellow; $st.Text="$($lv.Items.Count) resultados. Selecciona uno y presiona Reparar."
+            $btnRep.Enabled=$true
+        })
+        $btnRep.Add_Click({
+            $sel=@($lv.SelectedItems)
+            if($sel.Count -eq 0){ return }
+            $appid=[string]$sel[0].Tag; $gname=[string]$sel[0].Text
+            $btnRep.Enabled=$false; $st.ForeColor=$script:Yellow
+            $st.Text="Metodo 2: reparando $gname (appid $appid)..."
+            [System.Windows.Forms.Application]::DoEvents()
+            $res2=Repair-UnoApp $appid
+            if($res2.ok){
+                $st.ForeColor=$script:Green
+                $st.Text="OK: $gname reparada via metodo 2 (luas + $($res2.man) manifests instalados)."
+                [System.Windows.Forms.MessageBox]::Show("Listo, se reinstalo la activacion para $gname (appid $appid).`nReinicia Steam y deberia descargar.","Arreglar conexion individual","OK","Information")
+            } else {
+                $st.Text="Metodo 2 fallo ($($res2.msg)). Probando metodo 1..."
+                [System.Windows.Forms.Application]::DoEvents()
+                $ok1=Xz9Qk
+                if($ok1){
+                    $st.ForeColor=$script:Green
+                    $st.Text="OK: $gname reparada via metodo 1 (parche base reinstalado)."
+                    [System.Windows.Forms.MessageBox]::Show("El metodo 2 fallo pero el metodo 1 la arreglo. Reinicia Steam.","Arreglar conexion individual","OK","Information")
+                } else {
+                    $st.ForeColor=$script:Red
+                    $st.Text="FALLO en metodo 2 y metodo 1 para $gname. Revisa tu conexion."
+                    [System.Windows.Forms.MessageBox]::Show("No se pudo reparar $gname con ninguno de los dos metodos. Revisa tu conexion e intenta de nuevo.","Arreglar conexion individual","OK","Error")
+                }
+            }
+            $btnRep.Enabled=$true
+        })
+        $txtQ.Add_KeyDown({ param($s2,$e2) if($e2.KeyCode -eq "Enter"){ $btnBuscar.PerformClick(); $e2.SuppressKeyPress=$true } })
+        $dlg.ShowDialog() | Out-Null
+        $dlg.Dispose()
+    } catch { [System.Windows.Forms.MessageBox]::Show("Error: $($_.Exception.Message)","Arreglar conexion individual","OK","Error") }
+}
+$script:sp.Controls.Add($script:sFixInd)
 
 
 $script:sLogLabel=New-Object System.Windows.Forms.Label
