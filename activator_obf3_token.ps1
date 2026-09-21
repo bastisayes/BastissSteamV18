@@ -2129,7 +2129,7 @@ function Update-ServerUrl {
     $cacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt"
     $gotUrl = $false
     try {
-        $ghu = ([string](Invoke-RestMethod -Uri $script:ghRawUrl -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
         if ($ghu -match "^https?://\S+$") {
             $script:serverUrl = $ghu
             $gotUrl = $true
@@ -2146,7 +2146,7 @@ function Update-ServerUrl {
     }
     if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:9878" }
     try {
-        $ghi = ([string](Invoke-RestMethod -Uri $script:ghRawIpUrl -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        $ghi = ([string](Invoke-RestMethod -Uri ($script:ghRawIpUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
         if ($ghi -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIp = $ghi } else { $script:serverIp = "" }
     } catch { $script:serverIp = "" }
 }
