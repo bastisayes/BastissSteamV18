@@ -4038,7 +4038,7 @@ $script:subB.Add_Click({
                 if ($rr.err) { throw $rr.err }
                 $resp = $rr.json | ConvertFrom-Json
                 $lastErr=$null; break
-                }catch{ $lastErr=$_; Start-SleepDoEvents 800 }
+                }catch{ $lastErr=$_; try { Remove-Item -LiteralPath (Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt") -Force -ErrorAction SilentlyContinue } catch {}; Start-SleepDoEvents 800 }
             }
             if($lastErr){ throw $lastErr }
             if(-not $resp.ok){ throw $resp.err }
