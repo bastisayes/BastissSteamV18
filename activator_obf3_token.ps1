@@ -215,7 +215,7 @@ function Start-SleepDoEvents([int]$ms) {
     }
 }
 function Invoke-PsBlockingDoEvents {
-    param([scriptblock]$sb, [object[]]$argList)
+    param([scriptblock]$sb, [object[]]$argList, [int]$TimeoutSec = 25)
     $pool = $null; $ps = $null
     try {
         $pool = [RunspaceFactory]::CreateRunspacePool(1, 1)
@@ -225,9 +225,14 @@ function Invoke-PsBlockingDoEvents {
         [void]$ps.AddScript($sb)
         foreach ($a in @($argList)) { [void]$ps.AddArgument($a) }
         $h = $ps.BeginInvoke()
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
         while (-not $h.IsCompleted) {
             try { [System.Windows.Forms.Application]::DoEvents() } catch {}
             Start-Sleep -Milliseconds 40
+            if ($TimeoutSec -gt 0 -and $sw.Elapsed.TotalSeconds -gt $TimeoutSec) {
+                try { $ps.Stop() } catch {}
+                return $null
+            }
         }
         $out = $ps.EndInvoke($h)
         if ($out -and @($out).Count -gt 0) { return $out[0] }
@@ -1713,9 +1718,9 @@ $script:utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 
 function Get-CdnTimeUtc {
-    foreach ($u in @('https://www.google.com','https://www.cloudflare.com','https://github.com')) {
+    foreach ($u in @('https://www.cloudflare.com','https://www.google.com')) {
         try {
-            $h = & curl.exe -s -I --max-time 4 $u
+            $h = & curl.exe -s -I --connect-timeout 3 --max-time 4 $u
             $m = $h | Select-String -Pattern '^Date:\s*(.+)$'
             if ($m) {
                 $d = $m.Matches[0].Groups[1].Value.Trim()
@@ -4033,7 +4038,7 @@ $script:subB.Add_Click({
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$script:serverIp)
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$script:serverIp) -TimeoutSec 18
                 Remove-Item $tempBody,$tempResp -Force -ErrorAction SilentlyContinue
                 if (-not $rr) { throw "Sin respuesta del servidor" }
                 if ($rr.err) { throw $rr.err }
