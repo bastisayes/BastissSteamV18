@@ -5274,6 +5274,35 @@ $script:sDiag.Add_Click({
     $script:sDiag.Text="DIAGNOSTICAR"
     $script:sDiag.Enabled=$true
 })
+function Expand-PatchZip {
+    param([string]$zip,[string]$root)
+    $locked=@()
+    try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+    Start-Sleep -Milliseconds 1200
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+    $arch=[System.IO.Compression.ZipFile]::OpenRead($zip)
+    try {
+        foreach($entry in $arch.Entries){
+            $rel=$entry.FullName.TrimStart('/','\')
+            if([string]::IsNullOrWhiteSpace($rel) -or $entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')){ continue }
+            $full=Join-Path $root $rel
+            $dir=[System.IO.Path]::GetDirectoryName($full)
+            if($dir -and -not (Test-Path -LiteralPath $dir)){ New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+            $done=$false
+            for($t=1;$t -le 4 -and -not $done;$t++){
+                try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$full,$true); $done=$true }
+                catch {
+                    if($t -lt 4){
+                        try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+                        Start-Sleep -Milliseconds 1500
+                    }
+                }
+            }
+            if(-not $done){ $locked+=$full }
+        }
+    } finally { $arch.Dispose() }
+    return ,$locked
+}
 function Repair-Activacion2 {
     try {
         $steamRoots=@()
@@ -5302,19 +5331,9 @@ function Repair-Activacion2 {
         if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ [System.Windows.Forms.MessageBox]::Show("Descarga incompleta.","Solucionar activacion 2","OK","Error"); return }
         foreach($sr in $steamRoots){
             try {
-                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-                $archZ=[System.IO.Compression.ZipFile]::OpenRead($tmpZip)
-                try {
-                    foreach($entryZ in $archZ.Entries){
-                        $relZ=$entryZ.FullName.TrimStart('/','\')
-                        if([string]::IsNullOrWhiteSpace($relZ) -or $entryZ.FullName.EndsWith('/') -or $entryZ.FullName.EndsWith('\')){ continue }
-                        $fullZ=Join-Path $sr $relZ
-                        $dirZ=[System.IO.Path]::GetDirectoryName($fullZ)
-                        if($dirZ -and -not (Test-Path -LiteralPath $dirZ)){ New-Item -ItemType Directory -Path $dirZ -Force | Out-Null }
-                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entryZ,$fullZ,$true)
-                    }
-                } finally { $archZ.Dispose() }
-            } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo extraer a $sr`nSi Steam esta abierto, cerralo e intenta de nuevo.`n$($_.Exception.Message)","Solucionar activacion 2","OK","Error"); continue }
+                $lockedZ = Expand-PatchZip -zip $tmpZip -root $sr
+                if($lockedZ.Count -gt 0){ [System.Windows.Forms.MessageBox]::Show("Cerra Steam y los juegos y reintenta. Archivos en uso:`n" + (($lockedZ | Select-Object -First 8) -join "`n"),"Solucionar activacion 2","OK","Warning") }
+            } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo extraer a $sr`n$($_.Exception.Message)","Solucionar activacion 2","OK","Error"); continue }
         }
         Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
         if($steamRoots.Count -gt 1){
@@ -5390,19 +5409,9 @@ function Repair-UnoApp([string]$appid) {
         if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ $res.msg="Descarga incompleta"; return $res }
         foreach($sr in $roots){
             try {
-                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-                $archA=[System.IO.Compression.ZipFile]::OpenRead($tmpZip)
-                try {
-                    foreach($entryA in $archA.Entries){
-                        $relA=$entryA.FullName.TrimStart('/','\')
-                        if([string]::IsNullOrWhiteSpace($relA) -or $entryA.FullName.EndsWith('/') -or $entryA.FullName.EndsWith('\')){ continue }
-                        $fullA=Join-Path $sr $relA
-                        $dirA=[System.IO.Path]::GetDirectoryName($fullA)
-                        if($dirA -and -not (Test-Path -LiteralPath $dirA)){ New-Item -ItemType Directory -Path $dirA -Force | Out-Null }
-                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entryA,$fullA,$true)
-                    }
-                } finally { $archA.Dispose() }
-            } catch { Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue; $res.msg="No se pudo extraer a $sr`nSi Steam esta abierto, cerralo e intenta de nuevo."; return $res }
+                $lockedA = Expand-PatchZip -zip $tmpZip -root $sr
+                if($lockedA.Count -gt 0){ Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue; $res.msg="Cerra Steam y los juegos y reintenta. Archivos en uso: " + (($lockedA | Select-Object -First 3) -join ", "); return $res }
+            } catch { Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue; $res.msg="No se pudo extraer a $sr"; return $res }
         }
         Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
         $sr0=$roots[0]
