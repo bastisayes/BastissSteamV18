@@ -2128,25 +2128,25 @@ function Update-ServerUrl {
     } catch {}
     $cacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt"
     $gotUrl = $false
-    try {
-        $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
-        if ($ghu -match "^https?://\S+$") {
-            $script:serverUrl = $ghu
-            $gotUrl = $true
-            try { [System.IO.File]::WriteAllText($cacheFile, $ghu, (New-Object System.Text.UTF8Encoding $false)) } catch {}
-        }
-    } catch {}
+    if (Test-Path -LiteralPath $cacheFile) {
+        try {
+            $cu = ([System.IO.File]::ReadAllText($cacheFile)).Trim()
+            if ($cu -match "^https?://\S+$") { $script:serverUrl = $cu; $gotUrl = $true }
+        } catch {}
+    }
     if (-not $gotUrl) {
         try {
-            if (Test-Path -LiteralPath $cacheFile) {
-                $cu = ([System.IO.File]::ReadAllText($cacheFile)).Trim()
-                if ($cu -match "^https?://\S+$") { $script:serverUrl = $cu; $gotUrl = $true }
+            $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+            if ($ghu -match "^https?://\S+$") {
+                $script:serverUrl = $ghu
+                $gotUrl = $true
+                try { [System.IO.File]::WriteAllText($cacheFile, $ghu, (New-Object System.Text.UTF8Encoding $false)) } catch {}
             }
         } catch {}
     }
     if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:9878" }
     try {
-        $ghi = ([string](Invoke-RestMethod -Uri ($script:ghRawIpUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        $ghi = ([string](Invoke-RestMethod -Uri ($script:ghRawIpUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 6 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
         if ($ghi -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIp = $ghi } else { $script:serverIp = "" }
     } catch { $script:serverIp = "" }
 }
@@ -3994,13 +3994,14 @@ $script:subB.Add_Click({
     if([string]::IsNullOrEmpty($code)){$lblR.ForeColor=$script:Red;$lblR.Text=T (S("ZXJyb3JDb2RpZ28="));[System.Windows.Forms.Application]::DoEvents();return}
     $lblR.ForeColor=$script:Yellow;$lblR.Text="Conectando con servidor..."
     [System.Windows.Forms.Application]::DoEvents()
+    $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         $redeemNow, $_ = Get-Now
         $sendToken = ""
         if ($locTok -and $locTok.token) { $sendToken = [string]$locTok.token }
         $body = @{code=$code;client_id=$script:clientId;redeem_at=$redeemNow.ToString("o");token=$sendToken} | ConvertTo-Json
         $lastErr = $null
-        for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        for ($attempt = 0; $attempt -lt 3 -and $cdSW.Elapsed.TotalSeconds -lt 15; $attempt++) {
             try {
                 Update-ServerUrl
                 $reqUrl = "$($script:serverUrl)/api/redeem-code"
@@ -4015,14 +4016,14 @@ $script:subB.Add_Click({
                     param($reqUrl, $body, $tempBody, $tempResp, $resolveStr, $serverIp)
                     $u8 = New-Object System.Text.UTF8Encoding $false
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
-                    $curlOut = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" @ra -X POST -H "Content-Type: application/json" --data-binary "@$tempBody" "$reqUrl" --max-time 30 -o $tempResp 2>&1
+                    $curlOut = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" @ra -X POST -H "Content-Type: application/json" --data-binary "@$tempBody" "$reqUrl" --connect-timeout 6 --max-time 15 -o $tempResp 2>&1
                     $ce = $LASTEXITCODE
                     $respRaw = $null
                     if ($ce -eq 0 -and (Test-Path -LiteralPath $tempResp)) { $respRaw = [System.IO.File]::ReadAllText($tempResp, $u8) }
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
@@ -4038,7 +4039,7 @@ $script:subB.Add_Click({
                 if ($rr.err) { throw $rr.err }
                 $resp = $rr.json | ConvertFrom-Json
                 $lastErr=$null; break
-                }catch{ $lastErr=$_; try { Remove-Item -LiteralPath (Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt") -Force -ErrorAction SilentlyContinue } catch {}; Start-SleepDoEvents 800 }
+                }catch{ $lastErr=$_; Start-SleepDoEvents 600 }
             }
             if($lastErr){ throw $lastErr }
             if(-not $resp.ok){ throw $resp.err }
