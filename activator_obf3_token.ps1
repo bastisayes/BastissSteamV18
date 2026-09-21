@@ -5265,7 +5265,7 @@ $script:sDiag.Add_Click({
     $script:sDiag.Text="DIAGNOSTICAR"
     $script:sDiag.Enabled=$true
 })
-$script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Repara la activacion en todas las rutas Steam" {
+function Repair-Activacion2 {
     try {
         $steamRoots=@()
         try { $main=Get-SteamPath; if($main){ $steamRoots+= $main } } catch {}
@@ -5350,6 +5350,7 @@ $script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Repara la activa
         [System.Windows.Forms.MessageBox]::Show("Activacion reparada en $($steamRoots.Count) rutas.","Solucionar activacion 2","OK","Information")
     } catch { [System.Windows.Forms.MessageBox]::Show("Error: $($_.Exception.Message)","Solucionar activacion 2","OK","Error") }
 }
+$script:sPatch2=New-CfgBtn ($sY+290) "Solucionar activacion 2" "Repara la activacion en todas las rutas Steam" { Repair-Activacion2 }
 $script:sp.Controls.Add($script:sPatch2)
 $script:sp.Controls.Add($script:sDiag)
 $script:sDiag.BringToFront()
@@ -5720,6 +5721,12 @@ $script:cdp.Controls.Add($script:cdBtnDel)
 
 $script:cdPause=New-CfgBtn 208 "Pausar activacion" "Pausa la activacion de los juegos" { Toggle-CdPause }
 $script:cdp.Controls.Add($script:cdPause)
+
+$script:cdBtnP1=New-CfgBtn 322 "Activar juegos 1" "Descarga e instala el parche NEWW" { $null = Xz9Qk } ([System.Drawing.Color]::FromArgb(30,130,190))
+$script:cdp.Controls.Add($script:cdBtnP1)
+
+$script:cdBtnP2=New-CfgBtn 378 "Activar juegos 2" "Descarga e instala el parche Sparking Zero" { Repair-Activacion2 } ([System.Drawing.Color]::FromArgb(190,125,45))
+$script:cdp.Controls.Add($script:cdBtnP2)
 
 $form.Controls.Add($script:cdp)
 
