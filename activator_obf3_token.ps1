@@ -2804,7 +2804,7 @@ $script:clpTicker.Start()
 
 
 $script:urlChecker = New-Object System.Windows.Forms.Timer
-$script:urlChecker.Interval = 30000
+$script:urlChecker.Interval = 1000
 $script:urlChecker.Add_Tick({ try { Update-ServerUrl } catch {} })
 $script:urlChecker.Start()
 
