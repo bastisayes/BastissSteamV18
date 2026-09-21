@@ -2510,8 +2510,7 @@ function Xz9Qk {
         $srChk=$null; try { $srChk=Get-SteamPath } catch {}
         if (Test-ParcheActual $srChk) {
             try { Set-ParcheInstalado $true } catch {}
-            if (-not $Silent) { [System.Windows.Forms.MessageBox]::Show("Activado correctamente.","Listo","OK","Information") }
-            return $true
+            if ($Silent) { return $true }
         }
     } catch {}
     $attempt=0
