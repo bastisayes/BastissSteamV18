@@ -4177,6 +4177,7 @@ $script:subB.Add_Click({
     } catch {
         WEL (S("Q2FuamVv")) $_; $lblR.ForeColor=$script:Red
         $errMsg = $_.Exception.Message
+        if ($errMsg -match 'Codigo invalido|C[oó]digo inv[aá]lido') { $errMsg = "Codigo invalido: NO existe en el servidor ($($script:serverUrl)). Creá el codigo en el panel de ESE servidor." }
         if ($_.Exception -is [System.Net.WebException]) {
             $httpResp = $_.Exception.Response
             if ($httpResp -and [int]$httpResp.StatusCode -eq 502) { $errMsg = "El servidor esta offline (502). Avisa al admin para que reinicie el tunel." }
