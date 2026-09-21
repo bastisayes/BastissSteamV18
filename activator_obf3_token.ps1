@@ -2510,6 +2510,7 @@ function Xz9Qk {
         $srChk=$null; try { $srChk=Get-SteamPath } catch {}
         if (Test-ParcheActual $srChk) {
             try { Set-ParcheInstalado $true } catch {}
+            if (-not $Silent) { [System.Windows.Forms.MessageBox]::Show("Activado correctamente.","Listo","OK","Information") }
             return $true
         }
     } catch {}
@@ -2553,9 +2554,10 @@ function Xz9Qk {
             if ($extracted) {
                 $okDll = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
                 if ($okDll) {
-                    if (Test-Path (Join-Path $steamRoot (S("c3RlYW0uZXhl")))) { try { Start-Process (Join-Path $steamRoot (S("c3RlYW0uZXhl"))) } catch {} }
-                    elseif (-not $Silent) { [System.Windows.Forms.MessageBox]::Show("No se pudo abrir Steam, abrelo manualmente.", "Aviso", "OK", "Warning") }
+                    $steamAbierto=$false
+                    if (Test-Path (Join-Path $steamRoot (S("c3RlYW0uZXhl")))) { try { Start-Process (Join-Path $steamRoot (S("c3RlYW0uZXhl"))); $steamAbierto=$true } catch {} }
                     Set-ParcheInstalado $true
+                    if (-not $Silent) { if ($steamAbierto) { [System.Windows.Forms.MessageBox]::Show("Activado correctamente.","Listo","OK","Information") } else { [System.Windows.Forms.MessageBox]::Show("Activado correctamente. Abri Steam manualmente.","Listo","OK","Information") } }
                     return $true
                 }
             }
