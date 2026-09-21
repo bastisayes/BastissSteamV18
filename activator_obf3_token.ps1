@@ -4181,17 +4181,18 @@ $script:subB.Add_Click({
     } catch {
         WEL (S("Q2FuamVv")) $_; $lblR.ForeColor=$script:Red
         $errMsg = $_.Exception.Message
-        if ($errMsg -match 'Codigo invalido|C[oó]digo inv[aá]lido') { $errMsg = "Codigo invalido: NO existe en el servidor ($($script:serverUrl)). Creá el codigo en el panel de ESE servidor." }
+        if ($errMsg -match 'Codigo invalido|C[oó]digo inv[aá]lido') { $errMsg = "Codigo invalido: NO existe en el servidor. Pedile al admin que lo cree de nuevo." }
         if ($_.Exception -is [System.Net.WebException]) {
             $httpResp = $_.Exception.Response
             if ($httpResp -and [int]$httpResp.StatusCode -eq 502) { $errMsg = "El servidor esta offline (502). Avisa al admin para que reinicie el tunel." }
             elseif ($_.Exception.Message -match "Unable to connect|NameResolutionFailure") { $errMsg = "No se pudo conectar al servidor. Revisa tu internet." }
             elseif ($_.Exception.Message -match "Timeout") { $errMsg = "El servidor no respondio a tiempo. Intenta de nuevo." }
         } elseif ($errMsg -match "Unable to connect|NameResolutionFailure|unable to resolve") {
-            $errMsg = "No se pudo conectar al servidor (URL: $($script:serverUrl)). Revisa tu internet o pide al admin que reinicie el tunel."
+            $errMsg = "No se pudo conectar al servidor. Revisa tu internet o pide al admin que reinicie el tunel."
         } elseif ($errMsg -match "Timeout|timed out") {
             $errMsg = "El servidor no respondio a tiempo. Intenta de nuevo."
         }
+        try { $errMsg = $errMsg -replace 'https?://[^\s\)\]''"<>]+','[servidor]' } catch {}
         $lblR.Text="Error: $errMsg"
         $detalle = $_.Exception.Message
         if ($errors -and $errors.Count -gt 0) { $detalle += "`n`nJuegos fallados:`n" + ($errors -join "`n") }
