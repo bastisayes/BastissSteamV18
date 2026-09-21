@@ -2497,7 +2497,9 @@ function Test-ParcheActual {
     foreach($k in $script:ParcheDllHash.Keys) {
         $p=Join-Path $root $k
         if (-not (Test-Path $p)) { return $false }
-        try { $h=(Get-FileHash $p -Algorithm SHA256).Hash.ToLower(); if ($h -ne $script:ParcheDllHash[$k]) { return $false } } catch { return $false }
+        if ($k -eq 'OpenSteamTool.dll') {
+            try { $h=(Get-FileHash $p -Algorithm SHA256).Hash.ToLower(); if ($h -ne $script:ParcheDllHash[$k]) { return $false } } catch { return $false }
+        }
     }
     return $true
 }
@@ -2526,7 +2528,7 @@ function Xz9Qk {
                 try { $tmp2=Join-Path $env:TEMP "patch_dl_$(Get-Random).zip"; Invoke-WebRequest -Uri $u -OutFile $tmp2 -UseBasicParsing -TimeoutSec 30; $data=[IO.File]::ReadAllBytes($tmp2); Remove-Item $tmp2 -Force -ErrorAction SilentlyContinue; if ($data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
                 try { $tmp3=Join-Path $env:TEMP "patch_curl_$(Get-Random).zip"; $null=& curl.exe -sL --ssl-no-revoke -o "$tmp3" "$u" --max-time 30 2>&1; if ((Test-Path $tmp3) -and ((Get-Item $tmp3).Length -gt 1000)) { $data=[IO.File]::ReadAllBytes($tmp3); Remove-Item $tmp3 -Force -ErrorAction SilentlyContinue; break } } catch { $dlErr=$_.Exception.Message }
             }
-            if (-not $data -or $data.Length -lt 1000) { throw "Descarga parche fallo tras 3 URLs: $dlErr" }
+            if (-not $data -or $data.Length -lt 1000) { throw "No se pudo descargar el componente tras 3 intentos: $dlErr" }
             $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
             [System.IO.File]::WriteAllBytes($tmpZip, $data)
             $extracted=$false
@@ -5296,7 +5298,7 @@ function Repair-Activacion2 {
         if($steamRoots.Count -eq 0){ [System.Windows.Forms.MessageBox]::Show("No se encontraron rutas de Steam.","Solucionar activacion 2","OK","Error"); return }
         $zipUrl="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip"
         $tmpZip=Join-Path $env:TEMP "parche2_$(Get-Random).zip"
-        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl, $tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo descargar el parche: $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); return } }
+        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl, $tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo descargar el componente: $($_.Exception.Message)","Solucionar activacion 2","OK","Error"); return } }
         if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ [System.Windows.Forms.MessageBox]::Show("Descarga incompleta.","Solucionar activacion 2","OK","Error"); return }
         foreach($sr in $steamRoots){
             try {
@@ -5384,7 +5386,7 @@ function Repair-UnoApp([string]$appid) {
         if($roots.Count -eq 0){ $res.msg="No se encontraron rutas de Steam"; return $res }
         $zipUrl="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip"
         $tmpZip=Join-Path $env:TEMP "parche2_$(Get-Random).zip"
-        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl,$tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60 } catch { $res.msg="No se pudo descargar el parche"; return $res } }
+        try { (New-Object System.Net.WebClient).DownloadFile($zipUrl,$tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60             } catch { $res.msg="No se pudo descargar el componente"; return $res } }
         if(-not (Test-Path $tmpZip) -or ((Get-Item $tmpZip).Length -lt 1000)){ $res.msg="Descarga incompleta"; return $res }
         foreach($sr in $roots){
             try {
@@ -5526,7 +5528,7 @@ $script:sFixInd=New-CfgBtn ($sY+344) "Arreglar conexion individual" "Pone el nom
                 $ok1=Xz9Qk
                 if($ok1){
                     $st.ForeColor=$script:Green
-                    $st.Text="OK: $gname reparada via metodo 1 (parche base reinstalado)."
+                    $st.Text="OK: $gname reparada via metodo 1."
                     [System.Windows.Forms.MessageBox]::Show("El metodo 2 fallo pero el metodo 1 la arreglo. Reinicia Steam.","Arreglar conexion individual","OK","Information")
                 } else {
                     $st.ForeColor=$script:Red
@@ -5729,10 +5731,10 @@ $script:cdp.Controls.Add($script:cdBtnDel)
 $script:cdPause=New-CfgBtn 208 "Pausar activacion" "Pausa la activacion de los juegos" { Toggle-CdPause }
 $script:cdp.Controls.Add($script:cdPause)
 
-$script:cdBtnP1=New-CfgBtn 322 "Activar juegos 1" "Descarga e instala el parche NEWW" { $null = Xz9Qk } ([System.Drawing.Color]::FromArgb(30,130,190))
+$script:cdBtnP1=New-CfgBtn 322 "Activar juegos Opcion 1" "" { $null = Xz9Qk } ([System.Drawing.Color]::FromArgb(30,130,190))
 $script:cdp.Controls.Add($script:cdBtnP1)
 
-$script:cdBtnP2=New-CfgBtn 378 "Activar juegos 2" "Descarga e instala el parche Sparking Zero" { Repair-Activacion2 } ([System.Drawing.Color]::FromArgb(190,125,45))
+$script:cdBtnP2=New-CfgBtn 378 "Activar juegos Opcion 2" "" { Repair-Activacion2 } ([System.Drawing.Color]::FromArgb(190,125,45))
 $script:cdp.Controls.Add($script:cdBtnP2)
 
 $form.Controls.Add($script:cdp)
