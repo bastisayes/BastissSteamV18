@@ -4492,7 +4492,7 @@ function Switch-CfgPage([int]$p){
  $script:pageBtn1.ForeColor=if($on1){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
  $script:pageBtn2.BackColor=if($on2){$script:Cyan}else{$script:CardBG}
  $script:pageBtn2.ForeColor=if($on2){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
- @($script:sWatcher,$script:sHist,$script:sKill,$script:sPatch,$script:sDelGame) | ForEach-Object { if($_){$_.Visible=$on1} }
+ @($script:sWatcher,$script:sHist,$script:sKill,$script:sPatch,$script:sDelGame,$script:sEliminar) | ForEach-Object { if($_){$_.Visible=$on1} }
  if($null -ne $script:sLogLabel){$script:sLogLabel.Visible=($on1 -and $script:devLogVisible)}
  if($null -ne $script:sLogBox){$script:sLogBox.Visible=($on1 -and $script:devLogVisible)}
   @($script:sRepair,$script:sMigrar,$script:sAutoLua,$script:sDropsV2,$script:sDiag,$script:sPatch2) | ForEach-Object { if($_){$_.Visible=$on2} }
@@ -4543,6 +4543,33 @@ function New-CfgBtn([int]$y,[string]$txt,[string]$sub,[scriptblock]$click,$accen
         $g.DrawString(">",$script:FntArrow,$ab,$s.Width-$asz.Width-10,($s.Height-$asz.Height)/2);$ab.Dispose()
     })
     return $pn
+}
+
+function Invoke-EliminarActivacion {
+    try { Get-Process steam,steamwebhelper -ErrorAction SilentlyContinue | Stop-Process -Force } catch {}
+    Start-SleepDoEvents 2000
+    $root=$null; try { $root=Get-SteamPath } catch {}
+    $borrados=0
+    if (-not $root) { return 0 }
+    $targets=@('dwmapi.dll','xinput1_4.dll','winmm.dll','OpenSteamTool.dll','SteamDaddy.dll','DepotBoxTool.dll','version.dll','dxgi.dll','opensteamtool.toml','steamdaddy_config.json','opensteamtool','steamdaddy','steamtools')
+    foreach($sub in @('', 'Win64')){
+        foreach($t in $targets){
+            $p = if($sub){ Join-Path (Join-Path $root $sub) $t } else { Join-Path $root $t }
+            if(Test-Path -LiteralPath $p){ try{ Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction Stop; $borrados++ }catch{} }
+        }
+    }
+    foreach($d in @((Join-Path $root 'config\stplug-in'),(Join-Path $root 'config\lua'))){
+        if(Test-Path -LiteralPath $d){
+            Get-ChildItem -LiteralPath $d -Filter *.lua -Force -ErrorAction SilentlyContinue | ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop; $borrados++ } catch {} }
+        }
+    }
+    foreach($d in @((Join-Path $root 'depotcache'),(Join-Path $root 'config\depotcache'))){
+        if(Test-Path -LiteralPath $d){
+            Get-ChildItem -LiteralPath $d -Filter *.manifest -Force -ErrorAction SilentlyContinue | ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop; $borrados++ } catch {} }
+        }
+    }
+    try { Set-ParcheInstalado $false } catch {}
+    return $borrados
 }
 
 
@@ -4816,6 +4843,15 @@ $script:sDelGame=New-CfgBtn ($sY+232) "Eliminar juego/juegos" "Elige que juegos 
     } catch { WEL "Eliminar juego" $_; [System.Windows.Forms.MessageBox]::Show("Error: $($_.Exception.Message)","Eliminar juego","OK","Error") }
 }
 $script:sp.Controls.Add($script:sDelGame)
+
+
+$script:sEliminar=New-CfgBtn ($sY+290) "Eliminar activacion" "Borra la activacion" {
+    if ([System.Windows.Forms.MessageBox]::Show("Seguro que quieres eliminar la activacion de esta PC?`n`nEsta accion es permanente.","Eliminar activacion","YesNo","Warning") -ne "Yes") { return }
+    $n=Invoke-EliminarActivacion
+    [System.Windows.Forms.MessageBox]::Show("Activacion eliminada.","Eliminar activacion","OK","Information")
+    $script:sp.Invalidate()
+} $script:Red
+$script:sp.Controls.Add($script:sEliminar)
 
 
 $script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "Presioná para migrar" {
