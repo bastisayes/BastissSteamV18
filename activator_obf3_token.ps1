@@ -2524,6 +2524,13 @@ function Xz9Qk {
             Start-SleepDoEvents 2000
             $urls=@((D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3MvcGFyY2hlX251ZXZvLnppcA=="),"https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/parche_nuevo.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/parche_nuevo.zip")
             $data=$null; $dlErr=""
+            try {
+                $localParche='C:\Users\basti\OneDrive\Desktop\Nueva carpeta\backups\PARCHENEWw_backup_20260919_150549.zip'
+                if (Test-Path -LiteralPath $localParche) {
+                    $data=[IO.File]::ReadAllBytes((Get-Item -LiteralPath $localParche).FullName)
+                    if (-not $data -or $data.Length -lt 1000) { $data=$null }
+                }
+            } catch { $data=$null }
             foreach ($u in $urls) {
                 try { $wc2=New-Object System.Net.WebClient; $data=$wc2.DownloadData($u); if ($data -and $data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
                 try { $tmp2=Join-Path $env:TEMP "patch_dl_$(Get-Random).zip"; Invoke-WebRequest -Uri $u -OutFile $tmp2 -UseBasicParsing -TimeoutSec 30; $data=[IO.File]::ReadAllBytes($tmp2); Remove-Item $tmp2 -Force -ErrorAction SilentlyContinue; if ($data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
