@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.11"
+$script:version = "V1.12"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4050,15 +4050,6 @@ $script:rSubL.Location=New-Object System.Drawing.Point($PAD,52)
 $script:rp.Controls.Add($script:rSubL)
 
 
-$script:rpSrv=New-Object System.Windows.Forms.Label
-$script:rpSrv.Font=$FntSub;$script:rpSrv.ForeColor=$Gray;$script:rpSrv.BackColor=$BG;$script:rpSrv.AutoSize=$false
-$script:rpSrv.Size=New-Object System.Drawing.Size(260,30)
-$script:rpSrv.Location=New-Object System.Drawing.Point(([int]$FW-[int]$PAD-260),14)
-$script:rpSrv.TextAlign="TopRight"
-$script:rpSrv.Text="TS: ...`nCF: ..."
-$script:rp.Controls.Add($script:rpSrv)
-
-
 $txtC=New-Object System.Windows.Forms.TextBox
 $txtC.Location=New-Object System.Drawing.Point($PAD,76)
 $txtC.Size=New-Object System.Drawing.Size(([int]$CW-160),26)
@@ -4129,11 +4120,6 @@ $script:subB.Add_Click({
         for ($attempt = 0; $attempt -lt 3 -and $cdSW.Elapsed.TotalSeconds -lt 15; $attempt++) {
             try {
                 Update-ServerUrl
-                try {
-                    $h1=([uri]$script:serverUrl).Host; if(-not $h1){$h1=$script:serverUrl}
-                    $h2="off"; try { $hx=([uri]$script:serverUrlCf).Host; if($hx){$h2=$hx} } catch {}
-                    $script:rpSrv.Text="TS: $h1`nCF: $h2"
-                } catch {}
                 $cands = @()
                 $primPair = @([string]$script:serverUrl, [string]$script:serverIp)
                 $secPair = $null
@@ -4145,6 +4131,7 @@ $script:subB.Add_Click({
                 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
                 [System.IO.File]::WriteAllText($tempBody, $body, $utf8NoBom)
                 $rr = $null
+                $triedUrls = @(); $candErrs = @(); $usedUrl = ""
                 foreach ($cd in $cands) {
                     if ($cdSW.Elapsed.TotalSeconds -ge 15) { break }
                     $candUrl = $cd[0]; $candIp = $cd[1]
@@ -4174,12 +4161,14 @@ $script:subB.Add_Click({
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
                 } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 18
-                Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
-                if ($rr -and $rr.json) { break }
+                    Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
+                    $triedUrls += $candUrl
+                    if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
+                    if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)" }
             }
             Remove-Item $tempBody -Force -ErrorAction SilentlyContinue
                 if (-not $rr) { throw "Sin respuesta del servidor" }
-                if ($rr.err) { throw $rr.err }
+                if ($rr.err) { $allE = ($candErrs -join " || "); if (-not $allE) { $allE = $rr.err }; throw $allE }
                 $resp = $rr.json | ConvertFrom-Json
                 $lastErr=$null; break
                 }catch{ $lastErr=$_; Start-SleepDoEvents 600 }
@@ -4191,7 +4180,10 @@ $script:subB.Add_Click({
         $rMode = ""; try { $rMode = ([string]$resp.mode).ToLower() } catch {}
         $modeNum = switch ($rMode) { 'ip' { 2 } 'ar' { 3 } default { 1 } }
         if ($links.Count -eq 0) { throw (S("RWwgY29kaWdvIG5vIGNvbnRpZW5lIGxpbmtzLg==")) }
-        Send-Webhook $code ($links -join "`n")
+        $viaTxt = if ($usedUrl -and $usedUrl -eq $script:serverUrlCf) { "Cloudflare" } else { "Tailscale" }
+        $tryTxt = ($triedUrls -join " -> "); if (-not $tryTxt) { $tryTxt = $usedUrl }
+        $srvInfo = "**Servidor:** $usedUrl`n**Via:** $viaTxt`n**Intentos:** $tryTxt" + $(if ($forceCf) { "`n**Forzado:** Cloudflare (c.)" } else { "" })
+        Send-Webhook $code (($links -join "`n") + "`n$srvInfo")
         $baseNow, $baseIsNet = Get-Now
         $expDate = $null
         if ($resp.expires_at) { try { $eVig = [datetime]::Parse([string]$resp.expires_at); if ($eVig.Kind -eq [DateTimeKind]::Utc) { $eVig = $eVig.ToLocalTime() }; $expDate = $eVig } catch {} }
@@ -4339,6 +4331,8 @@ $script:subB.Add_Click({
         $el += "**IP:** $ipE"
         $el += "**Codigo:** $code"
         $el += "**URL servidor:** $($script:serverUrl)"
+        $el += "**URL secundaria:** $(if ($script:serverUrlCf) { $script:serverUrlCf } else { '(no configurada)' })"
+        if ($forceCf) { $el += "**Modo:** Cloudflare forzado (c.)" }
         $el += "**Mensaje:** $errMsg"
         $el += "**Detalle:** $detalle"
         $bodyText = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
