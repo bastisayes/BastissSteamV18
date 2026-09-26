@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.15"
+$script:version = "V1.16"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2209,6 +2209,7 @@ function Update-ServerUrl {
     }
     $cfCacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cf_cached.txt"
     $gotCf = $false
+    $cfDbg = Join-Path $env:TEMP 'bsmap_cf_debug.log'
     for ($cfTry = 0; $cfTry -lt 2 -and -not $gotCf; $cfTry++) {
         try {
             $cfu2 = ([string](Invoke-RestMethod -Uri ($script:ghRawUrlCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
@@ -2217,7 +2218,26 @@ function Update-ServerUrl {
                 $gotCf = $true
                 try { [System.IO.File]::WriteAllText($cfCacheFile, $cfu2, (New-Object System.Text.UTF8Encoding $false)) } catch {}
             }
-        } catch { try { Start-Sleep -Milliseconds 800 } catch {} }
+        } catch {
+            try { Add-Content -LiteralPath $cfDbg -Value "[$(Get-Date -Format 'HH:mm:ss')] CF-RAW intento $($cfTry+1) fallo: $($_.Exception.Message)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+            try { Start-Sleep -Milliseconds 800 } catch {}
+        }
+    }
+    if (-not $gotCf) {
+        try {
+            $cfApi = Invoke-RestMethod -Uri ('https://api.github.com/repos/bastisayes/BastissSteamV18/contents/current_url_cf.txt?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop
+            if ($cfApi.content) {
+                $cfb = ([string]$cfApi.content).Replace("`n","").Replace("`r","").Replace(" ","")
+                $cfu3 = ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cfb))).Trim()
+                if ($cfu3 -match "^https?://\S+$") {
+                    $script:serverUrlCf = $cfu3
+                    $gotCf = $true
+                    try { [System.IO.File]::WriteAllText($cfCacheFile, $cfu3, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+                }
+            }
+        } catch {
+            try { Add-Content -LiteralPath $cfDbg -Value "[$(Get-Date -Format 'HH:mm:ss')] CF-API fallo: $($_.Exception.Message)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+        }
     }
     if (-not $gotCf) {
         try {
