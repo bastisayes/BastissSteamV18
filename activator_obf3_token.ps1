@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.9"
+$script:version = "V1.10"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2119,6 +2119,10 @@ if ($script:expiryWatcher) {
 
 $script:serverUrl = "http://127.0.0.1:9878"
 $script:serverIp = ""
+$script:serverUrlCf = ""
+$script:serverIpCf = ""
+$script:ghRawUrlCf = "https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/current_url_cf.txt"
+$script:ghRawIpCf = "https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/current_ip_cf.txt"
 $script:serverOverrideFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_token_override.txt"
 $script:ghApiUrlBase = (S("aHR0cHM6Ly9hcGkuZ2l0aHViLmNvbS9yZXBvcy9iYXN0aXNheWVzL0ZpeGVzLXN0ZWFtL2NvbnRlbnRzL2N1cnJlbnRfdXJsLnR4dA=="))
 $script:ghRawUrl = (S("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvQmFzdGlzc1N0ZWFtVjE4L21haW4vY3VycmVudF91cmwudHh0"))
@@ -2199,6 +2203,50 @@ function Update-ServerUrl {
                 if (Test-Path -LiteralPath $ipCacheFile) {
                     $cip = ([System.IO.File]::ReadAllText($ipCacheFile)).Trim()
                     if ($cip -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIp = $cip }
+                }
+            } catch {}
+        }
+    }
+    $cfCacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cf_cached.txt"
+    $gotCf = $false
+    try {
+        $cfu2 = ([string](Invoke-RestMethod -Uri ($script:ghRawUrlCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        if ($cfu2 -match "^https?://\S+$") {
+            $script:serverUrlCf = $cfu2
+            $gotCf = $true
+            try { [System.IO.File]::WriteAllText($cfCacheFile, $cfu2, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+        }
+    } catch {}
+    if (-not $gotCf) {
+        try {
+            if (Test-Path -LiteralPath $cfCacheFile) {
+                $ccfu = ([System.IO.File]::ReadAllText($cfCacheFile)).Trim()
+                if ($ccfu -match "^https?://\S+$") { $script:serverUrlCf = $ccfu; $gotCf = $true }
+            }
+        } catch {}
+    }
+    if (-not $gotCf) { $script:serverUrlCf = "" }
+    try {
+        $cfIpRaw = ([string](Invoke-RestMethod -Uri ($script:ghRawIpCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 6 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        if ($cfIpRaw -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIpCf = $cfIpRaw } else { $script:serverIpCf = "" }
+    } catch { $script:serverIpCf = "" }
+    if ($script:serverUrlCf -match '^https://' -and $script:serverUrlCf -ne $script:serverUrl -and -not $script:serverIpCf) {
+        $ipCfCacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_ip_cf_cached.txt"
+        try {
+            $hnCf = ([uri]$script:serverUrlCf).Host
+            if ($hnCf -and $hnCf -ne '127.0.0.1' -and $hnCf -ne 'localhost') {
+                $dohCf = Resolve-ServerIpDoH $hnCf
+                if ($dohCf -match '^\d{1,3}(\.\d{1,3}){3}$') {
+                    $script:serverIpCf = $dohCf
+                    try { [System.IO.File]::WriteAllText($ipCfCacheFile, $dohCf, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+                }
+            }
+        } catch {}
+        if (-not $script:serverIpCf) {
+            try {
+                if (Test-Path -LiteralPath $ipCfCacheFile) {
+                    $ccf = ([System.IO.File]::ReadAllText($ipCfCacheFile)).Trim()
+                    if ($ccf -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIpCf = $ccf }
                 }
             } catch {}
         }
@@ -4070,15 +4118,22 @@ $script:subB.Add_Click({
         for ($attempt = 0; $attempt -lt 3 -and $cdSW.Elapsed.TotalSeconds -lt 15; $attempt++) {
             try {
                 Update-ServerUrl
-                $reqUrl = "$($script:serverUrl)/api/redeem-code"
+                $cands = @()
+                if ($script:serverUrl) { $cands += ,@([string]$script:serverUrl, [string]$script:serverIp) }
+                if ($script:serverUrlCf -and $script:serverUrlCf -ne $script:serverUrl) { $cands += ,@([string]$script:serverUrlCf, [string]$script:serverIpCf) }
                 $tempBody = Join-Path $env:TEMP (S("YnNtYXBfcmVkZWVtX2JvZHkuanNvbg=="))
                 $tempResp = Join-Path $env:TEMP (S("YnNtYXBfcmVkZWVtX3Jlc3AuanNvbg=="))
                 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
                 [System.IO.File]::WriteAllText($tempBody, $body, $utf8NoBom)
-                $resolveArg = @()
-                if ($script:serverIp -and $script:serverUrl -match "^https://([a-zA-Z0-9-]+)") { $hn = ([uri]$script:serverUrl).Host; if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$($script:serverIp)") } }
-                $resolveStr = ($resolveArg -join "|")
-                $rr = Invoke-PsBlockingDoEvents {
+                $rr = $null
+                foreach ($cd in $cands) {
+                    if ($cdSW.Elapsed.TotalSeconds -ge 15) { break }
+                    $candUrl = $cd[0]; $candIp = $cd[1]
+                    $reqUrl = "$candUrl/api/redeem-code"
+                    $resolveArg = @()
+                    if ($candIp -and $candUrl -match "^https://([a-zA-Z0-9-]+)") { $hn = ([uri]$candUrl).Host; if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$candIp") } }
+                    $resolveStr = ($resolveArg -join "|")
+                    $rr = Invoke-PsBlockingDoEvents {
                     param($reqUrl, $body, $tempBody, $tempResp, $resolveStr, $serverIp)
                     $u8 = New-Object System.Text.UTF8Encoding $false
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
@@ -4099,8 +4154,11 @@ $script:subB.Add_Click({
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$script:serverIp) -TimeoutSec 18
-                Remove-Item $tempBody,$tempResp -Force -ErrorAction SilentlyContinue
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 18
+                Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
+                if ($rr -and $rr.json) { break }
+            }
+            Remove-Item $tempBody -Force -ErrorAction SilentlyContinue
                 if (-not $rr) { throw "Sin respuesta del servidor" }
                 if ($rr.err) { throw $rr.err }
                 $resp = $rr.json | ConvertFrom-Json
