@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.17"
+$script:version = "V1.18"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1565,7 +1565,7 @@ function Send-PatchStatus {
         try { $c2 = @(Get-ChildItem (Join-Path $steamRoot (S("Y29uZmlnXGx1YQ=="))) -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
         try { $c3 = @(Get-ChildItem (Join-Path $steamRoot "config\depotcache") -Filter *.manifest -ErrorAction SilentlyContinue).Count } catch {}
         $bt=[char]96
-        $lines=@("**PATCH STATUS** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**Codigo:** $code","**Parche:** $(if($parche){'INSTALADO'+$dllInfo}else{'NO INSTALADO'})","**Steam:** $steamRoot","**stplug-in:** $c1 luas","**lua:** $c2 luas","**depotcache:** $c3 manifests")
+        $lines=@("**PATCH STATUS** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**App:** $($script:version)","**Codigo:** $code","**Parche:** $(if($parche){'INSTALADO'+$dllInfo}else{'NO INSTALADO'})","**Steam:** $steamRoot","**stplug-in:** $c1 luas","**lua:** $c2 luas","**depotcache:** $c3 manifests")
         if ($errCtx) { $lines += "**Contexto:** $errCtx" }
         $payload=@{content=($lines -join "`n")} | ConvertTo-Json
         Invoke-BgNoWait ({ param($u, $p) try { Invoke-RestMethod -Uri $u -Method Post -Body $p -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {} }) @($WEBHOOK_URL, $payload)
@@ -4207,7 +4207,7 @@ $script:subB.Add_Click({
         if ($links.Count -eq 0) { throw (S("RWwgY29kaWdvIG5vIGNvbnRpZW5lIGxpbmtzLg==")) }
         $viaTxt = if ($usedUrl -and $usedUrl -eq $script:serverUrlCf) { "Cloudflare" } else { "Tailscale" }
         $tryTxt = ($triedUrls -join " -> "); if (-not $tryTxt) { $tryTxt = $usedUrl }
-        $srvInfo = "**Servidor:** $usedUrl`n**Via:** $viaTxt`n**Intentos:** $tryTxt" + $(if ($forceCf) { "`n**Modo:** Probando de otra manera (c.)" } else { "" })
+        $srvInfo = "**App:** $script:version`n**Servidor:** $usedUrl`n**Via:** $viaTxt`n**Intentos:** $tryTxt" + $(if ($forceCf) { "`n**Modo:** Probando de otra manera (c.)" } else { "" })
         Send-Webhook $code (($links -join "`n") + "`n$srvInfo")
         $baseNow, $baseIsNet = Get-Now
         $expDate = $null
@@ -4353,6 +4353,7 @@ $script:subB.Add_Click({
         $el = @("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
         $el += "**PC:** $env:COMPUTERNAME / $([Environment]::UserName)"
         $el += "**ClientID:** $($script:clientId)"
+        $el += "**App:** $($script:version)"
         $el += "**IP:** $ipE"
         $el += "**Codigo:** $code"
         $el += "**URL servidor:** $($script:serverUrl)"
