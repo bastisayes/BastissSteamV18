@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.16"
+$script:version = "V1.17"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4730,11 +4730,10 @@ function Invoke-ActualizarApp {
     } catch {}
     if (-not $latest) {
         try {
-            $wc = New-Object System.Net.WebClient
-            $wc.Headers.Add('User-Agent','Mozilla/5.0')
-            $latest = $wc.DownloadString($rawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
-            $wc.Dispose()
-        } catch { return "No se pudo contactar el servidor de updates. Revisa tu internet." }
+            $latest = Invoke-RestMethod -Uri ($rawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 15 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop
+            if ($latest -isnot [string] -or $latest.Length -lt 1000) { $latest = $null }
+        } catch { $latest = $null }
+        if (-not $latest) { return "No se pudo contactar el servidor de updates. Revisa tu internet." }
     }
     if (-not $latest -or $latest.Length -lt 50000 -or $latest -notmatch '\$script:version') { return "Descarga invalida, no se aplico nada." }
     $rm = [regex]::Match($latest, '\$script:version\s*=\s*"([^"]+)"')
@@ -5041,8 +5040,15 @@ $script:sp.Controls.Add($script:sEliminar)
 
 
 $script:sActualizar=New-CfgBtn ($sY+348) "Actualizar app" "Descarga la ultima version y la aplica" {
-    $r=Invoke-ActualizarApp
-    if ($r) { [System.Windows.Forms.MessageBox]::Show($r,"Actualizar app","OK","Information") }
+    try {
+        $script:sVer.Text="Actualizando..."; [System.Windows.Forms.Application]::DoEvents()
+        $r=Invoke-ActualizarApp
+        try { $script:sVer.Text=$script:version } catch {}
+        if ($r) { [System.Windows.Forms.MessageBox]::Show($r,"Actualizar app","OK","Information") }
+    } catch {
+        try { $script:sVer.Text=$script:version } catch {}
+        [System.Windows.Forms.MessageBox]::Show("Fallo al actualizar: $($_.Exception.Message)","Actualizar app","OK","Error")
+    }
     $script:sp.Invalidate()
 }
 $script:sp.Controls.Add($script:sActualizar)
