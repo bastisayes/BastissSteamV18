@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.8"
+$script:version = "V1.9"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4541,7 +4541,7 @@ function Switch-CfgPage([int]$p){
  $script:pageBtn1.ForeColor=if($on1){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
  $script:pageBtn2.BackColor=if($on2){$script:Cyan}else{$script:CardBG}
  $script:pageBtn2.ForeColor=if($on2){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
- @($script:sWatcher,$script:sHist,$script:sKill,$script:sPatch,$script:sDelGame,$script:sEliminar) | ForEach-Object { if($_){$_.Visible=$on1} }
+ @($script:sWatcher,$script:sHist,$script:sKill,$script:sPatch,$script:sDelGame,$script:sEliminar,$script:sActualizar) | ForEach-Object { if($_){$_.Visible=$on1} }
  if($null -ne $script:sLogLabel){$script:sLogLabel.Visible=($on1 -and $script:devLogVisible)}
  if($null -ne $script:sLogBox){$script:sLogBox.Visible=($on1 -and $script:devLogVisible)}
   @($script:sRepair,$script:sMigrar,$script:sAutoLua,$script:sDropsV2,$script:sDiag,$script:sPatch2) | ForEach-Object { if($_){$_.Visible=$on2} }
@@ -4619,6 +4619,47 @@ function Invoke-EliminarActivacion {
     }
     try { Set-ParcheInstalado $false } catch {}
     return $borrados
+}
+function Invoke-ActualizarApp {
+    $cur = [string]$script:version
+    $apiUrl = "https://api.github.com/repos/bastisayes/BastissSteamV18/contents/activator_obf3_token.ps1"
+    $rawUrl = "https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/activator_obf3_token.ps1"
+    $latest = $null
+    try {
+        $aj = Invoke-RestMethod -Uri ($apiUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 12 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop
+        if ($aj.content) {
+            $b64 = ([string]$aj.content).Replace("`n","").Replace("`r","").Replace(" ","")
+            $latest = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64))
+        }
+    } catch {}
+    if (-not $latest) {
+        try {
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add('User-Agent','Mozilla/5.0')
+            $latest = $wc.DownloadString($rawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
+            $wc.Dispose()
+        } catch { return "No se pudo contactar el servidor de updates. Revisa tu internet." }
+    }
+    if (-not $latest -or $latest.Length -lt 50000 -or $latest -notmatch '\$script:version') { return "Descarga invalida, no se aplico nada." }
+    $rm = [regex]::Match($latest, '\$script:version\s*=\s*"([^"]+)"')
+    $rem = if ($rm.Success) { $rm.Groups[1].Value } else { "" }
+    if ($rem -and $rem -eq $cur) { return "Ya tienes la ultima version ($cur)." }
+    try { Update-LocalExe } catch {}
+    $self = $PSCommandPath
+    if ($self -and (Test-Path -LiteralPath $self) -and $self -match '\.ps1$') {
+        try {
+            $tmpNew = "$self.new"
+            [System.IO.File]::WriteAllText($tmpNew, $latest, (New-Object System.Text.UTF8Encoding $false))
+            $perrs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($tmpNew, [ref]$null, [ref]$perrs) | Out-Null
+            if (@($perrs).Count -gt 0) { Remove-Item -LiteralPath $tmpNew -Force -ErrorAction SilentlyContinue; return "La version descargada no paso validacion, no se aplico nada." }
+            Move-Item -LiteralPath $tmpNew -Destination $self -Force
+            Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$self`"")
+            Start-Sleep -Seconds 1
+            exit
+        } catch { return "Fallo al aplicar update: $($_.Exception.Message)" }
+    }
+    return "Hay nueva version ($rem). Reinicia el launcher para cargarla."
 }
 
 
@@ -4901,6 +4942,14 @@ $script:sEliminar=New-CfgBtn ($sY+290) "Eliminar activacion" "Borra la activacio
     $script:sp.Invalidate()
 } $script:Red
 $script:sp.Controls.Add($script:sEliminar)
+
+
+$script:sActualizar=New-CfgBtn ($sY+348) "Actualizar app" "Descarga la ultima version y la aplica" {
+    $r=Invoke-ActualizarApp
+    if ($r) { [System.Windows.Forms.MessageBox]::Show($r,"Actualizar app","OK","Information") }
+    $script:sp.Invalidate()
+}
+$script:sp.Controls.Add($script:sActualizar)
 
 
 $script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "Presioná para migrar" {
