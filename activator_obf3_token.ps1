@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.10"
+$script:version = "V1.11"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2165,21 +2165,21 @@ function Update-ServerUrl {
     } catch {}
     $cacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt"
     $gotUrl = $false
-    if (Test-Path -LiteralPath $cacheFile) {
-        try {
-            $cu = ([System.IO.File]::ReadAllText($cacheFile)).Trim()
-            if ($cu -match "^https?://\S+$") { $script:serverUrl = $cu; $gotUrl = $true }
-        } catch {}
-    }
+    try {
+        $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        if ($ghu -match "^https?://\S+$") {
+            $script:serverUrl = $ghu
+            $gotUrl = $true
+            try { [System.IO.File]::WriteAllText($cacheFile, $ghu, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+        }
+    } catch {}
     if (-not $gotUrl) {
-        try {
-            $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
-            if ($ghu -match "^https?://\S+$") {
-                $script:serverUrl = $ghu
-                $gotUrl = $true
-                try { [System.IO.File]::WriteAllText($cacheFile, $ghu, (New-Object System.Text.UTF8Encoding $false)) } catch {}
-            }
-        } catch {}
+        if (Test-Path -LiteralPath $cacheFile) {
+            try {
+                $cu = ([System.IO.File]::ReadAllText($cacheFile)).Trim()
+                if ($cu -match "^https?://\S+$") { $script:serverUrl = $cu; $gotUrl = $true }
+            } catch {}
+        }
     }
     if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:9878" }
     try {
@@ -4050,6 +4050,15 @@ $script:rSubL.Location=New-Object System.Drawing.Point($PAD,52)
 $script:rp.Controls.Add($script:rSubL)
 
 
+$script:rpSrv=New-Object System.Windows.Forms.Label
+$script:rpSrv.Font=$FntSub;$script:rpSrv.ForeColor=$Gray;$script:rpSrv.BackColor=$BG;$script:rpSrv.AutoSize=$false
+$script:rpSrv.Size=New-Object System.Drawing.Size(260,30)
+$script:rpSrv.Location=New-Object System.Drawing.Point(([int]$FW-[int]$PAD-260),14)
+$script:rpSrv.TextAlign="TopRight"
+$script:rpSrv.Text="TS: ...`nCF: ..."
+$script:rp.Controls.Add($script:rpSrv)
+
+
 $txtC=New-Object System.Windows.Forms.TextBox
 $txtC.Location=New-Object System.Drawing.Point($PAD,76)
 $txtC.Size=New-Object System.Drawing.Size(([int]$CW-160),26)
@@ -4104,9 +4113,11 @@ try{ $v=Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name RedeemParallel -Erro
 $script:subB.Add_Click({
     $locTok = Get-LocalToken
     $code=$txtC.Text.Trim().ToUpper()
+    $forceCf=$false
+    if ($code -match '^C\.(.+)$') { $code=$Matches[1].Trim(); $txtC.Text=$code; if ($code) { $forceCf=$true } }
     if([string]::IsNullOrEmpty($code) -and $locTok -and $locTok.code){ $code=([string]$locTok.code).Trim().ToUpper(); $txtC.Text=$code }
     if([string]::IsNullOrEmpty($code)){$lblR.ForeColor=$script:Red;$lblR.Text=T (S("ZXJyb3JDb2RpZ28="));[System.Windows.Forms.Application]::DoEvents();return}
-    $lblR.ForeColor=$script:Yellow;$lblR.Text="Conectando con servidor..."
+    $lblR.ForeColor=$script:Yellow;$lblR.Text=if($forceCf){"Conectando (Cloudflare forzado)..."}else{"Conectando con servidor..."}
     [System.Windows.Forms.Application]::DoEvents()
     $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
     try {
@@ -4118,9 +4129,17 @@ $script:subB.Add_Click({
         for ($attempt = 0; $attempt -lt 3 -and $cdSW.Elapsed.TotalSeconds -lt 15; $attempt++) {
             try {
                 Update-ServerUrl
+                try {
+                    $h1=([uri]$script:serverUrl).Host; if(-not $h1){$h1=$script:serverUrl}
+                    $h2="off"; try { $hx=([uri]$script:serverUrlCf).Host; if($hx){$h2=$hx} } catch {}
+                    $script:rpSrv.Text="TS: $h1`nCF: $h2"
+                } catch {}
                 $cands = @()
-                if ($script:serverUrl) { $cands += ,@([string]$script:serverUrl, [string]$script:serverIp) }
-                if ($script:serverUrlCf -and $script:serverUrlCf -ne $script:serverUrl) { $cands += ,@([string]$script:serverUrlCf, [string]$script:serverIpCf) }
+                $primPair = @([string]$script:serverUrl, [string]$script:serverIp)
+                $secPair = $null
+                if ($script:serverUrlCf -and $script:serverUrlCf -ne $script:serverUrl) { $secPair = @([string]$script:serverUrlCf, [string]$script:serverIpCf) }
+                if ($forceCf -and $secPair) { $cands += ,$secPair; if ($primPair[0]) { $cands += ,$primPair } }
+                else { if ($primPair[0]) { $cands += ,$primPair }; if ($secPair) { $cands += ,$secPair } }
                 $tempBody = Join-Path $env:TEMP (S("YnNtYXBfcmVkZWVtX2JvZHkuanNvbg=="))
                 $tempResp = Join-Path $env:TEMP (S("YnNtYXBfcmVkZWVtX3Jlc3AuanNvbg=="))
                 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
