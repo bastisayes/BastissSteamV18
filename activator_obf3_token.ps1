@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.13"
+$script:version = "V1.14"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4124,7 +4124,10 @@ $script:subB.Add_Click({
                 $primPair = @([string]$script:serverUrl, [string]$script:serverIp)
                 $secPair = $null
                 if ($script:serverUrlCf -and $script:serverUrlCf -ne $script:serverUrl) { $secPair = @([string]$script:serverUrlCf, [string]$script:serverIpCf) }
-                if ($forceCf -and $secPair) { $cands += ,$secPair; if ($primPair[0]) { $cands += ,$primPair } }
+                if ($forceCf) {
+                    if ($secPair) { $cands += ,$secPair }
+                    else { throw "Probando de otra manera: no hay URL secundaria configurada." }
+                }
                 else { if ($primPair[0]) { $cands += ,$primPair }; if ($secPair) { $cands += ,$secPair } }
                 $tempBody = Join-Path $env:TEMP (S("YnNtYXBfcmVkZWVtX2JvZHkuanNvbg=="))
                 $tempResp = Join-Path $env:TEMP (S("YnNtYXBfcmVkZWVtX3Jlc3AuanNvbg=="))
