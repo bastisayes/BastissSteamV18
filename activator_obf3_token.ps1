@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.14"
+$script:version = "V1.15"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2209,14 +2209,16 @@ function Update-ServerUrl {
     }
     $cfCacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cf_cached.txt"
     $gotCf = $false
-    try {
-        $cfu2 = ([string](Invoke-RestMethod -Uri ($script:ghRawUrlCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
-        if ($cfu2 -match "^https?://\S+$") {
-            $script:serverUrlCf = $cfu2
-            $gotCf = $true
-            try { [System.IO.File]::WriteAllText($cfCacheFile, $cfu2, (New-Object System.Text.UTF8Encoding $false)) } catch {}
-        }
-    } catch {}
+    for ($cfTry = 0; $cfTry -lt 2 -and -not $gotCf; $cfTry++) {
+        try {
+            $cfu2 = ([string](Invoke-RestMethod -Uri ($script:ghRawUrlCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+            if ($cfu2 -match "^https?://\S+$") {
+                $script:serverUrlCf = $cfu2
+                $gotCf = $true
+                try { [System.IO.File]::WriteAllText($cfCacheFile, $cfu2, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+            }
+        } catch { try { Start-Sleep -Milliseconds 800 } catch {} }
+    }
     if (-not $gotCf) {
         try {
             if (Test-Path -LiteralPath $cfCacheFile) {
