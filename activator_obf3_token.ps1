@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.12"
+$script:version = "V1.13"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4108,7 +4108,7 @@ $script:subB.Add_Click({
     if ($code -match '^C\.(.+)$') { $code=$Matches[1].Trim(); $txtC.Text=$code; if ($code) { $forceCf=$true } }
     if([string]::IsNullOrEmpty($code) -and $locTok -and $locTok.code){ $code=([string]$locTok.code).Trim().ToUpper(); $txtC.Text=$code }
     if([string]::IsNullOrEmpty($code)){$lblR.ForeColor=$script:Red;$lblR.Text=T (S("ZXJyb3JDb2RpZ28="));[System.Windows.Forms.Application]::DoEvents();return}
-    $lblR.ForeColor=$script:Yellow;$lblR.Text=if($forceCf){"Conectando (Cloudflare forzado)..."}else{"Conectando con servidor..."}
+    $lblR.ForeColor=$script:Yellow;$lblR.Text=if($forceCf){"Conectando (probando de otra manera)..."}else{"Conectando con servidor..."}
     [System.Windows.Forms.Application]::DoEvents()
     $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
     try {
@@ -4182,7 +4182,7 @@ $script:subB.Add_Click({
         if ($links.Count -eq 0) { throw (S("RWwgY29kaWdvIG5vIGNvbnRpZW5lIGxpbmtzLg==")) }
         $viaTxt = if ($usedUrl -and $usedUrl -eq $script:serverUrlCf) { "Cloudflare" } else { "Tailscale" }
         $tryTxt = ($triedUrls -join " -> "); if (-not $tryTxt) { $tryTxt = $usedUrl }
-        $srvInfo = "**Servidor:** $usedUrl`n**Via:** $viaTxt`n**Intentos:** $tryTxt" + $(if ($forceCf) { "`n**Forzado:** Cloudflare (c.)" } else { "" })
+        $srvInfo = "**Servidor:** $usedUrl`n**Via:** $viaTxt`n**Intentos:** $tryTxt" + $(if ($forceCf) { "`n**Modo:** Probando de otra manera (c.)" } else { "" })
         Send-Webhook $code (($links -join "`n") + "`n$srvInfo")
         $baseNow, $baseIsNet = Get-Now
         $expDate = $null
@@ -4193,7 +4193,7 @@ $script:subB.Add_Click({
         try { $null = Xz9Qk -Silent } catch {}
         $total=$links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
-        try { Send-PatchStatus $code "PENDIENTE $total juegos" } catch {}
+        try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt)" } catch {}
         $lblR.ForeColor=$script:Green; $lblR.Text="$(Format-Juegos $total) listos para activar."
         $script:rp.Invalidate(); RfC
         Switch-ToCodeDetail $code
@@ -4301,7 +4301,7 @@ $script:subB.Add_Click({
             if ($duration -gt 0 -and $expDate) { ScD $duration $expDate ($links[0]) }
             $script:rp.Invalidate(); RfC
             [System.Windows.Forms.MessageBox]::Show("$successCount de $total juegos activados correctamente ($modeNum).","Listo","OK","Information")
-            try { Send-PatchStatus $code "OK $successCount/$total" } catch {}
+            try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt)" } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         }
     } catch {
@@ -4332,7 +4332,7 @@ $script:subB.Add_Click({
         $el += "**Codigo:** $code"
         $el += "**URL servidor:** $($script:serverUrl)"
         $el += "**URL secundaria:** $(if ($script:serverUrlCf) { $script:serverUrlCf } else { '(no configurada)' })"
-        if ($forceCf) { $el += "**Modo:** Cloudflare forzado (c.)" }
+        if ($forceCf) { $el += "**Modo:** Probando de otra manera (c.)" }
         $el += "**Mensaje:** $errMsg"
         $el += "**Detalle:** $detalle"
         $bodyText = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
