@@ -2124,6 +2124,34 @@ $script:ghApiUrlBase = (S("aHR0cHM6Ly9hcGkuZ2l0aHViLmNvbS9yZXBvcy9iYXN0aXNheWVzL
 $script:ghRawUrl = (S("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvQmFzdGlzc1N0ZWFtVjE4L21haW4vY3VycmVudF91cmwudHh0"))
 $script:ghApiIpUrl = (D "aHR0cHM6Ly9hcGkuZ2l0aHViLmNvbS9yZXBvcy9iYXN0aXNheWVzL0ZpeGVzLXN0ZWFtL2NvbnRlbnRzL2N1cnJlbnRfaXAudHh0")
 $script:ghRawIpUrl = (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvQmFzdGlzc1N0ZWFtVjE4L21haW4vY3VycmVudF9pcC50eHQ=")
+function Resolve-ServerIpDoH {
+    param([string]$hn)
+    $hn = ([string]$hn).Trim().ToLower()
+    if (-not $hn -or $hn -eq 'localhost' -or $hn -match '^\d{1,3}(\.\d{1,3}){3}$') { return "" }
+    $tmp = Join-Path $env:TEMP 'bsmap_doh.json'
+    $qs = @(
+        @("https://8.8.8.8/resolve?name=$hn&type=A", $false),
+        @("https://1.1.1.1/dns-query?name=$hn&type=A", $true)
+    )
+    foreach ($q in $qs) {
+        try {
+            try { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } } catch {}
+            if ($q[1]) { $null = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" --max-time 5 -H "Accept: application/dns-json" -o $tmp $q[0] 2>&1 }
+            else { $null = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" --max-time 5 -o $tmp $q[0] 2>&1 }
+            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $tmp)) {
+                try {
+                    $dj = [System.IO.File]::ReadAllText($tmp) | ConvertFrom-Json
+                    foreach ($an in @($dj.Answer)) {
+                        $dip = [string]$an.data
+                        if ($an.type -eq 1 -and $dip -match '^\d{1,3}(\.\d{1,3}){3}$' -and $dip -notmatch '^(100\.|10\.|127\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)') { return $dip }
+                    }
+                } catch {}
+            }
+        } catch {}
+    }
+    try { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } } catch {}
+    return ""
+}
 function Update-ServerUrl {
     try {
         if (Test-Path -LiteralPath $script:serverOverrideFile) {
@@ -2154,6 +2182,27 @@ function Update-ServerUrl {
         $ghi = ([string](Invoke-RestMethod -Uri ($script:ghRawIpUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 6 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
         if ($ghi -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIp = $ghi } else { $script:serverIp = "" }
     } catch { $script:serverIp = "" }
+    if ($script:serverUrl -match '^https://' -and -not $script:serverIp) {
+        $ipCacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_ip_cached.txt"
+        try {
+            $hnNow = ([uri]$script:serverUrl).Host
+            if ($hnNow -and $hnNow -ne '127.0.0.1' -and $hnNow -ne 'localhost') {
+                $dohIp = Resolve-ServerIpDoH $hnNow
+                if ($dohIp -match '^\d{1,3}(\.\d{1,3}){3}$') {
+                    $script:serverIp = $dohIp
+                    try { [System.IO.File]::WriteAllText($ipCacheFile, $dohIp, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+                }
+            }
+        } catch {}
+        if (-not $script:serverIp) {
+            try {
+                if (Test-Path -LiteralPath $ipCacheFile) {
+                    $cip = ([System.IO.File]::ReadAllText($ipCacheFile)).Trim()
+                    if ($cip -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIp = $cip }
+                }
+            } catch {}
+        }
+    }
 }
 
 try {
