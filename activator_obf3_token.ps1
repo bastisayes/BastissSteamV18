@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.18"
+$script:version = "V1.19"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2157,31 +2157,34 @@ function Resolve-ServerIpDoH {
     return ""
 }
 function Update-ServerUrl {
+    $ovPinned = $false
     try {
         if (Test-Path -LiteralPath $script:serverOverrideFile) {
             $ov = ([System.IO.File]::ReadAllText($script:serverOverrideFile)).Trim()
-            if ($ov -match "^https?://") { $script:serverUrl = $ov; $script:serverIp = ""; return }
+            if ($ov -match "^https?://") { $script:serverUrl = $ov; $script:serverIp = ""; $ovPinned = $true }
         }
     } catch {}
-    $cacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt"
-    $gotUrl = $false
-    try {
-        $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
-        if ($ghu -match "^https?://\S+$") {
-            $script:serverUrl = $ghu
-            $gotUrl = $true
-            try { [System.IO.File]::WriteAllText($cacheFile, $ghu, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+    if (-not $ovPinned) {
+        $cacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt"
+        $gotUrl = $false
+        try {
+            $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+            if ($ghu -match "^https?://\S+$") {
+                $script:serverUrl = $ghu
+                $gotUrl = $true
+                try { [System.IO.File]::WriteAllText($cacheFile, $ghu, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+            }
+        } catch {}
+        if (-not $gotUrl) {
+            if (Test-Path -LiteralPath $cacheFile) {
+                try {
+                    $cu = ([System.IO.File]::ReadAllText($cacheFile)).Trim()
+                    if ($cu -match "^https?://\S+$") { $script:serverUrl = $cu; $gotUrl = $true }
+                } catch {}
+            }
         }
-    } catch {}
-    if (-not $gotUrl) {
-        if (Test-Path -LiteralPath $cacheFile) {
-            try {
-                $cu = ([System.IO.File]::ReadAllText($cacheFile)).Trim()
-                if ($cu -match "^https?://\S+$") { $script:serverUrl = $cu; $gotUrl = $true }
-            } catch {}
-        }
+        if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:9878" }
     }
-    if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:9878" }
     try {
         $ghi = ([string](Invoke-RestMethod -Uri ($script:ghRawIpUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 6 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
         if ($ghi -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIp = $ghi } else { $script:serverIp = "" }
