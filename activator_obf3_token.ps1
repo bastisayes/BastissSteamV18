@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.25"
+$script:version = "V1.26"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6525,8 +6525,7 @@ if ($irmCodeArg) {
                 $r=$j.ps.EndInvoke($j.handle)
                 if($r -and $r.ok){
                     $successCount++
-                    $fn = @($r.lua)[0]; if (-not $fn) { $fn = @($r.man)[0] }; if (-not $fn) { $fn = $j.game }
-                    Write-Host "($successCount/$total) $fn"
+                    Write-Host "($successCount/$total)"
                     $timerExp=if($expDate){$expDate}else{$baseNow.AddYears(1)}
                     $timers=At5Vc; $internetNow,$netOk=Get-InternetTime; if(-not $internetNow){$internetNow=$baseNow}; $iNow=$internetNow.ToString("o")
                     $timers+=@{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$iNow;game_name=$j.game;steam_root=$steamRoot;lua_files=@($r.lua);manifest_files=@($r.man)}
