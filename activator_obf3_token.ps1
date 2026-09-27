@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.22"
+$script:version = "V1.23"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2117,7 +2117,7 @@ if ($script:expiryWatcher) {
 }
 
 
-$script:serverUrl = "http://127.0.0.1:9880"
+$script:serverUrl = "http://127.0.0.1:18880"
 $script:serverIp = ""
 $script:serverUrlCf = ""
 $script:serverIpCf = ""
@@ -2183,7 +2183,7 @@ function Update-ServerUrl {
                 } catch {}
             }
         }
-        if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:9880" }
+        if (-not $gotUrl) { $script:serverUrl = "http://127.0.0.1:18880" }
     }
     try {
         $ghi = ([string](Invoke-RestMethod -Uri ($script:ghRawIpUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 6 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
