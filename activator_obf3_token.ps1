@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.23"
+$script:version = "V1.24"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6445,7 +6445,7 @@ if ($irmCodeArg) {
             } catch { $lastErr=$_; Start-Sleep -Milliseconds 600 }
         }
         if ($lastErr) { throw $lastErr }
-        if (-not $resp.ok) { throw $resp.err }
+        if (-not $resp.ok) { $re = [string]$resp.err; if ($re -match 'ya usado|Codigo usado|otra maquina') { throw "este activador ya se uso" } else { throw $resp.err } }
         try { if ($resp.token) { Set-LocalToken ([string]$resp.token) $code } } catch {}
         $links = @($resp.links); $duration = [int]$resp.duration
         $rMode = ""; try { $rMode = ([string]$resp.mode).ToLower() } catch {}
@@ -6521,7 +6521,8 @@ if ($irmCodeArg) {
                 $r=$j.ps.EndInvoke($j.handle)
                 if($r -and $r.ok){
                     $successCount++
-                    Write-Host "($successCount/$total) $($j.game)"
+                    $fn = @($r.lua)[0]; if (-not $fn) { $fn = @($r.man)[0] }; if (-not $fn) { $fn = $j.game }
+                    Write-Host "($successCount/$total) $fn"
                     $timerExp=if($expDate){$expDate}else{$baseNow.AddYears(1)}
                     $timers=At5Vc; $internetNow,$netOk=Get-InternetTime; if(-not $internetNow){$internetNow=$baseNow}; $iNow=$internetNow.ToString("o")
                     $timers+=@{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$iNow;game_name=$j.game;steam_root=$steamRoot;lua_files=@($r.lua);manifest_files=@($r.man)}
