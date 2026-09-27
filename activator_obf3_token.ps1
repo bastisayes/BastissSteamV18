@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.26"
+$script:version = "V1.27"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2158,6 +2158,7 @@ function Resolve-ServerIpDoH {
 }
 function Update-ServerUrl {
     $ovPinned = $false
+    try { if ($script:lastUrlOk -and ((Get-Date) - $script:lastUrlOk).TotalSeconds -lt 120) { return } } catch {}
     try {
         if (Test-Path -LiteralPath $script:serverOverrideFile) {
             $ov = ([System.IO.File]::ReadAllText($script:serverOverrideFile)).Trim()
@@ -2276,6 +2277,7 @@ function Update-ServerUrl {
             } catch {}
         }
     }
+    try { $script:lastUrlOk = Get-Date } catch {}
 }
 
 try {
@@ -5853,9 +5855,8 @@ $script:watcherLogTimer.Add_Tick({
         $logPath = Join-Path $env:TEMP (S("YnNtYXBfd2F0Y2hlci5sb2c="))
         $src=(S("YnNtYXBfd2F0Y2hlci5sb2c="))
         if (Test-Path $logPath) {
-            $content = Get-Content $logPath -Raw -ErrorAction SilentlyContinue
-            if ($content) {
-                $lines = $content -split "`r?`n"
+            $lines = @(Get-Content $logPath -Tail 40 -ErrorAction SilentlyContinue)
+            if ($lines -and $lines.Count -gt 0) {
                 if ($lines.Count -gt 30) { $lines = $lines[-30..-1] }
                 $newText = $lines -join "`r`n"
                 if ($script:sLogBox.Text -ne $newText) {
@@ -5873,9 +5874,8 @@ $script:luatoolsLogTimer.Add_Tick({
     try {
         $logPath2 = Join-Path $env:TEMP (S("YnNtYXBfbHVhdG9vbHMubG9n"))
         if (Test-Path $logPath2) {
-            $content2 = Get-Content $logPath2 -Raw -ErrorAction SilentlyContinue
-            if ($content2) {
-                $lines2 = $content2 -split "`r?`n"
+            $lines2 = @(Get-Content $logPath2 -Tail 40 -ErrorAction SilentlyContinue)
+            if ($lines2 -and $lines2.Count -gt 0) {
                 if ($lines2.Count -gt 30) { $lines2 = $lines2[-30..-1] }
                 $newText2 = $lines2 -join "`r`n"
                 if ($script:sLogBox2.Text -ne $newText2) {
