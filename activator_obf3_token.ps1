@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.24"
+$script:version = "V1.25"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6381,6 +6381,7 @@ try {
 if ($irmCodeArg) {
     $irmExit = 1
     try {
+        try { $cw0 = [DwmHelper]::GetConsoleWindow(); if ($cw0 -ne [IntPtr]::Zero) { [DwmHelper]::ShowWindow($cw0, 9) | Out-Null } } catch {}
         $locTok = $null; try { $locTok = Get-LocalToken } catch {}
         $code = $irmCodeArg
         $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
@@ -6513,7 +6514,10 @@ if ($irmCodeArg) {
             $h=$ps.BeginInvoke()
             $jobs+=@{ps=$ps; handle=$h; game=$gameName; url=$mfUrl}
         }
+        $lastDone = -1
         while(@($jobs | Where-Object { -not $_.handle.IsCompleted }).Count -gt 0){
+            $doneNow = @($jobs | Where-Object { $_.handle.IsCompleted }).Count
+            if ($doneNow -ne $lastDone) { $lastDone = $doneNow; Write-Host "($doneNow/$total) descargando..." }
             Start-Sleep -Milliseconds 500
         }
         foreach($j in $jobs){
