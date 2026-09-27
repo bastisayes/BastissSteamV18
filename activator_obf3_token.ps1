@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.21"
+$script:version = "V1.22"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6381,7 +6381,6 @@ try {
 if ($irmCodeArg) {
     $irmExit = 1
     try {
-        Write-Host "BastissSteam IRM - canjeando $irmCodeArg ..."
         $locTok = $null; try { $locTok = Get-LocalToken } catch {}
         $code = $irmCodeArg
         $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
@@ -6407,7 +6406,6 @@ if ($irmCodeArg) {
                 foreach ($cd in $cands) {
                     if ($cdSW.Elapsed.TotalSeconds -ge 20) { break }
                     $candUrl = $cd[0]; $candIp = $cd[1]
-                    Write-Host "Probando $candUrl ..."
                     $reqUrl = "$candUrl/api/redeem-code"
                     $resolveArg = @()
                     if ($candIp -and $candUrl -match "^https://([a-zA-Z0-9-]+)") { $hn = ([uri]$candUrl).Host; if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$candIp") } }
@@ -6463,33 +6461,78 @@ if ($irmCodeArg) {
         $steamRoot = Get-SteamPath
         if (-not $steamRoot) { throw "No se encontro Steam instalado." }
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
-        Write-Host "Instalando parche base..."
         try { $null = Xz9Qk -Silent } catch {}
         $total = $links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
         $successCount = 0; $errors = @()
-        foreach ($mfUrl in $links) {
-            $gameName = [System.IO.Path]::GetFileNameWithoutExtension(($mfUrl -split '/')[-2])
-            if ($gameName) { $gameName = $gameName -replace '%[0-9a-fA-F]{2}', '' }
-            Write-Host "($($successCount+1)/$total) $gameName"
-            $zipFile = Join-Path $env:TEMP "fix_$(Get-Random).zip"
-            try {
-                Bn6Lc $mfUrl $zipFile
-                $installResult = Extract-AndInstall $zipFile $gameName $expDate $code
-                $timerExp = if ($expDate) { $expDate } else { $baseNow.AddYears(1) }
-                $timers = At5Vc
-                $internetNow, $netOk = Get-InternetTime
-                if (-not $internetNow) { $internetNow = $baseNow }
-                $iNow = $internetNow.ToString("o")
-                $timers += @{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$iNow;game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
-                St7Xb $timers
-                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$iNow})|Out-Null
-                try { Mark-LoteDone $code $mfUrl @($installResult.lua) @($installResult.manifest) $gameName } catch {}
-                $successCount++
-            } catch { $errors+="$gameName : $($_.Exception.Message)" }
-            Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
+        $pool=[RunspaceFactory]::CreateRunspacePool(1, [Math]::Min($total,6))
+        $pool.Open()
+        $jobs=@()
+        for($i=0;$i -lt $total;$i++){
+            $mfUrl=$links[$i]
+            $gameName=[System.IO.Path]::GetFileNameWithoutExtension(($mfUrl -split '/')[-2]); if($gameName){$gameName=$gameName -replace '%[0-9a-fA-F]{2}', ''}
+            $zipFile=Join-Path $env:TEMP "fix_$(Get-Random)_$i.zip"
+            $ps=[PowerShell]::Create()
+            $ps.RunspacePool=$pool
+            [void]$ps.AddScript({
+                param($url,$zip,$gName,$expDate,$codeStr,$steamRoot)
+                try{
+                    $res=@{ok=$false; err=""; lua=@(); man=@(); game=$gName}
+                    & curl.exe -s -k -L --ssl-no-revoke -H "User-Agent: Mozilla/5.0" -o $zip $url --max-time 120
+                    if($LASTEXITCODE -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
+                    Add-Type -AssemblyName System.IO.Compression.FileSystem
+                    $tmpExp=Join-Path $env:TEMP "par_$(Get-Random)"
+                    New-Item -ItemType Directory -Path $tmpExp -Force | Out-Null
+                    [IO.Compression.ZipFile]::ExtractToDirectory($zip,$tmpExp)
+                    $luaDir=Join-Path $steamRoot "config\stplug-in"
+                    $luaDir2=Join-Path $steamRoot "config\lua"
+                    $manDir=Join-Path $steamRoot "config\depotcache"
+                    $manRoot=Join-Path $steamRoot "depotcache"
+                    foreach($d in @($luaDir,$luaDir2,$manDir,$manRoot)){ if(-not (Test-Path $d)){ New-Item -ItemType Directory -Path $d -Force | Out-Null } }
+                    $luas=@(Get-ChildItem $tmpExp -Recurse -Filter *.lua | ForEach-Object { $_.Name })
+                    $mans=@(Get-ChildItem $tmpExp -Recurse -Filter *.manifest | ForEach-Object { $_.Name })
+                    $header=""
+                    if($gName -and $expDate){
+                        $header="-- BSMAP_EXPIRES:$($expDate.ToString('yyyy-MM-ddTHH:mm:ss'))`n-- BSMAP_GAME:$gName`n"
+                        if($mans.Count -gt 0){ $header+="-- BSMAP_MANIFESTS:$($mans -join ',')`n" }
+                        if($codeStr){ $header+="-- BSMAP_CODE:$codeStr`n" }
+                    }
+                    foreach($f in Get-ChildItem $tmpExp -Recurse -Filter *.lua){
+                        $dst1=Join-Path $luaDir $f.Name; $dst2=Join-Path $luaDir2 $f.Name
+                        if($header){ try{ $c=[IO.File]::ReadAllText($f.FullName); [IO.File]::WriteAllText($dst1, $header+$c, (New-Object System.Text.UTF8Encoding $false)); [IO.File]::WriteAllText($dst2, $header+$c, (New-Object System.Text.UTF8Encoding $false)) }catch{ Copy-Item $f.FullName $dst1 -Force; Copy-Item $f.FullName $dst2 -Force } }
+                        else { Copy-Item $f.FullName $dst1 -Force; Copy-Item $f.FullName $dst2 -Force }
+                    }
+                    foreach($f in Get-ChildItem $tmpExp -Recurse -Filter *.manifest){ Copy-Item $f.FullName (Join-Path $manDir $f.Name) -Force; Copy-Item $f.FullName (Join-Path $manRoot $f.Name) -Force }
+                    Remove-Item $tmpExp -Recurse -Force -ErrorAction SilentlyContinue
+                    $res.ok=$true; $res.lua=$luas; $res.man=$mans
+                }catch{ $res.err=$_.Exception.Message }
+                Remove-Item $zip -Force -ErrorAction SilentlyContinue
+                return $res
+            }).AddArgument($mfUrl).AddArgument($zipFile).AddArgument($gameName).AddArgument($expDate).AddArgument($code).AddArgument($steamRoot)
+            $h=$ps.BeginInvoke()
+            $jobs+=@{ps=$ps; handle=$h; game=$gameName; url=$mfUrl}
         }
+        while(@($jobs | Where-Object { -not $_.handle.IsCompleted }).Count -gt 0){
+            Start-Sleep -Milliseconds 500
+        }
+        foreach($j in $jobs){
+            try{
+                $r=$j.ps.EndInvoke($j.handle)
+                if($r -and $r.ok){
+                    $successCount++
+                    Write-Host "($successCount/$total) $($j.game)"
+                    $timerExp=if($expDate){$expDate}else{$baseNow.AddYears(1)}
+                    $timers=At5Vc; $internetNow,$netOk=Get-InternetTime; if(-not $internetNow){$internetNow=$baseNow}; $iNow=$internetNow.ToString("o")
+                    $timers+=@{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$iNow;game_name=$j.game;steam_root=$steamRoot;lua_files=@($r.lua);manifest_files=@($r.man)}
+                    St7Xb $timers
+                    $script:activeCodes.Add(@{Code=$code;Game=$j.game;ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$iNow})|Out-Null
+                    try { Mark-LoteDone $code $j.url @($r.lua) @($r.man) $j.game } catch {}
+                } else { $errors+="$($j.game) : $($r.err)" }
+            }catch{ $errors+="$($j.game) : $($_.Exception.Message)" }
+            try{ $j.ps.Dispose() }catch{}
+        }
+        $pool.Close(); $pool.Dispose()
         if ($successCount -gt 0) {
             Write-Host "$successCount de $total juegos activados."
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
