@@ -1,4 +1,4 @@
-﻿function S([string]$b) {
+function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
 }
 $script:obfKey = [Convert]::FromBase64String("QmFzdGlzc1N0ZWFt")
@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.28"
+$script:version = "V1.29"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
