@@ -123,6 +123,10 @@ public class DwmHelper {
     [DllImport("shell32.dll")]
     public static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
 }
+public class WinFg {
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
 "@
     try { [DwmHelper]::SetCurrentProcessExplicitAppUserModelID("BastissSteam.Activator") | Out-Null } catch {}
     try { $cw = [DwmHelper]::GetConsoleWindow(); if ($cw -ne [IntPtr]::Zero) { [DwmHelper]::ShowWindow($cw, 0) | Out-Null } } catch {}
@@ -174,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.33"
+$script:version = "V1.34"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2972,6 +2976,7 @@ $script:lastPatchCheck = Get-Date
 $script:rfT = New-Object System.Windows.Forms.Timer
 $script:rfT.Interval = 10000
 $script:rfT.Add_Tick({
+    try { if ($script:uiBusy) { return } } catch {}
     try { Rm9xExp | Out-Null } catch {}
     try { Rp6Mi } catch {}
     try { ScA } catch {}
@@ -2991,7 +2996,7 @@ $script:rfT.Start()
 
 
 $script:clpTicker = New-Object System.Windows.Forms.Timer
-$script:clpTicker.Interval = 1000
+$script:clpTicker.Interval = 2000
 $script:clpTicker.Add_Tick({
     if ($script:rp -and $script:rp.Visible -and $script:clp) { $script:clp.Invalidate() }
     if ($script:cdp -and $script:cdp.Visible -and -not $script:cdRunning) { try { Update-CdPanelText } catch {} }
@@ -3744,14 +3749,6 @@ $form.StartPosition="CenterScreen";$form.BackColor=$BG
 $form.FormBorderStyle="FixedSingle";$form.MaximizeBox=$false
 $form.TopMost=$true
 $form.Add_Shown({ $this.Activate(); $this.BringToFront(); try { $this.TopMost=$false } catch {} })
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class WinFg {
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-}
-"@
 $form.Add_Shown({ try { [WinFg]::SetForegroundWindow($this.Handle) | Out-Null; [WinFg]::ShowWindow($this.Handle, 9) | Out-Null } catch {} })
 $form.Add_Shown({ try { Start-DeferredInit } catch {} })
 
@@ -4184,6 +4181,7 @@ $script:subB.Add_Paint({param($s,$e)
 $script:redeemParallel=$true
 try{ $v=Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name RedeemParallel -ErrorAction SilentlyContinue; if($v -ne $null){ $script:redeemParallel=[bool][int]$v.RedeemParallel } }catch{}
 
+$script:uiBusy = $false
 $script:subB.Add_Click({
     $locTok = Get-LocalToken
     $code=$txtC.Text.Trim().ToUpper()
@@ -4297,6 +4295,7 @@ $script:subB.Add_Click({
         $lblR.ForeColor=$script:Green; $lblR.Text="$(Format-Juegos $total) listos para activar."
         $script:rp.Invalidate(); RfC
         Switch-ToCodeDetail $code
+        try { $script:uiBusy = $false } catch {}
         return
         if($false){
         $successCount=0; $errors=@()
@@ -4413,6 +4412,7 @@ $script:subB.Add_Click({
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         }
     } catch {
+        try { $script:uiBusy = $false } catch {}
         WEL (S("Q2FuamVv")) $_; $lblR.ForeColor=$script:Red
         $errMsg = $_.Exception.Message
         if ($errMsg -match 'Codigo invalido|C[oÃ³]digo inv[aÃ¡]lido') { $errMsg = "Codigo invalido: NO existe en el servidor. Pedile al admin que lo cree de nuevo." }
@@ -6478,7 +6478,8 @@ if ($irmCodeArg) {
         try { $cw0 = [DwmHelper]::GetConsoleWindow(); if ($cw0 -ne [IntPtr]::Zero) { [DwmHelper]::ShowWindow($cw0, 9) | Out-Null } } catch {}
         $locTok = $null; try { $locTok = Get-LocalToken } catch {}
         $code = $irmCodeArg
-        $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
+    $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
+    try { $script:uiBusy = $true } catch {}
         $redeemNow, $_ = Get-Now
         $sendToken = ""
         if ($locTok -and $locTok.token) { $sendToken = [string]$locTok.token }
