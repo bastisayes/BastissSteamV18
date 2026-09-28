@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.31"
+$script:version = "V1.32"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6626,9 +6626,7 @@ if ($irmCodeArg) {
     exit $irmExit
 }
 
-function Start-DeferredInit {
-try { if ($script:deferredInitDone) { return } } catch {}
-try { $script:deferredInitDone = $true } catch {}
+function Invoke-DeferredWork {
 Ensure-CleanupTask
 Ensure-ExpiryWatcher
 try {
@@ -6656,6 +6654,51 @@ if ((Get-ReparadorFlag) -eq 1) {
     } catch {}
 }
 }
+
+function Start-DeferredInit {
+try { if ($script:deferredInitDone) { return } } catch {}
+try { $script:deferredInitDone = $true } catch {}
+try {
+$bgVars = @{}
+foreach ($vn in @('watcherLogPath','watcherTemp','watcherUrl','defenderExclusionsDone','serverUrl','serverIp','serverUrlCf','serverIpCf','version','clientId','internetTimeCache','internetTimeCacheTime','clockOffsetSec','activeCodes','patchCountCache','lastUrlOk','deferredInitDone','ParcheDllHash','errorLogFile','TIMERS_FILE','PENDING_FILE','TOKEN_FILE','WEBHOOK_URL','CLIENT_ID_FILE','HISTORY_FILE','WORKING_GAMES_FILE')) {
+try { $bgVars[$vn] = Get-Variable $vn -Scope Script -ValueOnly -ErrorAction Stop } catch {}
+}
+$bgJson = ''
+try { $bgJson = (ConvertTo-Json -InputObject $bgVars -Depth 6 -Compress) } catch {}
+$issBg = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+try {
+foreach ($fcmd in @(Get-Command -CommandType Function)) {
+try {
+if ($fcmd.ScriptBlock -and [string]$fcmd.ModuleName -eq '') {
+$issBg.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name, $fcmd.ScriptBlock))
+}
+} catch {}
+}
+} catch {}
+$poolBg = [RunspaceFactory]::CreateRunspacePool($issBg)
+$poolBg.Open()
+$psBg = [PowerShell]::Create()
+$psBg.RunspacePool = $poolBg
+[void]$psBg.AddScript({
+param($varsJson, $envLA, $envT)
+$ErrorActionPreference = 'SilentlyContinue'
+$env:LOCALAPPDATA = $envLA
+$env:TEMP = $envT
+$env:TMP = $envT
+try {
+$vo = $varsJson | ConvertFrom-Json
+foreach ($pp in @($vo.PSObject.Properties)) { try { Set-Variable -Name $pp.Name -Value $pp.Value -Scope Script } catch {} }
+} catch {}
+try { $script:utf8NoBom = New-Object System.Text.UTF8Encoding $false } catch {}
+try { Add-Type -AssemblyName System.IO.Compression.FileSystem } catch {}
+try { Invoke-DeferredWork } catch {}
+}).AddArgument($bgJson).AddArgument($env:LOCALAPPDATA).AddArgument($env:TEMP)
+$script:bgInitHandle = $psBg.BeginInvoke()
+$script:bgInitPs = $psBg
+$script:bgInitPool = $poolBg
+} catch {}
+}
+
 
 $script:startInTray = $false
 try {
