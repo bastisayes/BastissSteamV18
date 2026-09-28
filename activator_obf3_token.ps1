@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.30"
+$script:version = "V1.31"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1561,9 +1561,17 @@ function Send-PatchStatus {
         $parche = $parcheFlag -or $hasDll
         $dllInfo = if ($hasDll) { " (dll OK)" } elseif ($parcheFlag) { " (flag OK, dll falta)" } else { "" }
         $c1=0;$c2=0;$c3=0
-        try { $c1 = @(Get-ChildItem (Join-Path $steamRoot (S("Y29uZmlnXHN0cGx1Zy1pbg=="))) -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
-        try { $c2 = @(Get-ChildItem (Join-Path $steamRoot (S("Y29uZmlnXGx1YQ=="))) -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
-        try { $c3 = @(Get-ChildItem (Join-Path $steamRoot "config\depotcache") -Filter *.manifest -ErrorAction SilentlyContinue).Count } catch {}
+        $ccKey = [string]$steamRoot
+        try {
+            if ($script:patchCountCache -and $script:patchCountCache.root -eq $ccKey -and ((Get-Date) - $script:patchCountCache.time).TotalSeconds -lt 120) {
+                $c1 = $script:patchCountCache.c1; $c2 = $script:patchCountCache.c2; $c3 = $script:patchCountCache.c3
+            } else {
+                try { $c1 = @(Get-ChildItem (Join-Path $steamRoot (S("Y29uZmlnXHN0cGx1Zy1pbg=="))) -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
+                try { $c2 = @(Get-ChildItem (Join-Path $steamRoot (S("Y29uZmlnXGx1YQ=="))) -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
+                try { $c3 = @(Get-ChildItem (Join-Path $steamRoot "config\depotcache") -Filter *.manifest -ErrorAction SilentlyContinue).Count } catch {}
+                $script:patchCountCache = @{ root = $ccKey; time = Get-Date; c1 = $c1; c2 = $c2; c3 = $c3 }
+            }
+        } catch {}
         $bt=[char]96
         $lines=@("**PATCH STATUS** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**App:** $($script:version)","**Codigo:** $code","**Parche:** $(if($parche){'INSTALADO'+$dllInfo}else{'NO INSTALADO'})","**Steam:** $steamRoot","**stplug-in:** $c1 luas","**lua:** $c2 luas","**depotcache:** $c3 manifests")
         if ($errCtx) { $lines += "**Contexto:** $errCtx" }
@@ -3721,6 +3729,7 @@ public class WinFg {
 }
 "@
 $form.Add_Shown({ try { [WinFg]::SetForegroundWindow($this.Handle) | Out-Null; [WinFg]::ShowWindow($this.Handle, 9) | Out-Null } catch {} })
+$form.Add_Shown({ try { Start-DeferredInit } catch {} })
 
 
 $ib=New-Object System.Drawing.Bitmap(64,64)
@@ -6617,6 +6626,9 @@ if ($irmCodeArg) {
     exit $irmExit
 }
 
+function Start-DeferredInit {
+try { if ($script:deferredInitDone) { return } } catch {}
+try { $script:deferredInitDone = $true } catch {}
 Ensure-CleanupTask
 Ensure-ExpiryWatcher
 try {
@@ -6642,6 +6654,7 @@ if ((Get-ReparadorFlag) -eq 1) {
             try { Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [AUTO] Reparador auto-iniciado (flag persistente)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
         }
     } catch {}
+}
 }
 
 $script:startInTray = $false
