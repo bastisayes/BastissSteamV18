@@ -174,7 +174,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.32"
+$script:version = "V1.33"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1701,18 +1701,42 @@ function Get-SafeFont {
 }
 
 
+function Save-DefExclFlag([string]$p) {
+    try {
+        $defFlag = Join-Path $env:LOCALAPPDATA "BastissSteam\defexcl_done.txt"
+        $ddf = Split-Path $defFlag -Parent
+        if (-not (Test-Path $ddf)) { New-Item -ItemType Directory -Path $ddf -Force | Out-Null }
+        Add-Content -LiteralPath $defFlag -Value ($p + "|" + (Get-Date -Format 'yyyyMMdd')) -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch {}
+}
+function Test-DefExclFlag([string]$p) {
+    try {
+        $defFlag = Join-Path $env:LOCALAPPDATA "BastissSteam\defexcl_done.txt"
+        if (-not (Test-Path -LiteralPath $defFlag)) { return $false }
+        $cut = (Get-Date).AddDays(-7)
+        foreach ($fl in @(Get-Content -LiteralPath $defFlag -ErrorAction Stop)) {
+            $fp = ($fl -split '\|')[0]; $fd = [datetime]::MinValue
+            try { $fd = [datetime]::ParseExact(($fl -split '\|')[1],'yyyyMMdd',$null) } catch {}
+            if ($fp -eq $p -and $fd -ge $cut) { return $true }
+        }
+    } catch {}
+    return $false
+}
 function Add-DefenderExclusion {
     param([string]$Path)
+    if (Test-DefExclFlag $Path) { return $true }
     $regPath = "HKLM:\SOFTWARE\Microsoft\Microsoft Antimalware\Exclusions\Paths"
     $current = try { (Get-ItemProperty -Path $regPath -ErrorAction Stop).PSObject.Properties.Name } catch { @() }
-    if ($current -contains $Path) { return $true }
+    if ($current -contains $Path) { Save-DefExclFlag $Path; return $true }
     try {
         Set-ItemProperty -Path $regPath -Name $Path -Value 0 -Type DWord -ErrorAction Stop
+        Save-DefExclFlag $Path
         return $true
     } catch {}
     try {
         $cmd = "reg.exe ADD `"HKLM\SOFTWARE\Microsoft\Microsoft Antimalware\Exclusions\Paths`" /v `"$Path`" /t REG_DWORD /d 0 /f"
         Start-Process cmd -ArgumentList "/c $cmd" -Verb RunAs -WindowStyle Hidden -Wait -ErrorAction Stop
+        Save-DefExclFlag $Path
         return $true
     } catch { return $false }
 }
@@ -6323,6 +6347,7 @@ function Add-SteamDefenderExclusions {
             $exclusions += (Join-Path $lib "config\depotcache")
         }
         $exclusions = $exclusions | Select-Object -Unique | Where-Object { $_ -and (Test-Path $_) }
+        $allNeeded = @($exclusions)
         if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
         try {
             $existingExcl = @()
@@ -6330,6 +6355,20 @@ function Add-SteamDefenderExclusions {
             if (-not $existingExcl -or $existingExcl.Count -eq 0) { try { $existingExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
             $exclusions = @($exclusions | Where-Object { $existingExcl -notcontains $_ })
             if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
+            try {
+                $defCut = (Get-Date).AddDays(-7)
+                $fresh = @()
+                $defFlagF = Join-Path $env:LOCALAPPDATA "BastissSteam\defexcl_done.txt"
+                if (Test-Path -LiteralPath $defFlagF) {
+                    foreach ($fl in @(Get-Content -LiteralPath $defFlagF -ErrorAction Stop)) {
+                        $fp = ($fl -split '\|')[0]; $fdd = [datetime]::MinValue
+                        try { $fdd = [datetime]::ParseExact(($fl -split '\|')[1],'yyyyMMdd',$null) } catch {}
+                        if ($fdd -ge $defCut) { $fresh += $fp }
+                    }
+                }
+                $exclusions = @($exclusions | Where-Object { $fresh -notcontains $_ })
+                if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
+            } catch {}
         } catch {}
         $batPath = Join-Path $env:TEMP (S("YnNtYXBfYWRkX2V4Y2x1c2lvbnMuYmF0"))
         $lines = @("@echo off")
@@ -6348,6 +6387,7 @@ function Add-SteamDefenderExclusions {
         $proc.WaitForExit(30000) | Out-Null
         Start-Sleep -Milliseconds 500
         try { Remove-Item $batPath -Force -ErrorAction SilentlyContinue } catch {}
+        try { foreach ($ex in $allNeeded) { Save-DefExclFlag $ex } } catch {}
         $script:defenderExclusionsDone = $true
         Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [DEFENDER] Exclusiones agregadas en folders de Steam" -Encoding UTF8 -ErrorAction SilentlyContinue
         return $true
