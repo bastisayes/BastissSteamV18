@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.34"
+$script:version = "V1.35"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4191,6 +4191,7 @@ $script:subB.Add_Click({
     if([string]::IsNullOrEmpty($code)){$lblR.ForeColor=$script:Red;$lblR.Text=T (S("ZXJyb3JDb2RpZ28="));[System.Windows.Forms.Application]::DoEvents();return}
     $lblR.ForeColor=$script:Yellow;$lblR.Text=if($forceCf){"Conectando (probando de otra manera)..."}else{"Conectando con servidor..."}
     [System.Windows.Forms.Application]::DoEvents()
+    if ($script:uiBusy) { $lblR.Text="Ya hay un canje en curso, espera que termine..."; return }
     $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         $redeemNow, $_ = Get-Now
