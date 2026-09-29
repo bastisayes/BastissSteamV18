@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.47"
+$script:version = "V1.48"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6741,7 +6741,7 @@ if ($irmCodeArg) {
     } catch {
         $em = $_.Exception.Message
         try { $em = $em -replace 'https?://[^\s\)\]''"<>]+','[servidor]' } catch {}
-        Write-Host "ERROR: $em"
+        Write-Host "No se pudo canjear. Se envio el reporte."
         try { Send-ConnErrorBg $code $em ([string]$_.Exception.Message) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {}
     }
     try {
