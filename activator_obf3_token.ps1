@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.43"
+$script:version = "V1.44"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -3036,6 +3036,7 @@ $script:rfT.Start()
 $script:clpTicker = New-Object System.Windows.Forms.Timer
 $script:clpTicker.Interval = 2000
 $script:clpTicker.Add_Tick({
+    try { if ($form.WindowState -eq 'Minimized') { return } } catch {}
     if ($script:rp -and $script:rp.Visible -and $script:clp) { $script:clp.Invalidate() }
     if ($script:cdp -and $script:cdp.Visible -and -not $script:cdRunning) { try { Update-CdPanelText } catch {} }
 })
@@ -3044,7 +3045,7 @@ $script:clpTicker.Start()
 
 $script:urlChecker = New-Object System.Windows.Forms.Timer
 $script:urlChecker.Interval = 120000
-$script:urlChecker.Add_Tick({ try { Update-ServerUrl } catch {} })
+$script:urlChecker.Add_Tick({ try { if ($form.WindowState -ne 'Minimized') { Update-ServerUrl } } catch {} })
 $script:urlChecker.Start()
 
 
@@ -6151,6 +6152,7 @@ if ($script:steamLibs -eq $null) { try { $script:steamLibs = Ss3Jd; $script:stea
 $script:steamWatchTimer = New-Object System.Windows.Forms.Timer
 $script:steamWatchTimer.Interval = 15000
 $script:steamWatchTimer.Add_Tick({
+    try { if ($form.WindowState -eq 'Minimized') { return } } catch {}
     try {
         if ($script:fixesJob -eq $null -and ($script:fixesCache.Count -eq 0 -or ((Get-Date) - $script:fixesCacheTime).TotalSeconds -gt 120)) {
             $script:fixesJob = Start-Job -ScriptBlock {
