@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.44"
+$script:version = "V1.45"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2740,7 +2740,7 @@ function Xz9Qk {
             }
             if (-not $defOk) {
                 $defMsg = "Se pedira permiso de ADMINISTRADOR para continuar. Aceptalo cuando aparezca."
-                if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { [System.Windows.Forms.MessageBox]::Show($defMsg,"Permiso","OK","Warning") } catch {} }
+                if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { $lblR.ForeColor=$script:Orange; $lblR.Text=$defMsg; [System.Windows.Forms.Application]::DoEvents() } catch {} }
             }
             Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-SleepDoEvents 2000
@@ -4340,6 +4340,7 @@ $script:subB.Add_Click({
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt)" } catch {}
         $lblR.ForeColor=$script:Green; $lblR.Text="$(Format-Juegos $total) listos para activar."
         $script:rp.Invalidate(); RfC
+        try { $form.Show(); $form.WindowState='Normal'; $form.Activate() } catch {}
         Switch-ToCodeDetail $code
         try { $script:uiBusy = $false } catch {}
         return
