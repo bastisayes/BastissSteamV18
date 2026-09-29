@@ -4268,7 +4268,7 @@ $script:subB.Add_Click({
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','5','--max-time','10','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','7','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -4287,7 +4287,7 @@ $script:subB.Add_Click({
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
@@ -4297,7 +4297,7 @@ $script:subB.Add_Click({
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 12
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 8
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
@@ -6530,7 +6530,7 @@ if ($irmCodeArg) {
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','5','--max-time','10','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','7','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -6549,7 +6549,7 @@ if ($irmCodeArg) {
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
@@ -6559,7 +6559,7 @@ if ($irmCodeArg) {
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 12
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 8
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
