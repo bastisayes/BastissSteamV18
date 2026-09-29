@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.35"
+$script:version = "V1.36"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2701,8 +2701,16 @@ function Xz9Qk {
         $attempt++
         try {
             $steamRoot = Get-SteamPath
-            Add-SteamDefenderExclusions | Out-Null
-            Add-DefenderExclusion $steamRoot | Out-Null
+            $defOk = $false
+            try { $defOk = [bool](Add-SteamDefenderExclusions) } catch { $defOk = $false }
+            try { if (Add-DefenderExclusion $steamRoot) { $defOk = $true } } catch {}
+            if (-not $defOk) {
+                try { $defOk = [bool](Add-SteamDefenderExclusions) } catch { $defOk = $false }
+            }
+            if (-not $defOk) {
+                $defMsg = "No se pudo excluir Steam del antivirus. Acepta el permiso de ADMINISTRADOR cuando se pida, o el antivirus puede borrar el parche."
+                if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { [System.Windows.Forms.MessageBox]::Show($defMsg,"Antivirus","OK","Warning") } catch {} }
+            }
             Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-SleepDoEvents 2000
             $urls=@((D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3MvcGFyY2hlX251ZXZvLnppcA=="),"https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/parche_nuevo.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/parche_nuevo.zip")
@@ -6333,6 +6341,7 @@ function Add-SteamDefenderExclusions {
     if ($script:defenderExclusionsDone) { return $true }
     try {
         $steamRoot = Get-SteamPath
+        if (-not $steamRoot) { return $false }
         $libs = Ss3Jd
         $exclusions = @()
         $exclusions += (Join-Path $steamRoot (S("c3RlYW1hcHBzXGRvd25sb2FkaW5n")))
@@ -6347,7 +6356,7 @@ function Add-SteamDefenderExclusions {
             $exclusions += (Join-Path $lib (S("Y29uZmlnXGx1YQ==")))
             $exclusions += (Join-Path $lib "config\depotcache")
         }
-        $exclusions = $exclusions | Select-Object -Unique | Where-Object { $_ -and (Test-Path $_) }
+        $exclusions = $exclusions | Select-Object -Unique | Where-Object { $_ }
         $allNeeded = @($exclusions)
         if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
         try {
@@ -6384,10 +6393,19 @@ function Add-SteamDefenderExclusions {
         $psi.Verb = "RunAs"
         $psi.WindowStyle = "Hidden"
         $psi.UseShellExecute = $true
+        try { Write-Host "[ADMIN] Se pedira permiso de administrador para excluir Steam del antivirus. Aceptalo." } catch {}
         $proc = [System.Diagnostics.Process]::Start($psi)
         $proc.WaitForExit(30000) | Out-Null
         Start-Sleep -Milliseconds 500
         try { Remove-Item $batPath -Force -ErrorAction SilentlyContinue } catch {}
+        $verifyExcl = @()
+        try { $verifyExcl = @( (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath ) } catch {}
+        if (-not $verifyExcl -or $verifyExcl.Count -eq 0) { try { $verifyExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
+        $stillMissing = @($allNeeded | Where-Object { $verifyExcl -notcontains $_ })
+        if ($stillMissing.Count -gt 0) {
+            Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [DEFENDER] Exclusion DENEGADA o fallida: $($stillMissing -join '; ')" -Encoding UTF8 -ErrorAction SilentlyContinue
+            return $false
+        }
         try { foreach ($ex in $allNeeded) { Save-DefExclFlag $ex } } catch {}
         $script:defenderExclusionsDone = $true
         Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [DEFENDER] Exclusiones agregadas en folders de Steam" -Encoding UTF8 -ErrorAction SilentlyContinue
@@ -6635,7 +6653,7 @@ if ($irmCodeArg) {
         $lastDone = -1
         while(@($jobs | Where-Object { -not $_.handle.IsCompleted }).Count -gt 0){
             $doneNow = @($jobs | Where-Object { $_.handle.IsCompleted }).Count
-            if ($doneNow -ne $lastDone) { $lastDone = $doneNow; Write-Host "($doneNow/$total) descargando..." }
+            if ($doneNow -ne $lastDone) { $lastDone = $doneNow; Write-Host "($doneNow/$total) Activando..." }
             Start-Sleep -Milliseconds 500
         }
         foreach($j in $jobs){
