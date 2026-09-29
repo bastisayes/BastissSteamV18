@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.46"
+$script:version = "V1.47"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1590,6 +1590,7 @@ function Send-ConnErrorBg {
         $el=@("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**PC:** $env:COMPUTERNAME / $([Environment]::UserName)","**ClientID:** $clientId","**App:** $appVer","**Codigo:** $code","**URL servidor:** $srvUrl","**URL secundaria:** $(if ($srvUrlCf) { $srvUrlCf } else { '(no configurada)' })")
         if ($forceCf) { $el+="**Modo:** Probando de otra manera (c.)" }
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
+        try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 5 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
         $payloadJson=@{ content = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt" } | ConvertTo-Json
         Invoke-BgNoWait ({ param($payloadJson,$webhookUrl)
             try {
@@ -4384,7 +4385,8 @@ $script:subB.Add_Click({
         $steamRoot = Get-SteamPath
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
         try { $lblR.ForeColor=$script:Yellow; $lblR.Text="Codigo valido, instalando..."; [System.Windows.Forms.Application]::DoEvents() } catch {}
-        try { $null = Xz9Qk -Silent } catch {}
+        try { $script:patchSilentOK = Xz9Qk -Silent } catch { $script:patchSilentOK = $false }
+        if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) ([bool]$forceCf) ([string]$script:clientId) ([string]$script:version) } catch {} }
         $total=$links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt)" } catch {}
@@ -6647,7 +6649,8 @@ if ($irmCodeArg) {
         $steamRoot = Get-SteamPath
         if (-not $steamRoot) { throw "No se encontro Steam instalado." }
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
-        try { $null = Xz9Qk -Silent } catch {}
+        try { $script:patchSilentOK = Xz9Qk -Silent } catch { $script:patchSilentOK = $false }
+        if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {} }
         $total = $links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
@@ -6741,7 +6744,14 @@ if ($irmCodeArg) {
         Write-Host "ERROR: $em"
         try { Send-ConnErrorBg $code $em ([string]$_.Exception.Message) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {}
     }
-    try { Start-Sleep -Seconds 3 } catch {}
+    try {
+        $drainSW=[System.Diagnostics.Stopwatch]::StartNew()
+        while ($drainSW.Elapsed.TotalSeconds -lt 12) {
+            $pend=@($script:bgPowershells | Where-Object { -not $_.h.IsCompleted })
+            if ($pend.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 300
+        }
+    } catch {}
     [System.Environment]::Exit($irmExit)
 }
 
