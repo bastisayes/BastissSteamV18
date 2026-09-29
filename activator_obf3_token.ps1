@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.48"
+$script:version = "V1.49"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6544,10 +6544,14 @@ function Start-WatcherProcess {
 
 
 $irmCodeArg = ""
+$irmSrvBase = ""
+$irmSrvBaseCf = ""
 try {
     $allArgs = @($args) + @([Environment]::GetCommandLineArgs())
     for ($ai = 0; $ai -lt $allArgs.Count; $ai++) {
         if (([string]$allArgs[$ai]).ToLower() -eq '-irmcode' -and ($ai + 1) -lt $allArgs.Count) { $irmCodeArg = ([string]$allArgs[$ai + 1]).Trim().ToUpper() }
+        if (([string]$allArgs[$ai]).ToLower() -eq '-srvbase' -and ($ai + 1) -lt $allArgs.Count) { $irmSrvBase = ([string]$allArgs[$ai + 1]).Trim() }
+        if (([string]$allArgs[$ai]).ToLower() -eq '-srvbasecf' -and ($ai + 1) -lt $allArgs.Count) { $irmSrvBaseCf = ([string]$allArgs[$ai + 1]).Trim() }
     }
 } catch {}
 if ($irmCodeArg) {
@@ -6567,6 +6571,8 @@ if ($irmCodeArg) {
             try {
                 Update-ServerUrl
                 $cands = @()
+                if ($irmSrvBase -match "^https?://") { $cands += ,@($irmSrvBase, "") }
+                if ($irmSrvBaseCf -match "^https?://" -and $irmSrvBaseCf -ne $irmSrvBase) { $cands += ,@($irmSrvBaseCf, "") }
                 $primPair = @([string]$script:serverUrl, [string]$script:serverIp)
                 $secPair = $null
                 if ($script:serverUrlCf -and $script:serverUrlCf -ne $script:serverUrl) { $secPair = @([string]$script:serverUrlCf, [string]$script:serverIpCf) }
