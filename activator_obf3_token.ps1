@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.40"
+$script:version = "V1.41"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -3493,6 +3493,7 @@ function Remove-GamesForCode([string]$code) {
 }
 
 function Get-ActiveCodeGroups {
+    try {
     $g = @{}
     foreach ($c in @($script:activeCodes)) {
         $k = [string]$c.Code
@@ -3522,6 +3523,7 @@ function Get-ActiveCodeGroups {
         $list += $e
     }
     return @($list | Sort-Object -Property ActivatedAt -Descending)
+    } catch { return @() }
 }
 
 function Get-LinksFromToken([string]$code) {
@@ -3675,7 +3677,9 @@ function Start-CdActivate {
 $CR=10
 
 function New-RR{param([float]$x,[float]$y,[float]$w,[float]$h,[float]$r)
-    $p=New-Object System.Drawing.Drawing2D.GraphicsPath;$d=$r*2
+    if ($w -lt 1) { $w = 1 }; if ($h -lt 1) { $h = 1 }
+    $d=$r*2; $m=[Math]::Min($w,$h); if ($d -gt $m) { $d = $m }; if ($d -lt 0) { $d = 0 }
+    $p=New-Object System.Drawing.Drawing2D.GraphicsPath
     $p.AddArc($x,$y,$d,$d,180,90);$p.AddArc($x+$w-$d,$y,$d,$d,270,90)
     $p.AddArc($x+$w-$d,$y+$h-$d,$d,$d,0,90);$p.AddArc($x,$y+$h-$d,$d,$d,90,90)
     $p.CloseFigure();return $p}
