@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.37"
+$script:version = "V1.38"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -3013,7 +3013,7 @@ $script:clpTicker.Start()
 
 
 $script:urlChecker = New-Object System.Windows.Forms.Timer
-$script:urlChecker.Interval = 1000
+$script:urlChecker.Interval = 120000
 $script:urlChecker.Add_Tick({ try { Update-ServerUrl } catch {} })
 $script:urlChecker.Start()
 
