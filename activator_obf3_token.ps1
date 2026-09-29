@@ -72,7 +72,7 @@ if (-not $script:expiryWatcher) {
         $mGot = $false
     try { $mGot = $script:singleMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $mGot = $true }
     if (-not $mGot) {
-        Get-Process | Where-Object { $_.Id -ne $PID -and ($_.ProcessName -like 'BastissSteamActivator*' -or $_.MainWindowTitle -match 'BastissSteam') } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Get-Process | Where-Object { $_.Id -ne $PID -and ($_.ProcessName -like 'BastissSteamActivator*') } | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 900
         try { $null = $script:singleMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { }
     }
@@ -139,7 +139,7 @@ if (-not $script:expiryWatcher) {
         $mGot2 = $false
     try { $mGot2 = $script:siMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $mGot2 = $true }
     if (-not $mGot2) {
-        Get-Process | Where-Object { $_.Id -ne $PID -and ($_.ProcessName -like 'BastissSteamActivator*' -or $_.MainWindowTitle -match 'BastissSteam') } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Get-Process | Where-Object { $_.Id -ne $PID -and ($_.ProcessName -like 'BastissSteamActivator*') } | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 900
         try { $null = $script:siMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { }
     }
@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.49"
+$script:version = "V1.50"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
