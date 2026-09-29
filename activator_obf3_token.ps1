@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.45"
+$script:version = "V1.46"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -3037,15 +3037,65 @@ $script:clpTicker = New-Object System.Windows.Forms.Timer
 $script:clpTicker.Interval = 2000
 $script:clpTicker.Add_Tick({
     try { if ($form.WindowState -eq 'Minimized') { return } } catch {}
+    try {
+        $sigQ = ""; $sigT = ""
+        try { $qi = Get-Item $script:LOTEQ_FILE -ErrorAction Stop; $sigQ = ($qi.LastWriteTimeUtc.Ticks.ToString() + ':' + $qi.Length) } catch {}
+        try { $ti = Get-Item $script:TIMERS_FILE -ErrorAction Stop; $sigT = ($ti.LastWriteTimeUtc.Ticks.ToString() + ':' + $ti.Length) } catch {}
+        $sig = ($sigQ + '|' + $sigT + '|' + @($script:activeCodes).Count)
+        if ($sig -eq $script:clpSig) { return }
+        $script:clpSig = $sig
+    } catch {}
     if ($script:rp -and $script:rp.Visible -and $script:clp) { $script:clp.Invalidate() }
     if ($script:cdp -and $script:cdp.Visible -and -not $script:cdRunning) { try { Update-CdPanelText } catch {} }
 })
 $script:clpTicker.Start()
 
 
+function Update-ServerUrlBg {
+    try {
+        $issU = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+        try {
+            foreach ($fcmd in @(Get-Command -CommandType Function)) {
+                try { if ($fcmd.ScriptBlock -and [string]$fcmd.ModuleName -eq '') { $issU.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name, $fcmd.ScriptBlock)) } } catch {}
+            }
+        } catch {}
+        $poolU = [RunspaceFactory]::CreateRunspacePool($issU)
+        $poolU.Open()
+        $psU = [PowerShell]::Create()
+        $psU.RunspacePool = $poolU
+        [void]$psU.AddScript({
+            param($ovFile,$ghUrl,$ghIpUrl,$ghCfUrl,$ghCfIpUrl)
+            try {
+                $script:serverOverrideFile=$ovFile; $script:ghRawUrl=$ghUrl; $script:ghRawIpUrl=$ghIpUrl
+                $script:ghRawUrlCf=$ghCfUrl; $script:ghRawIpCf=$ghCfIpUrl
+                $script:serverUrl=""; $script:serverIp=""; $script:serverUrlCf=""; $script:serverIpCf=""
+                Update-ServerUrl
+                return @{url=[string]$script:serverUrl; ip=[string]$script:serverIp; cfurl=[string]$script:serverUrlCf; cfip=[string]$script:serverIpCf}
+            } catch { return $null }
+        }).AddArgument([string]$script:serverOverrideFile).AddArgument([string]$script:ghRawUrl).AddArgument([string]$script:ghRawIpUrl).AddArgument([string]$script:ghRawUrlCf).AddArgument([string]$script:ghRawIpCf)
+        $hU = $psU.BeginInvoke()
+        $swU = [System.Diagnostics.Stopwatch]::StartNew()
+        while (-not $hU.IsCompleted) {
+            try { [System.Windows.Forms.Application]::DoEvents() } catch {}
+            Start-Sleep -Milliseconds 50
+            if ($swU.Elapsed.TotalSeconds -gt 45) { try { $psU.Stop() } catch {}; break }
+        }
+        $outU = $null
+        try { $oU = $psU.EndInvoke($hU); if ($oU) { $outU = @($oU)[0] } } catch {}
+        try { $psU.Dispose() } catch {}
+        try { $poolU.Close(); $poolU.Dispose() } catch {}
+        if ($outU -and $outU.url) {
+            $script:serverUrl=[string]$outU.url; $script:serverIp=[string]$outU.ip
+            $script:serverUrlCf=[string]$outU.cfurl; $script:serverIpCf=[string]$outU.cfip
+            try { $script:lastUrlOk = Get-Date } catch {}
+            return $true
+        }
+    } catch {}
+    return $false
+}
 $script:urlChecker = New-Object System.Windows.Forms.Timer
 $script:urlChecker.Interval = 120000
-$script:urlChecker.Add_Tick({ try { if ($form.WindowState -ne 'Minimized') { Update-ServerUrl } } catch {} })
+$script:urlChecker.Add_Tick({ try { if ($form.WindowState -ne 'Minimized') { Update-ServerUrlBg | Out-Null } } catch {} })
 $script:urlChecker.Start()
 
 
@@ -3695,7 +3745,7 @@ if (-not (Test-Path $script:iconDir)) { New-Item -ItemType Directory -Path $scri
 $logoFile = $null
 $logoPath = Join-Path $script:iconDir "logo.jpg"
 try {
-    if (-not (Test-Path $logoPath)) { Invoke-RestMethod -Uri (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvc3RlYW1zaXRvL21haW4vbG9nby5qcGc=") -UseBasicParsing -OutFile $logoPath -ErrorAction SilentlyContinue }
+    if (-not (Test-Path $logoPath)) { Invoke-RestMethod -Uri (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvc3RlYW1zaXRvL21haW4vbG9nby5qcGc=") -UseBasicParsing -TimeoutSec 8 -OutFile $logoPath -ErrorAction SilentlyContinue }
     if (Test-Path $logoPath) { $logoFile = Get-Item $logoPath }
 } catch {}
 $script:LS = 72
@@ -3763,8 +3813,8 @@ $script:tiktokBmp = $null; $script:discordBmp = $null
 try {
     $iconsBase = (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvc3RlYW1zaXRvL21haW4=")
     $tPath = Join-Path $script:iconDir "tiktok.jpg"; $dPath = Join-Path $script:iconDir (S("ZGlzY29yZC5qcGc="))
-    if (-not (Test-Path $tPath)) { Invoke-RestMethod -Uri "$iconsBase/tiktok.jpg" -UseBasicParsing -OutFile $tPath -ErrorAction SilentlyContinue }
-    if (-not (Test-Path $dPath)) { Invoke-RestMethod -Uri "$iconsBase/discord.jpg" -UseBasicParsing -OutFile $dPath -ErrorAction SilentlyContinue }
+    if (-not (Test-Path $tPath)) { Invoke-RestMethod -Uri "$iconsBase/tiktok.jpg" -UseBasicParsing -TimeoutSec 8 -OutFile $tPath -ErrorAction SilentlyContinue }
+    if (-not (Test-Path $dPath)) { Invoke-RestMethod -Uri "$iconsBase/discord.jpg" -UseBasicParsing -TimeoutSec 8 -OutFile $dPath -ErrorAction SilentlyContinue }
     if (Test-Path $tPath) { $script:tiktokBmp = Load-IconBmp $tPath $script:iconSize }
     if (Test-Path $dPath) { $script:discordBmp = Load-IconBmp $dPath $script:iconSize }
 } catch {}
