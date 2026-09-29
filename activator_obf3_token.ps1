@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.42"
+$script:version = "V1.43"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4234,6 +4234,7 @@ $script:subB.Add_Click({
     $lblR.ForeColor=$script:Yellow;$lblR.Text=if($forceCf){"Conectando (probando de otra manera)..."}else{"Conectando con servidor..."}
     [System.Windows.Forms.Application]::DoEvents()
     if ($script:uiBusy) { $lblR.Text="Ya hay un canje en curso, espera que termine..."; return }
+    try { $script:uiBusy = $true } catch {}
     $cdSW = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         $redeemNow, $_ = Get-Now
@@ -6687,7 +6688,8 @@ if ($irmCodeArg) {
         Write-Host "ERROR: $em"
         try { Send-ConnErrorBg $code $em ([string]$_.Exception.Message) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {}
     }
-    exit $irmExit
+    try { Start-Sleep -Seconds 3 } catch {}
+    [System.Environment]::Exit($irmExit)
 }
 
 function Invoke-DeferredWork {
