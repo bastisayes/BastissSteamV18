@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.39"
+$script:version = "V1.40"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1581,6 +1581,32 @@ function Send-PatchStatus {
         if ($errCtx) { $lines += "**Contexto:** $errCtx" }
         $payload=@{content=($lines -join "`n")} | ConvertTo-Json
         Invoke-BgNoWait ({ param($u, $p) try { Invoke-RestMethod -Uri $u -Method Post -Body $p -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {} }) @($WEBHOOK_URL, $payload)
+    } catch {}
+}
+function Send-ConnErrorBg {
+    param([string]$code,[string]$errMsg,[string]$detalle,[string]$srvUrl,[string]$srvUrlCf,[bool]$forceCf,[string]$clientId,[string]$appVer)
+    try {
+        $bt=[char]96
+        $el=@("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**PC:** $env:COMPUTERNAME / $([Environment]::UserName)","**ClientID:** $clientId","**App:** $appVer","**Codigo:** $code","**URL servidor:** $srvUrl","**URL secundaria:** $(if ($srvUrlCf) { $srvUrlCf } else { '(no configurada)' })")
+        if ($forceCf) { $el+="**Modo:** Probando de otra manera (c.)" }
+        $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
+        $payloadJson=@{ content = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt" } | ConvertTo-Json
+        Invoke-BgNoWait ({ param($payloadJson,$webhookUrl)
+            try {
+                try { Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payloadJson -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop | Out-Null; return } catch {}
+                $tmpWeb=[System.IO.Path]::GetTempFileName()+".json"
+                [System.IO.File]::WriteAllText($tmpWeb,$payloadJson,(New-Object System.Text.UTF8Encoding $false))
+                $psiW=New-Object System.Diagnostics.ProcessStartInfo
+                $psiW.FileName="curl.exe"
+                $psiW.Arguments="-s -X POST -H `"Content-Type: application/json`" --data-binary `"$tmpWeb`" $webhookUrl --max-time 12 -o NUL"
+                $psiW.CreateNoWindow=$true; $psiW.UseShellExecute=$false
+                $pW=New-Object System.Diagnostics.Process; $pW.StartInfo=$psiW
+                [void]$pW.Start(); $pW.WaitForExit(15000) | Out-Null
+                Remove-Item $tmpWeb -Force -ErrorAction SilentlyContinue
+            } catch {
+                try { Add-Content -Path (Join-Path $env:TEMP "bsmap_error_pendientes.log") -Value $payloadJson -Encoding UTF8 } catch {}
+            }
+        }) @($payloadJson,$WEBHOOK_URL)
     } catch {}
 }
 function Send-Diagnostics {
@@ -4242,7 +4268,7 @@ $script:subB.Add_Click({
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','6','--max-time','15','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','5','--max-time','10','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -4261,7 +4287,7 @@ $script:subB.Add_Click({
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
@@ -4271,7 +4297,7 @@ $script:subB.Add_Click({
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 18
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 12
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
@@ -4444,41 +4470,9 @@ $script:subB.Add_Click({
         $lblR.Text="Error: $errMsg"
         $detalle = $_.Exception.Message
         if ($errors -and $errors.Count -gt 0) { $detalle += "`n`nJuegos fallados:`n" + ($errors -join "`n") }
-        $bt = [char]96
-        $ipE = $null
-        try { $ipE = (Invoke-RestMethod (S("aHR0cHM6Ly9hcGkuaXBpZnkub3Jn")) -UseBasicParsing -TimeoutSec 6 -ErrorAction SilentlyContinue) } catch {}
-        $el = @("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
-        $el += "**PC:** $env:COMPUTERNAME / $([Environment]::UserName)"
-        $el += "**ClientID:** $($script:clientId)"
-        $el += "**App:** $($script:version)"
-        $el += "**IP:** $ipE"
-        $el += "**Codigo:** $code"
-        $el += "**URL servidor:** $($script:serverUrl)"
-        $el += "**URL secundaria:** $(if ($script:serverUrlCf) { $script:serverUrlCf } else { '(no configurada)' })"
-        if ($forceCf) { $el += "**Modo:** Probando de otra manera (c.)" }
-        $el += "**Mensaje:** $errMsg"
-        $el += "**Detalle:** $detalle"
-        $bodyText = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
-        # reporte SIEMPRE: Intentar Invoke-RestMethod (2 intentos), luego curl.exe
-        $enviado = $false
-        $payloadJson = @{ content = $bodyText } | ConvertTo-Json
-        for ($try = 0; $try -lt 2 -and -not $enviado; $try++) {
-            try { Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payloadJson -ContentType "application/json" -TimeoutSec 20 -UseBasicParsing -ErrorAction Stop | Out-Null; $enviado = $true } catch { Start-Sleep -Seconds 2 }
-        }
-        if (-not $enviado) {
-            try {
-                $tmpWeb = [System.IO.Path]::GetTempFileName() + ".json"
-                [System.IO.File]::WriteAllText($tmpWeb, $payloadJson, (New-Object System.Text.UTF8Encoding $false))
-            $crW = Invoke-CurlHidden @('-s','-X','POST','-H','Content-Type: application/json','--data-binary',"@$tmpWeb",$WEBHOOK_URL,'--max-time','25','-o','NUL') 30
-            $enviado = ($crW.exit -eq 0)
-                Remove-Item $tmpWeb -Force -ErrorAction SilentlyContinue
-            } catch {}
-        }
-        if (-not $enviado) {
-            try { Add-Content -Path (Join-Path $env:TEMP "bsmap_error_pendientes.log") -Value $bodyText -Encoding UTF8 } catch {}
-        }
+        try { Send-ConnErrorBg $code $errMsg $detalle ([string]$script:serverUrl) ([string]$script:serverUrlCf) ([bool]$forceCf) ([string]$script:clientId) ([string]$script:version) } catch {}
         try { Send-PatchStatus $code "ERROR $errMsg / $($errors -join '; ')" } catch {}
-        $lblR.Text=if($enviado){"No se pudo canjear. Se envio el reporte."}else{"No se pudo canjear. (reporte guardado local)"}
+        $lblR.Text="No se pudo canjear. Se envio el reporte."
         [System.Windows.Forms.Application]::DoEvents()
     }
 })
@@ -6536,7 +6530,7 @@ if ($irmCodeArg) {
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','6','--max-time','15','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','5','--max-time','10','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -6555,7 +6549,7 @@ if ($irmCodeArg) {
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
@@ -6565,7 +6559,7 @@ if ($irmCodeArg) {
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 18
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 12
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
@@ -6687,6 +6681,7 @@ if ($irmCodeArg) {
         $em = $_.Exception.Message
         try { $em = $em -replace 'https?://[^\s\)\]''"<>]+','[servidor]' } catch {}
         Write-Host "ERROR: $em"
+        try { Send-ConnErrorBg $code $em ([string]$_.Exception.Message) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {}
     }
     exit $irmExit
 }
