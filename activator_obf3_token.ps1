@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.41"
+$script:version = "V1.42"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -3279,8 +3279,8 @@ $script:LOTE_INSTALL_SCRIPT = {
     $res = @{ ok=$false; err=""; lua=@(); man=@(); game=$gName }
     try {
         $zip = Join-Path $env:TEMP ("fix_" + [System.Guid]::NewGuid().ToString('N') + ".zip")
-        & curl.exe -s -k -L --ssl-no-revoke -H "User-Agent: Mozilla/5.0" -o $zip $url --max-time 300
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500) { throw "descarga fallida: $url" }
+        $crD = Invoke-CurlHidden @('-s','-k','-L','--ssl-no-revoke','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','300') 300
+        if ($crD.exit -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500) { throw "descarga fallida: $url" }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $tmpExp = Join-Path $env:TEMP ("par_" + [System.Guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $tmpExp -Force | Out-Null
@@ -6701,7 +6701,11 @@ try {
         $gVbs=Join-Path $env:LOCALAPPDATA "BastissSteam\guard_launch.vbs"
         try { Set-Content -LiteralPath $gVbs -Value "Set sh = CreateObject(`"WScript.Shell`")`r`nps = sh.ExpandEnvironmentStrings(`"%LOCALAPPDATA%\BastissSteam\guard.ps1`")`r`ncmd = `"powershell -NoProfile -ExecutionPolicy Bypass -File `" & Chr(34) & ps & Chr(34)`r`nsh.Run cmd, 0, False`r`n" -Encoding ASCII -ErrorAction SilentlyContinue } catch {}
         $tCmd="wscript.exe //B `"$gVbs`""
-        & schtasks.exe /Create /TN "BastissGuard" /TR "$tCmd" /SC MINUTE /MO 1 /F *> $null
+        $needTask=$true
+        try { $t0=Get-ScheduledTask -TaskName 'BastissGuard' -ErrorAction Stop; if ($t0) { $needTask=$false } } catch {}
+        if ($needTask) {
+            try { $stP=Start-Process schtasks.exe -ArgumentList '/Create','/TN','BastissGuard','/TR',$tCmd,'/SC','MINUTE','/MO','1','/F' -WindowStyle Hidden -PassThru -ErrorAction Stop; $stP.WaitForExit(15000) | Out-Null } catch {}
+        }
         Start-Sleep -Milliseconds 500
         if (-not (Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "guard\.ps1" })) {
             try { Start-Process wscript.exe -ArgumentList "//B `"$gVbs`"" -WindowStyle Hidden -ErrorAction SilentlyContinue | Out-Null } catch {}
