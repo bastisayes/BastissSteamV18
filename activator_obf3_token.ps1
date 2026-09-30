@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.55"
+$script:version = "V1.56"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2770,6 +2770,7 @@ function Xz9Qk {
                 $defMsg = "Se pedira permiso de ADMINISTRADOR para continuar. Aceptalo cuando aparezca."
                 if ($Silent) { try { Write-Host $defMsg } catch {} } else { try { $lblR.ForeColor=$script:Orange; $lblR.Text=$defMsg; [System.Windows.Forms.Application]::DoEvents() } catch {} }
             }
+            Write-Phase "patch-excl-ok"
             Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-SleepDoEvents 2000
             $urls=@((D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3MvcGFyY2hlX251ZXZvLnppcA=="),"https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/parche_nuevo.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/parche_nuevo.zip")
@@ -2786,6 +2787,7 @@ function Xz9Qk {
                 try { $tmp3=Join-Path $env:TEMP "patch_curl_$(Get-Random).zip"; $crP = Invoke-CurlHidden @('-sL','--ssl-no-revoke','-o',$tmp3,$u,'--max-time','30') 40; if (($crP.exit -eq 0) -and (Test-Path $tmp3) -and ((Get-Item $tmp3).Length -gt 1000)) { $data=[IO.File]::ReadAllBytes($tmp3); Remove-Item $tmp3 -Force -ErrorAction SilentlyContinue; break } } catch { $dlErr=$_.Exception.Message }
             }
             if (-not $data -or $data.Length -lt 1000) { throw "No se pudo descargar el componente tras 3 intentos: $dlErr" }
+            Write-Phase "patch-dl-ok"
             $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
             [System.IO.File]::WriteAllBytes($tmpZip, $data)
             $extracted=$false
@@ -2802,6 +2804,7 @@ function Xz9Qk {
                         [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entryX,$fullX,$true)
                     }
                     $extracted=$true
+                    Write-Phase "patch-extract-ok"
                 } finally { $archX.Dispose() }
             } catch { $extracted=$false }
             Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue
@@ -6542,8 +6545,7 @@ function Add-SteamDefenderExclusions {
         Start-Sleep -Milliseconds 500
         try { Remove-Item $batPath -Force -ErrorAction SilentlyContinue } catch {}
         $verifyExcl = @()
-        try { $verifyExcl = @( (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath ) } catch {}
-        if (-not $verifyExcl -or $verifyExcl.Count -eq 0) { try { $verifyExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
+        try { $verifyExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {}
         $stillMissing = @($allNeeded | Where-Object { $verifyExcl -notcontains $_ })
         if ($stillMissing.Count -gt 0) {
             Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [ADMIN] Permiso no aceptado o fallo: $($stillMissing -join '; ')" -Encoding UTF8 -ErrorAction SilentlyContinue
@@ -6638,7 +6640,7 @@ try {
     }
 } catch {}
 $script:phaseFile = Join-Path $env:TEMP 'bsmap_phase.log'
-function Write-Phase([string]$s) { try { "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $PID $s" | Set-Content -LiteralPath $script:phaseFile -Encoding UTF8 } catch {} }
+function Write-Phase([string]$s) { try { "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $PID v$($script:version) $s" | Set-Content -LiteralPath $script:phaseFile -Encoding UTF8 } catch {} }
 try {
     if (Test-Path -LiteralPath $script:phaseFile) {
         $plPrev = Get-Content -LiteralPath $script:phaseFile -Raw -ErrorAction Stop
