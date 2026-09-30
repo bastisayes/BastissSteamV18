@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.68"
+$script:version = "V1.69"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4169,13 +4169,13 @@ function New-Card{param([int]$X,[int]$Y,[int]$W,[int]$H,[string]$Title,[string]$
 
 
 function Switch-ToRedeem{$script:mp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:rp.Visible=$true;RfC}
-function Switch-ToMain{$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:mp.Visible=$true}
-function Switch-ToConfig{$script:mp.Visible=$false;$script:rp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:sp.Visible=$true;$script:sWatcher.Invalidate()}
+function Switch-ToMain{$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false;$script:mp.Visible=$true}
+function Switch-ToConfig{$script:mp.Visible=$false;$script:rp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false;$script:sp.Visible=$true;$script:sWatcher.Invalidate()}
 function Switch-FromConfig{$script:sp.Visible=$false;$script:mp.Visible=$true}
-function Switch-ToCodes{if($script:cdp){$script:cdp.Visible=$false};$script:mp.Visible=$false;$script:sp.Visible=$false;$script:rp.Visible=$true;try{Update-CdPanelText}catch{};RfC}
+function Switch-ToCodes{if($script:cdp){$script:cdp.Visible=$false};$script:mp.Visible=$false;$script:sp.Visible=$false;$script:bibp.Visible=$false;$script:rp.Visible=$true;try{Update-CdPanelText}catch{};RfC}
 function Switch-ToCodeDetail([string]$code){
     $script:cdCode=$code
-    $script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false
+    $script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;$script:bibp.Visible=$false
     if($script:cdp){ $script:cdp.Visible=$true; $script:cdp.BringToFront() }
     try{ Update-CdPanelText }catch{}
 }
@@ -4187,7 +4187,6 @@ function Refresh-AllText{
     $script:c4.Tag.Title=T "desinstalar";$script:c4.Tag.Sub=T (S("ZGVzaW5zdGFsYXJTdWI="));$script:c4.Invalidate()
     $script:cWeb.Tag.Title=T "web";$script:cWeb.Tag.Sub=T "webSub";$script:cWeb.Invalidate()
     $script:c5.Tag.Title=T "discord";$script:c5.Tag.Sub=T (S("ZGlzY29yZFN1Yg=="));$script:c5.Invalidate()
-    $script:c6.Tag.Title=T "tiktok";$script:c6.Tag.Sub=T "tiktokSub";$script:c6.Invalidate()
     $script:salBtn.Invalidate()
     $script:rTit.Text=T "canjear";$script:rSubL.Text=T (S("Y2FuamVhclN1Yg=="))
     $script:codesT.Text=T (S("Y29kaWdvc0FjdGl2b3M="))
@@ -4258,18 +4257,16 @@ $script:c1=New-Card -X $PAD -Y $R1Y -W $CW -H $CH -Title (T (S("YWN0aXZhcg==")))
 $script:mp.Controls.Add($script:c1)
 
 
-$script:cWeb=New-Card -X $PAD -Y $WEB_Y -W $CW -H $FCH -Title (T "web") -Sub (T "webSub") -Icon "webpage" -Click {Start-Process (D "aHR0cHM6Ly9iYXN0aXNzc3RlYW0ubmV0bGlmeS5hcHA=")}
+$script:cWeb=New-Card -X $PAD -Y $TIK_Y -W $HW -H $FCH -Title (T "web") -Sub (T "webSub") -Icon "webpage" -Click {Start-Process (D "aHR0cHM6Ly9iYXN0aXNzc3RlYW0ubmV0bGlmeS5hcHA=")}
 $script:mp.Controls.Add($script:cWeb)
+$script:cBiblio=New-Card -X $PAD+$HW+$GAP -Y $TIK_Y -W $HW -H $FCH -Title "Biblioteca" -Sub "Juegos con portada" -Icon "lightning" -Click { Show-Biblio }
+$script:mp.Controls.Add($script:cBiblio)
 
 
 
 
 $script:c5=New-Card -X $PAD -Y $DISC_Y -W $CW -H $FCH -Title (T "discord") -Sub (T (S("ZGlzY29yZFN1Yg=="))) -Icon "discord" -Click {Start-Process (D "aHR0cHM6Ly9kaXNjb3JkLmdnL3czbmhHZVd1dlQ=")}
 $script:mp.Controls.Add($script:c5)
-
-
-$script:c6=New-Card -X $PAD -Y $TIK_Y -W $CW -H $FCH -Title (T "tiktok") -Sub (T "tiktokSub") -Icon "tiktok" -Click {Start-Process (D "aHR0cHM6Ly93d3cudGlrdG9rLmNvbS9AYmFzdGlzc3N0ZWFtP2xhbmc9ZXM=")}
-$script:mp.Controls.Add($script:c6)
 
 
 $script:salBtn=New-BufferedPanel
@@ -6261,6 +6258,173 @@ Switch-CfgPage 1
 
 $form.Controls.Add($script:sp)
 
+function Get-BiblioGames {
+    $found = @{}
+    $roots = @()
+    try { $sr0 = Get-SteamPath; if ($sr0 -and (Test-Path $sr0)) { $roots += $sr0 } } catch {}
+    try { foreach ($lib in @(Ss3Jd)) { if ($lib -and (Test-Path $lib) -and ($roots -notcontains $lib)) { $roots += $lib } } catch {}
+    foreach ($rt in $roots) {
+        foreach ($sub in @('config\stplug-in','config\lua')) {
+            $d = Join-Path $rt $sub
+            if (-not (Test-Path -LiteralPath $d)) { continue }
+            Get-ChildItem -LiteralPath $d -Filter '*.lua' -File -ErrorAction SilentlyContinue | ForEach-Object {
+                $id = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+                if ($id -match '^\d+$' -and -not $found.ContainsKey($id)) {
+                    $nm = ""
+                    try { $nm = Get-GameNameByAppId $id } catch {}
+                    if (-not $nm) { $nm = "AppID $id" }
+                    $found[$id] = $nm
+                }
+            }
+        }
+    }
+    return @($found.GetEnumerator() | Sort-Object { $_.Value } | ForEach-Object { @{appid=$_.Key; name=$_.Value} })
+}
+function Get-BiblioCoverPath([string]$appid) {
+    try {
+        $cd = Join-Path $env:TEMP 'bsmap_covers'
+        $p = Join-Path $cd ($appid + ".jpg")
+        if (Test-Path -LiteralPath $p) { return $p }
+    } catch {}
+    return ""
+}
+function Start-BiblioCovers($games) {
+    try {
+        $cd = Join-Path $env:TEMP 'bsmap_covers'
+        if (-not (Test-Path $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
+        if (-not $script:bibPool) {
+            $script:bibPool = [RunspaceFactory]::CreateRunspacePool(1, 4)
+            $script:bibPool.Open()
+        }
+        if (-not $script:bibJobs) { $script:bibJobs = @() }
+        foreach ($g in $games) {
+            $aid = [string]$g.appid
+            if (Test-Path -LiteralPath (Join-Path $cd ($aid + ".jpg"))) { continue }
+            $psB = [PowerShell]::Create(); $psB.RunspacePool = $script:bibPool
+            [void]$psB.AddScript({
+                param($a,$dir)
+                try {
+                    $o = Join-Path $dir ($a + ".jpg")
+                    if (Test-Path -LiteralPath $o) { return }
+                    $t = "$o.part"
+                    Invoke-WebRequest -Uri ("https://cdn.cloudflare.steamstatic.com/steam/apps/" + $a + "/library_600x900.jpg") -OutFile $t -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+                    if ((Test-Path $t) -and ((Get-Item $t).Length -gt 5000)) { Move-Item -LiteralPath $t -Destination $o -Force }
+                    else { Remove-Item $t -Force -ErrorAction SilentlyContinue }
+                } catch { try { Remove-Item (Join-Path $dir ($a + ".jpg.part")) -Force -ErrorAction SilentlyContinue } catch {} }
+            }).AddArgument($aid).AddArgument($cd)
+            $hB = $psB.BeginInvoke()
+            $script:bibJobs += @{ps=$psB;h=$hB}
+        }
+    } catch {}
+}
+function Refresh-BiblioGrid([string]$filter) {
+    try {
+        $fl = $script:bibFlow; if (-not $fl -or $fl.IsDisposed) { return }
+        $f = ([string]$filter).Trim().ToLower()
+        $fl.SuspendLayout()
+        try {
+            foreach ($c in @($fl.Controls)) { try { $pb0=$c.Controls[0]; if ($pb0 -and $pb0.Image) { $pb0.Image.Dispose() } } catch {}; try { $c.Dispose() } catch {} }
+            $fl.Controls.Clear()
+        } catch {}
+        $script:bibBoxes = @{}
+        $games = @(); try { $games = $script:bibGames } catch {}
+        foreach ($g in $games) {
+            if ($f -and ($g.name.ToLower().IndexOf($f) -lt 0) -and ($g.appid.IndexOf($f) -lt 0)) { continue }
+            $pn = New-Object System.Windows.Forms.Panel
+            $pn.Size = New-Object System.Drawing.Size(126,202)
+            $pn.BackColor = $script:BG
+            $pb = New-Object System.Windows.Forms.PictureBox
+            $pb.Location = New-Object System.Drawing.Point(8,0)
+            $pb.Size = New-Object System.Drawing.Size(110,165)
+            $pb.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::StretchImage
+            $pb.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)
+            $pb.Cursor = [System.Windows.Forms.Cursors]::Hand
+            $pb.Tag = $g
+            $cp = Get-BiblioCoverPath $g.appid
+            if ($cp) { try { $pb.Image = [System.Drawing.Image]::FromFile($cp) } catch {} }
+            $pb.Add_Click({ param($s) try { $t=$s.Tag; [System.Windows.Forms.MessageBox]::Show(($t.name + "`nAppID: " + $t.appid),"Juego","OK","Information") } catch {} })
+            $pn.Controls.Add($pb)
+            $lb = New-Object System.Windows.Forms.Label
+            $lb.Location = New-Object System.Drawing.Point(0,167)
+            $lb.Size = New-Object System.Drawing.Size(126,34)
+            $lb.ForeColor = [System.Drawing.Color]::FromArgb(170,170,170)
+            $lb.Font = $script:FntSub
+            $lb.TextAlign = [System.Drawing.ContentAlignment]::TopCenter
+            $lb.AutoEllipsis = $true
+            $lb.Text = $g.name
+            $pn.Controls.Add($lb)
+            $fl.Controls.Add($pn)
+            try { $script:bibBoxes[$g.appid] = $pb } catch {}
+        }
+        $fl.ResumeLayout()
+    } catch {}
+}
+function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$true}
+function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};$script:bibp.Visible=$false;$script:mp.Visible=$true}
+function Show-Biblio {
+    Switch-ToBiblio
+    try {
+        $script:bibGames = Get-BiblioGames
+        $script:bibSearch.Text = ""
+        Refresh-BiblioGrid ""
+        Start-BiblioCovers $script:bibGames
+        $script:bibTimer.Start()
+    } catch {}
+}
+$script:bibp=New-BufferedPanel
+$script:bibp.Location=New-Object System.Drawing.Point(0,$CY)
+$script:bibp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bibp.BackColor=$BG;$script:bibp.Visible=$false
+$script:bibBack=New-Object System.Windows.Forms.Button
+$script:bibBack.Text="Volver"
+$script:bibBack.Location=New-Object System.Drawing.Point($PAD,10)
+$script:bibBack.Size=New-Object System.Drawing.Size(100,32)
+$script:bibBack.BackColor=$script:CardBG;$script:bibBack.ForeColor=$script:White
+$script:bibBack.FlatStyle="Flat";$script:bibBack.FlatAppearance.BorderColor=$script:Cyan
+$script:bibBack.Font=$script:FntCard;$script:bibBack.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:bibBack.Add_Click({Switch-FromBiblio})
+$script:bibp.Controls.Add($script:bibBack)
+$script:bibTitle=New-Object System.Windows.Forms.Label
+$script:bibTitle.Text="Biblioteca"
+$script:bibTitle.Font=$script:FntCard;$script:bibTitle.ForeColor=$script:White;$script:bibTitle.BackColor=$BG
+$script:bibTitle.Location=New-Object System.Drawing.Point(120,12);$script:bibTitle.AutoSize=$true
+$script:bibp.Controls.Add($script:bibTitle)
+$script:bibSearch=New-Object System.Windows.Forms.TextBox
+$script:bibSearch.Location=New-Object System.Drawing.Point($PAD,50)
+$script:bibSearch.Size=New-Object System.Drawing.Size(($FW-2*$PAD),24)
+$script:bibSearch.BackColor=$script:InputBG;$script:bibSearch.ForeColor=$script:White
+$script:bibSearch.BorderStyle="FixedSingle"
+$script:bibSearch.Add_TextChanged({ Refresh-BiblioGrid $script:bibSearch.Text })
+$script:bibp.Controls.Add($script:bibSearch)
+$script:bibFlow=New-Object System.Windows.Forms.FlowLayoutPanel
+$script:bibFlow.Location=New-Object System.Drawing.Point(0,82)
+$script:bibFlow.Size=New-Object System.Drawing.Size($FW,(($FH-$CY)-82))
+$script:bibFlow.BackColor=$BG;$script:bibFlow.AutoScroll=$true;$script:bibFlow.WrapContents=$true
+$script:bibFlow.FlowDirection=[System.Windows.Forms.FlowDirection]::LeftToRight
+$script:bibp.Controls.Add($script:bibFlow)
+$script:bibTimer=New-Object System.Windows.Forms.Timer
+$script:bibTimer.Interval=2500
+$script:bibTimer.Add_Tick({
+    try {
+        if (-not $script:bibp.Visible) { return }
+        try {
+            $dn = @()
+            foreach ($j in @($script:bibJobs)) { if ($j.h.IsCompleted) { try { $j.ps.EndInvoke($j.h) } catch {}; try { $j.ps.Dispose() } catch {}; $dn += $j } }
+            if ($dn.Count -gt 0) { $script:bibJobs = @($script:bibJobs | Where-Object { $dn -notcontains $_ }) }
+        } catch {}
+        $pend = $false
+        foreach ($k in @($script:bibBoxes.Keys)) {
+            $b = $null; try { $b = $script:bibBoxes[$k] } catch {}
+            if (-not $b -or $b.IsDisposed -or $b.Image) { continue }
+            $p = Get-BiblioCoverPath $k
+            if ($p) { try { $b.Image = [System.Drawing.Image]::FromFile($p); $b.Invalidate() } catch {} } else { $pend = $true }
+        }
+        if (-not $pend) { try { $script:bibTimer.Stop() } catch {} }
+    } catch {}
+})
+$script:bibJobs = @()
+$script:bibBoxes = @{}
+$script:bibGames = @()
+$form.Controls.Add($script:bibp)
 $script:cdp=New-BufferedPanel
 $script:cdp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:cdp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:cdp.BackColor=$BG;$script:cdp.Visible=$false
