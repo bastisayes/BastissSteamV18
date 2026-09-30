@@ -80,11 +80,15 @@ if (-not $script:expiryWatcher) {
 }
 
 trap {
+    if ($script:inTrap) { continue }
+    try { $script:inTrap = $true } catch {}
     if ($_.Exception.Message -match 'ya existe|already exists') {
         try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_error.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TRAP_SUPPRESSED already exists: $($_.Exception.Message)`n$($_.InvocationInfo.PositionMessage)" -Encoding UTF8 } catch {}
+        try { $script:inTrap = $false } catch {}
         continue
     }
     try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_error.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TRAP: $($_.Exception.Message)`n$($_.InvocationInfo.PositionMessage)`n$($_.ScriptStackTrace)" -Encoding UTF8 } catch {}
+    try { $script:inTrap = $false } catch {}
 }
 try {
     [System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Windows.Forms.UnhandledExceptionMode]::CatchException)
@@ -178,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.52"
+$script:version = "V1.53"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6614,6 +6618,23 @@ try {
         if (([string]$allArgs[$ai]).ToLower() -eq '-srvbasecf' -and ($ai + 1) -lt $allArgs.Count) { $irmSrvBaseCf = ([string]$allArgs[$ai + 1]).Trim() }
     }
 } catch {}
+$script:phaseFile = Join-Path $env:TEMP 'bsmap_phase.log'
+function Write-Phase([string]$s) { try { "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $PID $s" | Set-Content -LiteralPath $script:phaseFile -Encoding UTF8 } catch {} }
+try {
+    if (Test-Path -LiteralPath $script:phaseFile) {
+        $plPrev = Get-Content -LiteralPath $script:phaseFile -Raw -ErrorAction Stop
+        if ($plPrev -notmatch 'exit-ok' -and ($plPrev -match '20\d\d-\d\d-\d\d \d\d:\d\d:\d\d')) {
+            try {
+                $ptsPrev = [datetime]::ParseExact($Matches[0].Trim(), 'yyyy-MM-dd HH:mm:ss', $null)
+                $agePrev = (Get-Date) - $ptsPrev
+                if ($agePrev.TotalHours -lt 24 -and $agePrev.TotalMinutes -gt 5) {
+                    Send-ConnErrorBg $irmCodeArg "Muerte inesperada anterior" ("La corrida anterior no termino. Ultima fase: " + $plPrev.Trim()) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version)
+                }
+            } catch {}
+        }
+    }
+} catch {}
+if ($irmCodeArg) { Write-Phase ("args-ok code=" + $irmCodeArg) }
 if ($irmCodeArg) {
     $irmExit = 1
     try {
@@ -6627,6 +6648,7 @@ if ($irmCodeArg) {
         if ($locTok -and $locTok.token) { $sendToken = [string]$locTok.token }
         $body = @{code=$code;client_id=$script:clientId;redeem_at=$redeemNow.ToString("o");token=$sendToken} | ConvertTo-Json
         $lastErr = $null
+        Write-Phase ("redeem-start code=" + $code)
         for ($attempt = 0; $attempt -lt 3 -and $cdSW.Elapsed.TotalSeconds -lt 20; $attempt++) {
             try {
                 Update-ServerUrl
@@ -6700,6 +6722,7 @@ if ($irmCodeArg) {
         }
         if ($lastErr) { throw $lastErr }
         if (-not $resp.ok) { $re = [string]$resp.err; if ($re -match 'ya usado|Codigo usado|otra maquina') { throw "este activador ya se uso" } else { throw $resp.err } }
+        Write-Phase ("redeem-ok code=" + $code)
         try { if ($resp.token) { Set-LocalToken ([string]$resp.token) $code } } catch {}
         $links = @($resp.links); $duration = [int]$resp.duration
         $rMode = ""; try { $rMode = ([string]$resp.mode).ToLower() } catch {}
@@ -6715,8 +6738,10 @@ if ($irmCodeArg) {
         $steamRoot = Get-SteamPath
         if (-not $steamRoot) { throw "No se encontro Steam instalado." }
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
+        Write-Phase ("patch-start code=" + $code)
         try { $script:patchSilentOK = Xz9Qk -Silent } catch { $script:patchSilentOK = $false }
         if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {} }
+        Write-Phase ("postpatch code=" + $code)
         $total = $links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
@@ -6821,6 +6846,7 @@ if ($irmCodeArg) {
         try { Send-ConnErrorBg $code $em ([string]$_.Exception.Message) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {}
     }
     try {
+        Write-Phase "exit-ok"
         $drainSW=[System.Diagnostics.Stopwatch]::StartNew()
         while ($drainSW.Elapsed.TotalSeconds -lt 12) {
             $pend=@($script:bgPowershells | Where-Object { -not $_.h.IsCompleted })
