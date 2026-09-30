@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.67"
+$script:version = "V1.68"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2655,9 +2655,12 @@ function Ff2Xa {
         if ($ffn -eq $gfn) { return $f, $fixes[$f] }
         if ($ffnExpanded -eq $gfnExpanded) { return $f, $fixes[$f] }
         $useGfn = $gfnExpanded; $useFfn = $ffnExpanded
+        $escG = ""; $escF = ""
+        try { $escG = [System.Management.Automation.WildcardPattern]::Escape($useGfn) } catch { $escG = $useGfn }
+        try { $escF = [System.Management.Automation.WildcardPattern]::Escape($useFfn) } catch { $escF = $useFfn }
         $maxLen = [Math]::Max($useFfn.Length, $useGfn.Length)
         $minLen = [Math]::Min($useFfn.Length, $useGfn.Length)
-        if ($useFfn -like "*$useGfn*" -or $useGfn -like "*$useFfn*") {
+        if ($useFfn -like "*$escG*" -or $useGfn -like "*$escF*") {
             $shorter = if ($useFfn.Length -le $useGfn.Length) { $useFfn } else { $useGfn }
             $longer = if ($useFfn.Length -gt $useGfn.Length) { $useFfn } else { $useGfn }
             $isPrefix = $longer.StartsWith($shorter) -and $longer.Length -gt $shorter.Length
@@ -5668,6 +5671,7 @@ function Refresh-RepairRows {
     }
     $rowsR = @()
     foreach ($name in $gamesR.Keys) {
+        try {
         if ($noGameFolders -contains $name) { continue }
         $fixName,$fixUrl = Ff2Xa $name $fixesR
         $hasFix = (-not [string]::IsNullOrEmpty($fixUrl))
@@ -5688,6 +5692,7 @@ function Refresh-RepairRows {
         }
         $src = 'disk'; if ($ghR -contains $name) { $src = 'github' }
         $rowsR += [PSCustomObject]@{ Game=$name; Path=$gamesR[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=($needRepair -and $hasFix); HasFix=$hasFix; Src=$src }
+        } catch {}
     }
     $lvR.Items.Clear()
     foreach ($r in $rowsR) {
@@ -5753,6 +5758,7 @@ function Mn3Vp {
             $fb = New-Object System.Windows.Forms.FolderBrowserDialog
             $fb.Description="Elegi la carpeta donde estan los juegos"
             if ($fb.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                try {
                 $script:repairCustomRoot = $fb.SelectedPath
                 $txtPath.Text = $script:repairCustomRoot
                 try {
@@ -5762,6 +5768,7 @@ function Mn3Vp {
                 } catch {}
                 Merge-RepairGithub
                 Refresh-RepairRows | Out-Null
+                } catch { try { $st.Text="Error al leer la carpeta."; $st.ForeColor=$script:Red } catch {} }
             }
             $fb.Dispose()
         })
