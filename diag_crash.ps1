@@ -15,4 +15,5 @@ try { $lines+=('**PS:** '+$PSVersionTable.PSVersion.ToString()+' **OS:** '+[Envi
 $txt=$lines -join "`n"; if ($txt.Length -gt 1800) { $txt=$txt.Substring(0,1800) }
 $txt=-join ($txt.ToCharArray() | Where-Object { $c=[int]$_; ($c -ge 32 -and ($c -lt 55296 -or $c -gt 57343)) -or $c -eq 10 -or $c -eq 13 -or $c -eq 9 })
 $body=(@{content=$txt} | ConvertTo-Json)
-try { Invoke-RestMethod -Uri $wh -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop | Out-Null; Write-Host 'Diagnostico enviado.' } catch { Write-Host 'No se pudo enviar. Revisa tu internet.' }
+$b8=[System.Text.Encoding]::UTF8.GetBytes($body)
+try { Invoke-RestMethod -Uri $wh -Method Post -Body $b8 -ContentType 'application/json; charset=utf-8' -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop | Out-Null; Write-Host 'Diagnostico enviado.' } catch { Write-Host 'No se pudo enviar. Revisa tu internet.' }

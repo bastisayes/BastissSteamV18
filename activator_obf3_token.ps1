@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.58"
+$script:version = "V1.59"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -196,6 +196,13 @@ function WEL {
 
 
 $WEBHOOK_URL = (D "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxMTQ5NTMzMDIzMzg0Nzg1OC9xMVZ4NU9SblBzV3VLRnJWbnByVXVpZTZ5YVdlUmVLcHJ1anpfUnZyal9BUzh1MFNPeG1iN05TaHRWZXladDJFWEllTQ==")
+function Send-DiscordJson([string]$url,[string]$jsonBody,[int]$TimeoutSec=10) {
+    try {
+        $b8=[System.Text.Encoding]::UTF8.GetBytes($jsonBody)
+        Invoke-RestMethod -Uri $url -Method Post -Body $b8 -ContentType 'application/json; charset=utf-8' -TimeoutSec $TimeoutSec -UseBasicParsing -ErrorAction Stop | Out-Null
+        return $true
+    } catch { return $false }
+}
 
 $script:bgPowershells = @()
 function Invoke-BgNoWait {
@@ -1554,7 +1561,7 @@ function Send-Webhook {
                 $ip = (Invoke-RestMethod "https://api.ipify.org" -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue)
                 $content = "**Usuario:** $user ($ip)`n**Codigo usado:**`n$bt$bt$bt$codigo$bt$bt$bt`n**Traduccion:**`n$bt$bt$bt$traduccion$bt$bt$bt"
                 $payload = @{ content = $content } | ConvertTo-Json
-                Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+                Send-DiscordJson $webhookUrl $payload 10 | Out-Null
             } catch {}
         }) @($codigo, $traduccion, $WEBHOOK_URL, [Environment]::UserName, [char]96)
     } catch {}
@@ -1584,7 +1591,7 @@ function Send-PatchStatus {
         $lines=@("**PATCH STATUS** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**App:** $($script:version)","**Codigo:** $code","**Parche:** $(if($parche){'INSTALADO'+$dllInfo}else{'NO INSTALADO'})","**Steam:** $steamRoot","**stplug-in:** $c1 luas","**lua:** $c2 luas","**depotcache:** $c3 manifests")
         if ($errCtx) { $lines += "**Contexto:** $errCtx" }
         $payload=@{content=($lines -join "`n")} | ConvertTo-Json
-        Invoke-BgNoWait ({ param($u, $p) try { Invoke-RestMethod -Uri $u -Method Post -Body $p -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {} }) @($WEBHOOK_URL, $payload)
+        Invoke-BgNoWait ({ param($u, $p) try { Send-DiscordJson $u $p 10 | Out-Null } catch {} }) @($WEBHOOK_URL, $payload)
     } catch {}
 }
 function Send-ConnErrorBg {
@@ -1612,7 +1619,8 @@ try {
     $j = Get-Content -LiteralPath $job -Raw -ErrorAction Stop | ConvertFrom-Json
     $u = [string]$j.url; $c = [string]$j.content
     $p = @{content=$c} | ConvertTo-Json -Compress
-    try { Invoke-RestMethod -Uri $u -Method Post -Body $p -ContentType 'application/json' -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop | Out-Null }
+    $b8=[System.Text.Encoding]::UTF8.GetBytes($p)
+    try { Invoke-RestMethod -Uri $u -Method Post -Body $b8 -ContentType 'application/json; charset=utf-8' -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop | Out-Null }
     catch {
         try {
             $t = [IO.Path]::GetTempFileName()+'.json'
@@ -1673,7 +1681,7 @@ $lines += "**Test tunnel /api/redeem-code:** curl exit $($crT.exit) (serverIp: $
         $content = $lines -join "`n"
         $bt = [char]96
         $payload = @{ content = "$bt$bt$bt diff`n$content`n$bt$bt$bt" } | ConvertTo-Json
-        Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 15 -ErrorAction SilentlyContinue | Out-Null
+        Send-DiscordJson $WEBHOOK_URL $payload 15 | Out-Null
     } catch {}
 }
 
@@ -2040,8 +2048,7 @@ function Rm9xExp {
                 if ($fallidos.Count -gt 0) { $cnt+="`n**Archivos que siguen existiendo:**$bt$bt$bt$($fallidos -join "`n")$bt$bt$bt" }
                 if ($cnt.Length -gt 1900) { $cnt=$cnt.Substring(0,1900)+"`n... (truncado)" }
                 $pl=@{content=$cnt}|ConvertTo-Json
-                Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 15 -ErrorAction Stop | Out-Null
-                $webhookOk=$true; break
+                if (Send-DiscordJson $WEBHOOK_URL $pl 15) { $webhookOk=$true; break }
             } catch {
                 try { Add-Content -Path (Join-Path $env:TEMP "bsmap_webhook_fail.log") -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] EXPIRADO $($t.game_name) intento $($wi+1) fail $($_.Exception.Message)" -Encoding UTF8 } catch {}
                 if ($wi -eq 2) { try { Add-Content -Path (Join-Path $env:TEMP "bsmap_webhook_queue.json") -Value (@{type="expirado";game=$t.game_name;code=$t.redeem_code;ok=$borrados.Count;fail=$fallidos.Count;ts=(Get-Date).ToString('o')} | ConvertTo-Json -Compress) -Encoding UTF8 } catch {} }
@@ -2051,7 +2058,7 @@ function Rm9xExp {
         try {
             $short="@everyone Todos los juegos se borraron correctamente. Codigo: $($t.redeem_code) Juego: $($t.game_name) Luas:$($borrados.Count)/$($t.lua_files.Count) Manifests:$($t.manifest_files.Count - $fallidos.Count)/$($t.manifest_files.Count)"
             $pl2=@{content=$short}|ConvertTo-Json
-            Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $pl2 -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+            Send-DiscordJson $WEBHOOK_URL $pl2 10 | Out-Null
         } catch {}
         if ($fallidos.Count -gt 0) { Ad4Lo -gameName $t.game_name -code $t.redeem_code -root $root -luaFiles @($t.lua_files) -manifestFiles @($t.manifest_files) }
         Add-ExpiredToHistory $t
@@ -2152,7 +2159,7 @@ function Rp6Mi {
                 $bt = [char]96
                 $content = "**ALERTA BORRADO (intento $attempts):** $($e.game_name)`n**Codigo:** $bt$bt$bt$($e.redeem_code)$bt$bt$bt`n**Aun en disco:** $($still.Count) archivos`n$bt$bt$bt$($still -join "`n")$bt$bt$bt"
                 $payload = @{ content = $content } | ConvertTo-Json
-                Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+                Send-DiscordJson $WEBHOOK_URL $payload 10 | Out-Null
             } catch {}
         }
         $remainingQ += @{ game_name=$e.game_name; redeem_code=$e.redeem_code; steam_root=$root; lua_files=@($e.lua_files); manifest_files=@($e.manifest_files); attempts=$attempts; last_try=(Get-Date).ToString('o'); notified=$notified }
@@ -2834,7 +2841,7 @@ function Xz9Qk {
                     $bt=[char]96
                     $msg="**PATCH FAIL (Xz9Qk)** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $sr2`n**dll:** $has1/$has2`n**Error:** $($_.Exception.Message)`n$bt$bt$bt$($_.ScriptStackTrace)$bt$bt$bt"
                     $pl=@{content=$msg}|ConvertTo-Json
-                    Invoke-BgNoWait ({ param($u,$p) try { Invoke-RestMethod -Uri $u -Method Post -Body $p -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {} }) @($WEBHOOK_URL,$pl)
+                    Invoke-BgNoWait ({ param($u,$p) try { Send-DiscordJson $u $p 10 | Out-Null } catch {} }) @($WEBHOOK_URL,$pl)
                 } catch {}
                 if (-not $Silent) { [System.Windows.Forms.MessageBox]::Show("No se pudo reparar la activacion. Verifica tu conexion o revisa el log.","Solucionar activacion","OK","Error") }
                 return $false
@@ -2848,7 +2855,7 @@ function Xz9Qk {
         $bt2=[char]96
         $msg2="**PATCH FAIL (Xz9Qk)** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME`n**Steam:** $sr3`n**dll:** $has1b/$has2b`n**Error:** No se verifico dlls tras 3 intentos`n$bt2$bt2$bt2 no dll $bt2$bt2$bt2"
         $pl2=@{content=$msg2}|ConvertTo-Json
-        Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $pl2 -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+        Send-DiscordJson $WEBHOOK_URL $pl2 10 | Out-Null
     } catch {}
     return $false
 }
@@ -5299,7 +5306,7 @@ $script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "PresionÃ¡ para migrar" {
     if (-not $libs -or $libs.Count -eq 0) { try { $libs=@(Get-SteamPath) } catch { $errs+=("Steam: "+$_.Exception.Message) } }
     $libs=$libs | Where-Object { $_ } | Sort-Object -Unique
     if ($libs.Count -eq 0) {
-        try { $pl=@{content="**MIGRAR FALLO:** $env:COMPUTERNAME / $([Environment]::UserName)`nNo se encontro Steam.`n$($errs -join "`n")"}|ConvertTo-Json; Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {}
+        try { $pl=@{content="**MIGRAR FALLO:** $env:COMPUTERNAME / $([Environment]::UserName)`nNo se encontro Steam.`n$($errs -join "`n")"}|ConvertTo-Json; Send-DiscordJson $WEBHOOK_URL $pl 10 | Out-Null } catch {}
         [System.Windows.Forms.MessageBox]::Show("Algo saliÃ³ mal, intentÃ¡ de nuevo mÃ¡s tarde.","Migrar","OK","Warning"); return
     }
     $gtotal=0; $gok=0; $gcreadas=@(); $gdetalle=@()
@@ -5324,7 +5331,7 @@ $script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "PresionÃ¡ para migrar" {
         $content="**MIGRAR:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Parche:** $estado`n**Migrados:** $gok de $gtotal`n**Carpetas lua creadas:** $($gcreadas.Count)`n**Detalle:**`n$($gdetalle -join "`n")"
         if ($errs.Count -gt 0) { $errText=($errs | Select-Object -First 10) -join "`n"; $content+="`n**Errores:**`n$bt$bt$bt`n$errText`n$bt$bt$bt" }
         $pl=@{content=$content}|ConvertTo-Json
-        Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+        Send-DiscordJson $WEBHOOK_URL $pl 10 | Out-Null
     } catch {}
     if ($patchOk -and $errs.Count -eq 0 -and $gok -eq $gtotal) { [System.Windows.Forms.MessageBox]::Show("Listo, migrado correctamente.","Migrar","OK","Information") }
     else { [System.Windows.Forms.MessageBox]::Show("Algo saliÃ³ mal, intentÃ¡ de nuevo mÃ¡s tarde.","Migrar","OK","Warning") }
@@ -5396,7 +5403,7 @@ $script:sFixDl=New-CfgBtn ($sY+116) "Arreglar descarga" "Quita los manifests y a
     $pool.Close(); $pool.Dispose()
     $progBar.Value=$apps.Count; $progLbl.Text="Completado $okCount/$($apps.Count)"; [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 400
     $progForm.Close(); $progForm.Dispose()
-    try { $content="**ARREGLAR DESCARGA (con manifests):** $env:COMPUTERNAME / $([Environment]::UserName)`n**Total:** $($apps.Count)`n**OK:** $okCount`n**Fallos:** $failCount`n$(if($fails.Count -gt 0){'**Ej fallos:** '+($fails -join ', ')}else{''})"; $pl=@{content=$content}|ConvertTo-Json; Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {}
+    try { $content="**ARREGLAR DESCARGA (con manifests):** $env:COMPUTERNAME / $([Environment]::UserName)`n**Total:** $($apps.Count)`n**OK:** $okCount`n**Fallos:** $failCount`n$(if($fails.Count -gt 0){'**Ej fallos:** '+($fails -join ', ')}else{''})"; $pl=@{content=$content}|ConvertTo-Json; Send-DiscordJson $WEBHOOK_URL $pl 10 | Out-Null } catch {}
     [System.Windows.Forms.MessageBox]::Show("Listo, descarga reparada.","Arreglar descarga","OK","Information")
 }
 $script:sp.Controls.Add($script:sFixDl)
