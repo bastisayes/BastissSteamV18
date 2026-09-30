@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.70"
+$script:version = "V1.71"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4259,7 +4259,7 @@ $script:mp.Controls.Add($script:c1)
 
 $script:cWeb=New-Card -X $PAD -Y $TIK_Y -W $HW -H $FCH -Title (T "web") -Sub (T "webSub") -Icon "webpage" -Click {Start-Process (D "aHR0cHM6Ly9iYXN0aXNzc3RlYW0ubmV0bGlmeS5hcHA=")}
 $script:mp.Controls.Add($script:cWeb)
-$script:cBiblio=New-Card -X $PAD+$HW+$GAP -Y $TIK_Y -W $HW -H $FCH -Title "Biblioteca" -Sub "Juegos con portada" -Icon "lightning" -Click { Show-Biblio }
+$script:cBiblio=New-Card -X ($PAD+$HW+$GAP) -Y $TIK_Y -W $HW -H $FCH -Title "Biblioteca" -Sub "Juegos con portada" -Icon "lightning" -Click { Show-Biblio }
 $script:mp.Controls.Add($script:cBiblio)
 
 
