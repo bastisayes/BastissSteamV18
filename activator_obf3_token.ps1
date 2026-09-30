@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.65"
+$script:version = "V1.66"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5635,6 +5635,70 @@ if($script:autoDropsV2Enabled){
 }
 
 
+function Merge-RepairGithub {
+    try {
+        $g2 = $script:repairGames; if (-not $g2) { return }
+        $f2 = $script:repairFixes; if (-not $f2) { return }
+        if (-not $script:repairCustomRoot -or -not (Test-Path $script:repairCustomRoot)) { return }
+        $gh2 = @($script:repairGithub)
+        foreach ($fk in $f2.Keys) {
+            if ($fk -match '\.') { continue }
+            $dup = $false
+            foreach ($g in $g2.Keys) { if ((Nn1Yw $g) -eq (Nn1Yw $fk)) { $dup = $true; break } }
+            if (-not $dup) { $g2[$fk] = $script:repairCustomRoot; if ($gh2 -notcontains $fk) { $gh2 += $fk } }
+        }
+        $script:repairGames = $g2
+        $script:repairGithub = $gh2
+    } catch {}
+}
+function Refresh-RepairRows {
+    try { $lvR = $script:repairLv; if (-not $lvR -or $lvR.IsDisposed) { return 0 } } catch { return 0 }
+    $gamesR = @{}; try { $gamesR = $script:repairGames; if (-not $gamesR) { $gamesR = @{} } } catch { $gamesR = @{} }
+    $fixesR = @{}; try { $fixesR = $script:repairFixes; if (-not $fixesR) { $fixesR = @{} } } catch { $fixesR = @{} }
+    $ghR = @(); try { $ghR = @($script:repairGithub) } catch {}
+    $noGameFolders = @('Steamworks Shared','Steam Controller Configs')
+    $timersR = @(); try { $timersR = At5Vc } catch {}
+    $libsR = @(); try { $libsR = Ss3Jd } catch {}
+    $diskLuasR = @{}
+    foreach ($lib in $libsR) {
+        foreach ($sub in @('config\stplug-in','config\lua')) {
+            $d = Join-Path $lib $sub
+            if (Test-Path $d) { Get-ChildItem "$d\*.lua" -ErrorAction SilentlyContinue | ForEach-Object { $diskLuasR[$_.Name] = $true } }
+        }
+    }
+    $rowsR = @()
+    foreach ($name in $gamesR.Keys) {
+        if ($noGameFolders -contains $name) { continue }
+        $fixName,$fixUrl = Ff2Xa $name $fixesR
+        $hasFix = (-not [string]::IsNullOrEmpty($fixUrl))
+        $timer = $null
+        foreach ($t in $timersR) { if ($t.game_name -eq $name) { $timer = $t; break } }
+        $needRepair = $false
+        if ($timer -and @($timer.lua_files).Count -gt 0) {
+            $missing = @($timer.lua_files | Where-Object { -not $diskLuasR.ContainsKey($_) })
+            $needRepair = $missing.Count -gt 0
+        } else {
+            $gNorm = Nn1Yw $name
+            $anyMatch = $false
+            foreach ($ln in $diskLuasR.Keys) {
+                $lNorm = Nn1Yw ([System.IO.Path]::GetFileNameWithoutExtension($ln))
+                if ($lNorm -eq $gNorm -or $lNorm -like "*$gNorm*" -or $gNorm -like "*$lNorm*") { $anyMatch = $true; break }
+            }
+            $needRepair = -not $anyMatch
+        }
+        $src = 'disk'; if ($ghR -contains $name) { $src = 'github' }
+        $rowsR += [PSCustomObject]@{ Game=$name; Path=$gamesR[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=($needRepair -and $hasFix); HasFix=$hasFix; Src=$src }
+    }
+    $lvR.Items.Clear()
+    foreach ($r in $rowsR) {
+        $item = New-Object System.Windows.Forms.ListViewItem($r.Game)
+        $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin reparacion"}else{"OK"}))|Out-Null
+        $item.Tag=$r
+        $item.Checked=($r.NeedRepair -and $r.Src -ne 'github')
+        $lvR.Items.Add($item)|Out-Null
+    }
+    return $rowsR.Count
+}
 function Mn3Vp {
     try {
         $fixes = Qw7Rt
@@ -5657,41 +5721,10 @@ function Mn3Vp {
         if ($script:repairCustomRoot -and (Test-Path $script:repairCustomRoot)) {
             Get-ChildItem -LiteralPath $script:repairCustomRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object { if (-not $games.ContainsKey($_.Name)) { $games[$_.Name] = $_.FullName } }
         }
-        $gameSrc = @{}
-        foreach ($gk in $games.Keys) { $gameSrc[$gk] = 'disk' }
-        if ($script:repairCustomRoot -and (Test-Path $script:repairCustomRoot)) {
-            foreach ($fk in $fixes.Keys) {
-                if ($fk -match '\.') { continue }
-                $dup = $false
-                foreach ($g in $games.Keys) { if ((Nn1Yw $g) -eq (Nn1Yw $fk)) { $dup = $true; break } }
-                if (-not $dup) { $games[$fk] = $script:repairCustomRoot; $gameSrc[$fk] = 'github' }
-            }
-        }
-        foreach ($name in $games.Keys) {
-            if ($noGameFolders -contains $name) { continue }
-            $fixName, $fixUrl = Ff2Xa $name $fixes
-            $hasFix = (-not [string]::IsNullOrEmpty($fixUrl))
-            $timer = $null
-            foreach ($t in $timers) { if ($t.game_name -eq $name) { $timer = $t; break } }
-            $needRepair = $false
-            if ($timer -and @($timer.lua_files).Count -gt 0) {
-                $missing = @($timer.lua_files | Where-Object { -not $diskLuas.ContainsKey($_) })
-                $needRepair = $missing.Count -gt 0
-            } else {
-                $gNorm = Nn1Yw $name
-                $anyMatch = $false
-                foreach ($ln in $diskLuas.Keys) {
-                    $lNorm = Nn1Yw ([System.IO.Path]::GetFileNameWithoutExtension($ln))
-                    if ($lNorm -eq $gNorm -or $lNorm -like "*$gNorm*" -or $gNorm -like "*$lNorm*") { $anyMatch = $true; break }
-                }
-                $needRepair = -not $anyMatch
-            }
-            $rows += [PSCustomObject]@{ Game=$name; Path=$games[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=($needRepair -and $hasFix); HasFix=$hasFix; Src=$gameSrc[$name] }
-        }
-        if ($rows.Count -eq 0) {
-            [System.Windows.Forms.MessageBox]::Show((S("Tm8gaGF5IGp1ZWdvcyBpbnN0YWxhZG9zIGNvbiByZXBhcmFjaW9uIGRpc3BvbmlibGUu")),(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Information")
-            return
-        }
+        $script:repairGames = $games
+        $script:repairFixes = $fixes
+        $script:repairGithub = @()
+        Merge-RepairGithub
         $dlg = New-Object System.Windows.Forms.Form
         $dlg.Text=(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw=="))
         $dlg.ClientSize=New-Object System.Drawing.Size(560,420)
@@ -5721,9 +5754,14 @@ function Mn3Vp {
             $fb.Description="Elegi la carpeta donde estan los juegos"
             if ($fb.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 $script:repairCustomRoot = $fb.SelectedPath
-                $script:repairRescan = $true
-                $dlg.DialogResult=[System.Windows.Forms.DialogResult]::OK
-                $dlg.Close()
+                $txtPath.Text = $script:repairCustomRoot
+                try {
+                    $g2 = $script:repairGames; if (-not $g2) { $g2 = @{} }
+                    Get-ChildItem -LiteralPath $script:repairCustomRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object { if (-not $g2.ContainsKey($_.Name)) { $g2[$_.Name] = $_.FullName } }
+                    $script:repairGames = $g2
+                } catch {}
+                Merge-RepairGithub
+                Refresh-RepairRows | Out-Null
             }
             $fb.Dispose()
         })
@@ -5736,12 +5774,11 @@ function Mn3Vp {
         $lv.BorderStyle="FixedSingle"
         $lv.Columns.Add("Juego",300)|Out-Null
         $lv.Columns.Add("Estado",220)|Out-Null
-        foreach ($r in $rows) {
-            $item = New-Object System.Windows.Forms.ListViewItem($r.Game)
-            $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin reparacion"}else{"OK"}))|Out-Null
-            $item.Tag=$r
-            $item.Checked=($r.NeedRepair -and $r.Src -ne 'github')
-            $lv.Items.Add($item)|Out-Null
+        $script:repairLv = $lv
+        if ((Refresh-RepairRows) -eq 0) {
+            [System.Windows.Forms.MessageBox]::Show((S("Tm8gaGF5IGp1ZWdvcyBpbnN0YWxhZG9zIGNvbiByZXBhcmFjaW9uIGRpc3BvbmlibGUu")),(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Information")
+            $dlg.Dispose()
+            return
         }
         $dlg.Controls.Add($lv)
         $st = New-Object System.Windows.Forms.Label
@@ -5813,7 +5850,6 @@ function Mn3Vp {
         })
         $dlg.ShowDialog() | Out-Null
         $dlg.Dispose()
-        if ($script:repairRescan) { $script:repairRescan = $false; Mn3Vp; return }
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Error en el reparador de juegos: $($_.Exception.Message)",(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Error")
     }
