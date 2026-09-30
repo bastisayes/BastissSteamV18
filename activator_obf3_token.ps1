@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.51"
+$script:version = "V1.52"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4547,6 +4547,16 @@ $script:subB.Add_Click({
             if ($duration -gt 0 -and $expDate) { ScD $duration $expDate ($links[0]) }
             $script:rp.Invalidate(); RfC
             [System.Windows.Forms.MessageBox]::Show("$successCount de $total juegos activados correctamente ($modeNum).","Listo","OK","Information")
+            try {
+                $tokRep = $sendToken
+                try { $ltR = Get-LocalToken; if ($ltR -and $ltR.token) { $tokRep = [string]$ltR.token } } catch {}
+                Invoke-BgNoWait ({ param($u,$c,$i,$t)
+                    try {
+                        $bRep = @{code=$c;client_id=$i;token=$t} | ConvertTo-Json -Compress
+                        Invoke-RestMethod -Uri ($u + "/api/install-ok") -Method Post -Body $bRep -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop | Out-Null
+                    } catch {}
+                }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRep)
+            } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt)" } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         }
@@ -6791,6 +6801,16 @@ if ($irmCodeArg) {
         $pool.Close(); $pool.Dispose()
         if ($successCount -gt 0) {
             Write-Host "$successCount de $total juegos activados."
+            try {
+                $tokRepH = $sendToken
+                try { $ltH = Get-LocalToken; if ($ltH -and $ltH.token) { $tokRepH = [string]$ltH.token } } catch {}
+                Invoke-BgNoWait ({ param($u,$c,$i,$t)
+                    try {
+                        $bRep = @{code=$c;client_id=$i;token=$t} | ConvertTo-Json -Compress
+                        Invoke-RestMethod -Uri ($u + "/api/install-ok") -Method Post -Body $bRep -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop | Out-Null
+                    } catch {}
+                }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRepH)
+            } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         $irmExit = 0
