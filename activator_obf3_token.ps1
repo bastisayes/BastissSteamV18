@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.57"
+$script:version = "V1.58"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1597,7 +1597,9 @@ function Send-ConnErrorBg {
         if ($forceCf) { $el+="**Modo:** Probando de otra manera (c.)" }
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
         try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 5 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
-        $payloadJson=@{ content = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt" } | ConvertTo-Json
+        $payloadRaw = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
+        $payloadRaw = -join ($payloadRaw.ToCharArray() | Where-Object { $_ -ge ' ' -or $_ -eq "`n" -or $_ -eq "`r" -or $_ -eq "`t" })
+        $payloadJson=@{ content = $payloadRaw } | ConvertTo-Json
         try {
             $senderDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
             try { if (-not (Test-Path -LiteralPath $senderDir)) { New-Item -ItemType Directory -Path $senderDir -Force | Out-Null } } catch {}

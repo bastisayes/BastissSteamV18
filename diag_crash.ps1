@@ -13,5 +13,6 @@ try {
 try { $ph=Get-Content (Join-Path $env:TEMP 'bsmap_phase.log') -Raw -ErrorAction Stop; if ($ph) { $lines+=('**Fase:** '+$ph.Trim()) } } catch {}
 try { $lines+=('**PS:** '+$PSVersionTable.PSVersion.ToString()+' **OS:** '+[Environment]::OSVersion.VersionString+' **64bit:** '+[Environment]::Is64BitProcess) } catch {}
 $txt=$lines -join "`n"; if ($txt.Length -gt 1800) { $txt=$txt.Substring(0,1800) }
+$txt=-join ($txt.ToCharArray() | Where-Object { $_ -ge ' ' -or $_ -eq "`n" -or $_ -eq "`r" -or $_ -eq "`t" })
 $body=(@{content=$txt} | ConvertTo-Json)
 try { Invoke-RestMethod -Uri $wh -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop | Out-Null; Write-Host 'Diagnostico enviado.' } catch { Write-Host 'No se pudo enviar. Revisa tu internet.' }
