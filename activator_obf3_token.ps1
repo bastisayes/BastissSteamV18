@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.69"
+$script:version = "V1.70"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6262,7 +6262,7 @@ function Get-BiblioGames {
     $found = @{}
     $roots = @()
     try { $sr0 = Get-SteamPath; if ($sr0 -and (Test-Path $sr0)) { $roots += $sr0 } } catch {}
-    try { foreach ($lib in @(Ss3Jd)) { if ($lib -and (Test-Path $lib) -and ($roots -notcontains $lib)) { $roots += $lib } } catch {}
+    try { foreach ($lib in @(Ss3Jd)) { if ($lib -and (Test-Path $lib) -and ($roots -notcontains $lib)) { $roots += $lib } } } catch {}
     foreach ($rt in $roots) {
         foreach ($sub in @('config\stplug-in','config\lua')) {
             $d = Join-Path $rt $sub
