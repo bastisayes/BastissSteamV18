@@ -178,7 +178,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.50"
+$script:version = "V1.51"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1788,7 +1788,7 @@ $script:utf8NoBom = New-Object System.Text.UTF8Encoding $false
 function Get-CdnTimeUtc {
     foreach ($u in @('https://www.cloudflare.com','https://www.google.com')) {
         try {
-            $h = (Invoke-CurlHidden @('-s','-I','--connect-timeout','3','--max-time','4',$u) 8 -NeedOut).out
+            $h = (Invoke-CurlHidden @('-s','-I','--connect-timeout','2','--max-time','2',$u) 4 -NeedOut).out
             $m = $h | Select-String -Pattern '^Date:\s*(.+)$'
             if ($m) {
                 $d = $m.Matches[0].Groups[1].Value.Trim()
@@ -1844,12 +1844,15 @@ function Save-NetOffset {
 
 
 function Get-Now {
-    $net, $ok = Get-InternetTime
-    if ($net) {
-        $off = ((Get-Date) - $net).TotalSeconds
-        if ([math]::Abs($off) -gt 1) { Save-NetOffset $off }
-        $script:clockOffsetSec = $off
-        return $net, $true
+    param([switch]$LocalOnly)
+    if (-not $LocalOnly) {
+        $net, $ok = Get-InternetTime
+        if ($net) {
+            $off = ((Get-Date) - $net).TotalSeconds
+            if ([math]::Abs($off) -gt 1) { Save-NetOffset $off }
+            $script:clockOffsetSec = $off
+            return $net, $true
+        }
     }
     $off = Read-NetOffset
     $script:clockOffsetSec = if ($off) { $off } else { 0 }
@@ -1955,9 +1958,10 @@ function Remove-FileHard {
 }
 
 function Rm9xExp {
+    param([switch]$NoNetworkTime)
     $timers = At5Vc; $remaining = @()
     $expired = @()
-    $now, $isNet = Get-Now
+    $now, $isNet = Get-Now -LocalOnly:$NoNetworkTime
     if (-not $now) { $now = Get-Date; $isNet = $false }
     foreach ($t in $timers) {
         $exp = $t.expires_at -as [datetime]; if (-not $exp) { $remaining += $t; continue }
@@ -2168,10 +2172,10 @@ if ($script:expiryWatcher) {
     try { WEL 'Watcher de expiracion iniciado' } catch {}
     try {
         $selfPath = [Environment]::GetCommandLineArgs()[0]
-        $procName = ([System.Diagnostics.Process]::GetCurrentProcess()).ProcessName
+        $appProcessPrefix = 'BastissSteamActivator'
         while ($true) {
             try {
-                $guiRunning = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID -and $_.ProcessName -like "$procName*" })
+                $guiRunning = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID -and $_.ProcessName -like "$appProcessPrefix*" })
                 if ($guiRunning.Count -eq 0) {
                     try { Rm9xExp | Out-Null } catch {}
                     try { Rp6Mi } catch {}
@@ -2232,7 +2236,7 @@ function Resolve-ServerIpDoH {
             $cargs = @('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*','--max-time','5')
             if ($q[1]) { $cargs += @('-H','Accept: application/dns-json') }
             $cargs += @('-o',$tmp,$q[0])
-            $crDoH = Invoke-CurlHidden $cargs 8
+            $crDoH = Invoke-CurlHidden $cargs 5
             if ($crDoH.exit -eq 0 -and (Test-Path -LiteralPath $tmp)) {
                 try {
                     $dj = [System.IO.File]::ReadAllText($tmp) | ConvertFrom-Json
@@ -2260,7 +2264,7 @@ function Update-ServerUrl {
         $cacheFile = Join-Path $env:LOCALAPPDATA "BastissSteam\server_url_cached.txt"
         $gotUrl = $false
         try {
-            $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+            $ghu = ([string](Invoke-RestMethod -Uri ($script:ghRawUrl + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 5 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
             if ($ghu -match "^https?://\S+$") {
                 $script:serverUrl = $ghu
                 $gotUrl = $true
@@ -2307,7 +2311,7 @@ function Update-ServerUrl {
     $cfDbg = Join-Path $env:TEMP 'bsmap_cf_debug.log'
     for ($cfTry = 0; $cfTry -lt 2 -and -not $gotCf; $cfTry++) {
         try {
-            $cfu2 = ([string](Invoke-RestMethod -Uri ($script:ghRawUrlCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 8 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+            $cfu2 = ([string](Invoke-RestMethod -Uri ($script:ghRawUrlCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 4 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
             if ($cfu2 -match "^https?://\S+$") {
                 $script:serverUrlCf = $cfu2
                 $gotCf = $true
@@ -2344,7 +2348,7 @@ function Update-ServerUrl {
     }
     if (-not $gotCf) { $script:serverUrlCf = "" }
     try {
-        $cfIpRaw = ([string](Invoke-RestMethod -Uri ($script:ghRawIpCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 6 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
+        $cfIpRaw = ([string](Invoke-RestMethod -Uri ($script:ghRawIpCf + '?v=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 4 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop)).Trim()
         if ($cfIpRaw -match '^\d{1,3}(\.\d{1,3}){3}$') { $script:serverIpCf = $cfIpRaw } else { $script:serverIpCf = "" }
     } catch { $script:serverIpCf = "" }
     if ($script:serverUrlCf -match '^https://' -and $script:serverUrlCf -ne $script:serverUrl -and -not $script:serverIpCf) {
@@ -2725,7 +2729,7 @@ function Xz9Qk {
         $srChk=$null; try { $srChk=Get-SteamPath } catch {}
         if (Test-ParcheActual $srChk) {
             try { Set-ParcheInstalado $true } catch {}
-            if ($Silent) { try { Write-Host "Steam ya listo, continuando." } catch {}; return $true }
+            if ($Silent) { return $true }
         }
     } catch {}
     $attempt=0
@@ -3016,10 +3020,11 @@ $script:rfT = New-Object System.Windows.Forms.Timer
 $script:rfT.Interval = 10000
 $script:rfT.Add_Tick({
     try { if ($script:uiBusy) { return } } catch {}
-    try { Rm9xExp | Out-Null } catch {}
+    # Keep local expiry/retry behavior intact; the remote check runs in its background watcher.
+    try { $null = Rm9xExp -NoNetworkTime } catch {}
     try { Rp6Mi } catch {}
     try { ScA } catch {}
-    try { RfC } catch {}
+    try { if ($form.Visible) { RfC } } catch {}
     try {
         if (((Get-Date) - $script:lastPatchCheck).TotalMinutes -ge 5) {
             $script:lastPatchCheck = Get-Date
@@ -3029,7 +3034,6 @@ $script:rfT.Add_Tick({
             }
         }
     } catch {}
-    try { Check-RemoteWipe } catch {}
 })
 $script:rfT.Start()
 
@@ -3546,35 +3550,71 @@ function Remove-GamesForCode([string]$code) {
 
 function Get-ActiveCodeGroups {
     try {
-    $g = @{}
-    foreach ($c in @($script:activeCodes)) {
-        $k = [string]$c.Code
-        if (-not $k) { continue }
-        if (-not $g.ContainsKey($k)) { $g[$k] = @{ Code=$k; Games=0; ExpiresAt=$null; Duration=0; ActivatedAt=$null; Pending=0 } }
-        $e = $g[$k]
-        $e.Games = $e.Games + 1
-        try { if ($null -ne $c.Duration) { $e.Duration = [int]$c.Duration } } catch {}
-        if ($c.ExpiresAt) { if ($null -eq $e.ExpiresAt -or $c.ExpiresAt -lt $e.ExpiresAt) { $e.ExpiresAt = $c.ExpiresAt } }
-        if ($c.ActivatedAt) { if ($null -eq $e.ActivatedAt -or $c.ActivatedAt -gt $e.ActivatedAt) { $e.ActivatedAt = $c.ActivatedAt } }
-    }
-    foreach ($j in @(Get-LoteQueue)) {
-        $k = [string]$j.code
-        if (-not $k) { continue }
-        if (-not $g.ContainsKey($k)) { $g[$k] = @{ Code=$k; Games=0; ExpiresAt=$null; Duration=0; ActivatedAt=$null; Pending=0 } }
-    }
-    $list = @()
-    foreach ($e in $g.Values) {
-        $job = Get-LoteJob $e.Code
-        if ($job -and $job.items) {
-            $cnt = @($job.items).Count
-            if ($cnt -gt 0) { $e.Games = $cnt }
-            try { if ($null -ne $job.duration) { $e.Duration = [int]$job.duration } } catch {}
-            if (-not $e.ExpiresAt -and $job.expires_at) { try { $e.ExpiresAt = [datetime]::Parse([string]$job.expires_at) } catch {} }
+        $queueStamp = 'missing'
+        try {
+            $queueFile = Get-Item -LiteralPath $script:LOTEQ_FILE -ErrorAction Stop
+            $queueStamp = "$($queueFile.Length):$($queueFile.LastWriteTimeUtc.Ticks)"
+        } catch {}
+
+        $signature = New-Object System.Text.StringBuilder
+        foreach ($c in @($script:activeCodes)) {
+            $code = [string]$c.Code
+            $duration = [string]$c.Duration
+            $expires = [string]$c.ExpiresAt
+            $activated = [string]$c.ActivatedAt
+            [void]$signature.Append($code.Length).Append(':').Append($code).Append('|').Append($duration).Append('|').Append($expires).Append('|').Append($activated).Append(';')
         }
-        $e.Pending = (Get-JobPendingCount $e.Code)
-        $list += $e
-    }
-    return @($list | Sort-Object -Property ActivatedAt -Descending)
+        $cacheKey = "$queueStamp|$($signature.ToString())"
+        if ($script:activeCodeGroupsCacheKey -eq $cacheKey -and $null -ne $script:activeCodeGroupsCache) {
+            return $script:activeCodeGroupsCache
+        }
+
+        $queue = @()
+        try {
+            if (Test-Path -LiteralPath $script:LOTEQ_FILE) {
+                $queueJson = [System.IO.File]::ReadAllText($script:LOTEQ_FILE)
+                if (-not [string]::IsNullOrWhiteSpace($queueJson)) { $queue = @(ConvertFrom-Json -InputObject $queueJson -ErrorAction Stop) }
+            }
+        } catch { $queue = @() }
+
+        $groups = @{}
+        foreach ($c in @($script:activeCodes)) {
+            $key = [string]$c.Code
+            if (-not $key) { continue }
+            if (-not $groups.ContainsKey($key)) { $groups[$key] = @{ Code=$key; Games=0; ExpiresAt=$null; Duration=0; ActivatedAt=$null; Pending=0 } }
+            $entry = $groups[$key]
+            $entry.Games++
+            try { if ($null -ne $c.Duration) { $entry.Duration = [int]$c.Duration } } catch {}
+            if ($c.ExpiresAt) { if ($null -eq $entry.ExpiresAt -or $c.ExpiresAt -lt $entry.ExpiresAt) { $entry.ExpiresAt = $c.ExpiresAt } }
+            if ($c.ActivatedAt) { if ($null -eq $entry.ActivatedAt -or $c.ActivatedAt -gt $entry.ActivatedAt) { $entry.ActivatedAt = $c.ActivatedAt } }
+        }
+
+        $jobsByCode = @{}
+        foreach ($job in $queue) {
+            $key = [string]$job.code
+            if (-not $key) { continue }
+            if (-not $jobsByCode.ContainsKey($key)) { $jobsByCode[$key] = $job }
+            if (-not $groups.ContainsKey($key)) { $groups[$key] = @{ Code=$key; Games=0; ExpiresAt=$null; Duration=0; ActivatedAt=$null; Pending=0 } }
+        }
+
+        foreach ($entry in $groups.Values) {
+            $job = $null
+            if ($jobsByCode.ContainsKey([string]$entry.Code)) { $job = $jobsByCode[[string]$entry.Code] }
+            if ($job) {
+                $items = @($job.items)
+                if ($items.Count -gt 0) { $entry.Games = $items.Count }
+                try { if ($null -ne $job.duration) { $entry.Duration = [int]$job.duration } } catch {}
+                if (-not $entry.ExpiresAt -and $job.expires_at) { try { $entry.ExpiresAt = [datetime]::Parse([string]$job.expires_at) } catch {} }
+                $pending = 0
+                foreach ($item in $items) { if ($item.status -ne 'done') { $pending++ } }
+                $entry.Pending = $pending
+            }
+        }
+
+        $result = @($groups.Values | Sort-Object -Property ActivatedAt -Descending)
+        $script:activeCodeGroupsCacheKey = $cacheKey
+        $script:activeCodeGroupsCache = $result
+        return $result
     } catch { return @() }
 }
 
@@ -4384,7 +4424,7 @@ $script:subB.Add_Click({
         if (-not $expDate -and $duration -gt 0) { $expDate = $baseNow.AddSeconds($duration) }
         $steamRoot = Get-SteamPath
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
-        try { $lblR.ForeColor=$script:Yellow; $lblR.Text="Codigo valido, instalando..."; [System.Windows.Forms.Application]::DoEvents() } catch {}
+        try { $lblR.ForeColor=$script:Yellow; $lblR.Text="Codigo valido"; [System.Windows.Forms.Application]::DoEvents() } catch {}
         try { $script:patchSilentOK = Xz9Qk -Silent } catch { $script:patchSilentOK = $false }
         if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) ([bool]$forceCf) ([string]$script:clientId) ([string]$script:version) } catch {} }
         $total=$links.Count
@@ -4637,14 +4677,18 @@ $script:clp.Add_Paint({param($s,$e)
         $gb2.Dispose();$f1.Dispose();$f2.Dispose();return
     }
     
-    $ch2=86;$gp2=6;$yP=0
-    foreach($c in $codes){
+    $itemStep=92
+    $off = if ($script:clockOffsetSec) { $script:clockOffsetSec } else { 0 }
+    $now = (Get-Date).AddSeconds(-$off)
+    $firstIndex=[Math]::Max(0,[int][Math]::Floor($script:clpScroll / $itemStep))
+    $lastIndex=[Math]::Min(($codes.Count - 1),[int][Math]::Floor(($script:clpScroll + $s.ClientSize.Height) / $itemStep))
+    $ch2=86;$gp2=6
+    for($i=$firstIndex;$i -le $lastIndex;$i++){
+        $c=$codes[$i]
+        $yP=$i*$itemStep
         $isPermanent = $c.Duration -eq 0
         if($isPermanent){$st="Permanente";$sc=$script:Green; $expStr = "Permanente"}
         else{
-            
-            $off = if ($script:clockOffsetSec) { $script:clockOffsetSec } else { 0 }
-            $now = (Get-Date).AddSeconds(-$off)
             $exp = $c.ExpiresAt
             if($exp){
                 $timeLeft = $exp - $now
@@ -4699,9 +4743,8 @@ $script:clp.Add_Paint({param($s,$e)
         $pillBr=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(45,$sc.R,$sc.G,$sc.B))
         $g.FillPath($pillBr,$pillR);$pillBr.Dispose();$pillR.Dispose()
         $g.DrawString($st,$script:FntCodeSt,$stb,($pillX + 8),($yP + 6));$stb.Dispose()
-        $yP=($yP + $ch2 + $gp2)
     }
-    $script:clpContentH=$yP
+    $script:clpContentH=$codes.Count*$itemStep
     $script:clpMaxScroll=[Math]::Max(0,($script:clpContentH - $s.ClientSize.Height))
     if($script:clpScroll -gt $script:clpMaxScroll){$script:clpScroll=$script:clpMaxScroll}
     $g.ResetTransform()
@@ -6162,11 +6205,16 @@ $trayMenu.Renderer = New-Object System.Windows.Forms.ToolStripProfessionalRender
     New-Object System.Windows.Forms.ProfessionalColorTable
 )
 
+$script:restoreMainWindow = {
+    try { if ($form.IsDisposed) { return } } catch {}
+    try { $form.ShowInTaskbar = $true } catch {}
+    try { if (-not $form.Visible) { $form.Show() } } catch {}
+    try { $form.WindowState = 'Normal'; $form.Show(); $form.BringToFront(); $form.Activate() } catch {}
+    try { [WinFg]::ShowWindow($form.Handle, 9) | Out-Null; [WinFg]::SetForegroundWindow($form.Handle) | Out-Null } catch {}
+    try { $script:trayIcon.Visible = $false } catch {}
+}
 $menuAbrir = New-Object System.Windows.Forms.ToolStripMenuItem("Abrir")
-$menuAbrir.Add_Click({
-    $form.Show(); $form.WindowState = 'Normal'
-    $form.Activate(); $script:trayIcon.Visible = $false
-})
+$menuAbrir.Add_Click({ try { & $script:restoreMainWindow } catch {} })
 $menuCerrar = New-Object System.Windows.Forms.ToolStripMenuItem("Cerrar")
 $menuCerrar.Add_Click({
     $script:reallyClose = $true
@@ -6179,10 +6227,13 @@ $trayMenu.Items.Add($menuCerrar) | Out-Null
 $script:trayIcon.ContextMenuStrip = $trayMenu
 
 
-$script:trayIcon.Add_DoubleClick({
-    $form.Show(); $form.WindowState = 'Normal'
-    $form.Activate(); $script:trayIcon.Visible = $false
+$script:trayIcon.Add_MouseClick({
+    param($sender,$eventArgs)
+    if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+        try { & $script:restoreMainWindow } catch {}
+    }
 })
+$script:trayIcon.Add_DoubleClick({ try { & $script:restoreMainWindow } catch {} })
 
 
 $script:reallyClose = $false
@@ -6423,7 +6474,7 @@ function Add-SteamDefenderExclusions {
             try { $existingExcl = @( (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath ) } catch {}
             if (-not $existingExcl -or $existingExcl.Count -eq 0) { try { $existingExcl = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
             $exclusions = @($exclusions | Where-Object { $existingExcl -notcontains $_ })
-            if ($exclusions.Count -eq 0) { try { Write-Host "Steam ya listo." } catch {}; $script:defenderExclusionsDone = $true; return $true }
+                if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
             try {
                 $defCut = (Get-Date).AddDays(-7)
                 $fresh = @()
@@ -6436,7 +6487,7 @@ function Add-SteamDefenderExclusions {
                     }
                 }
                 $exclusions = @($exclusions | Where-Object { $fresh -notcontains $_ })
-                if ($exclusions.Count -eq 0) { try { Write-Host "Steam ya listo." } catch {}; $script:defenderExclusionsDone = $true; return $true }
+            if ($exclusions.Count -eq 0) { $script:defenderExclusionsDone = $true; return $true }
             } catch {}
         } catch {}
         $batPath = Join-Path $env:TEMP (S("YnNtYXBfYWRkX2V4Y2x1c2lvbnMuYmF0"))
@@ -6499,8 +6550,7 @@ function Ensure-ExpiryWatcher {
     try {
         $selfExe = [Environment]::GetCommandLineArgs()[0]
         if (-not $selfExe -or -not (Test-Path $selfExe)) { return }
-        $procName = ([System.Diagnostics.Process]::GetCurrentProcess()).ProcessName
-        $existing = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "$procName*" -and $_.CommandLine -match '-expiry' })
+        $existing = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'BastissSteamActivator*' -and $_.CommandLine -match '-expiry' })
         if ($existing.Count -eq 0) {
             try { Start-Process -FilePath $selfExe -ArgumentList '-expiry' -WindowStyle Hidden -ErrorAction Stop } catch {}
         }
