@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.53"
+$script:version = "V1.54"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1596,22 +1596,41 @@ function Send-ConnErrorBg {
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
         try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 5 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
         $payloadJson=@{ content = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt" } | ConvertTo-Json
-        Invoke-BgNoWait ({ param($payloadJson,$webhookUrl)
+        try {
+            $senderDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
+            try { if (-not (Test-Path -LiteralPath $senderDir)) { New-Item -ItemType Directory -Path $senderDir -Force | Out-Null } } catch {}
+            $senderPs1 = Join-Path $senderDir 'bsmap_alert_sender.ps1'
             try {
-                try { Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payloadJson -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop | Out-Null; return } catch {}
-                $tmpWeb=[System.IO.Path]::GetTempFileName()+".json"
-                [System.IO.File]::WriteAllText($tmpWeb,$payloadJson,(New-Object System.Text.UTF8Encoding $false))
-                $psiW=New-Object System.Diagnostics.ProcessStartInfo
-                $psiW.FileName="curl.exe"
-                $psiW.Arguments="-s -X POST -H `"Content-Type: application/json`" --data-binary `"$tmpWeb`" $webhookUrl --max-time 12 -o NUL"
-                $psiW.CreateNoWindow=$true; $psiW.UseShellExecute=$false
-                $pW=New-Object System.Diagnostics.Process; $pW.StartInfo=$psiW
-                [void]$pW.Start(); $pW.WaitForExit(15000) | Out-Null
-                Remove-Item $tmpWeb -Force -ErrorAction SilentlyContinue
-            } catch {
-                try { Add-Content -Path (Join-Path $env:TEMP "bsmap_error_pendientes.log") -Value $payloadJson -Encoding UTF8 } catch {}
-            }
-        }) @($payloadJson,$WEBHOOK_URL)
+                if (-not (Test-Path -LiteralPath $senderPs1)) {
+                    $senderCode = @'
+param([string]$job)
+try {
+    $j = Get-Content -LiteralPath $job -Raw -ErrorAction Stop | ConvertFrom-Json
+    $u = [string]$j.url; $c = [string]$j.content
+    $p = @{content=$c} | ConvertTo-Json -Compress
+    try { Invoke-RestMethod -Uri $u -Method Post -Body $p -ContentType 'application/json' -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop | Out-Null }
+    catch {
+        try {
+            $t = [IO.Path]::GetTempFileName()+'.json'
+            [IO.File]::WriteAllText($t, $p, (New-Object System.Text.UTF8Encoding $false))
+            & curl.exe -s -X POST -H 'Content-Type: application/json' --data-binary "@$t" $u --max-time 8 -o NUL 2>$null
+            Remove-Item $t -Force -ErrorAction SilentlyContinue
+        } catch {}
+    }
+} catch {}
+try { Remove-Item -LiteralPath $job -Force -ErrorAction SilentlyContinue } catch {}
+'@
+                    [IO.File]::WriteAllText($senderPs1, $senderCode, (New-Object System.Text.UTF8Encoding $false))
+                }
+            } catch {}
+            $jobInner = ""; try { $jobInner = [string](($payloadJson | ConvertFrom-Json).content) } catch { $jobInner = $payloadJson }
+            $jobJson = @{url=[string]$WEBHOOK_URL;content=$jobInner} | ConvertTo-Json -Compress
+            $jobFile = Join-Path $env:TEMP ("bsmap_alert_" + [guid]::NewGuid().ToString('N') + ".json")
+            [IO.File]::WriteAllText($jobFile, $jobJson, (New-Object System.Text.UTF8Encoding $false))
+            Start-Process powershell.exe -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$senderPs1,$jobFile -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        } catch {
+            try { Add-Content -Path (Join-Path $env:TEMP "bsmap_error_pendientes.log") -Value $payloadJson -Encoding UTF8 } catch {}
+        }
     } catch {}
 }
 function Send-Diagnostics {
@@ -6848,7 +6867,7 @@ if ($irmCodeArg) {
     try {
         Write-Phase "exit-ok"
         $drainSW=[System.Diagnostics.Stopwatch]::StartNew()
-        while ($drainSW.Elapsed.TotalSeconds -lt 12) {
+        while ($drainSW.Elapsed.TotalSeconds -lt 3) {
             $pend=@($script:bgPowershells | Where-Object { -not $_.h.IsCompleted })
             if ($pend.Count -eq 0) { break }
             Start-Sleep -Milliseconds 300
