@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.62"
+$script:version = "V1.63"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2927,9 +2927,8 @@ function Get-InstallFolderMap {
 
 function Qw7Rt {
     try {
-        $wc = New-Object System.Net.WebClient
-        $jsonText = $wc.DownloadString((D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vbWFpbi9maXhlc19saXN0Lmpzb24="))
-        $wc.Dispose()
+        $jsonText = Invoke-RestMethod -Uri (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vbWFpbi9maXhlc19saXN0Lmpzb24=") -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+        if ($jsonText -isnot [string]) { $jsonText = ($jsonText | ConvertTo-Json -Compress) }
         $parsed = $jsonText | ConvertFrom-Json
         $fixes = @{}
         foreach ($f in @($parsed)) {
@@ -3400,7 +3399,17 @@ $script:LOTE_INSTALL_SCRIPT = {
     $res = @{ ok=$false; err=""; lua=@(); man=@(); game=$gName }
     try {
         $zip = Join-Path $env:TEMP ("fix_" + [System.Guid]::NewGuid().ToString('N') + ".zip")
-        $crD = Invoke-CurlHidden @('-s','-k','-L','--ssl-no-revoke','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','300') 300
+        $crD = @{exit=-1}
+        try {
+            $psiD = New-Object System.Diagnostics.ProcessStartInfo
+            $psiD.FileName = "curl.exe"
+            $psiD.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','300') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+            $psiD.CreateNoWindow = $true; $psiD.UseShellExecute = $false
+            $prD = New-Object System.Diagnostics.Process; $prD.StartInfo = $psiD
+            [void]$prD.Start()
+            if (-not $prD.WaitForExit(300000)) { try { $prD.Kill() } catch {} }
+            $crD = @{exit=$prD.ExitCode}
+        } catch {}
         if ($crD.exit -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500) { throw "descarga fallida: $url" }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $tmpExp = Join-Path $env:TEMP ("par_" + [System.Guid]::NewGuid().ToString('N'))
@@ -3472,7 +3481,7 @@ function Add-TimerForLote([string]$code, [int]$duration, $expDate, [string]$stea
 }
 
 function Invoke-LoteQueueForCode([string]$code, $label) {
-    if ($script:cdRunning) { return }
+    if ($script:cdRunning) { try { if ($script:cdInfo) { $script:cdInfo.Text = "Ya hay una activacion en curso, espera que termine..." } } catch {}; return }
     $job = Get-LoteJob $code
     if (-not $job) { return }
     $script:cdRunning = $true
@@ -3784,6 +3793,8 @@ function Start-CdActivate {
             $j0 = Get-LoteJob $code
             if ($j0) { $j0.paused = $false; Set-LoteJob $j0 }
             try { Update-CdPanelText } catch {}
+        } else {
+            try { if ($script:cdInfo) { $script:cdInfo.Text = "Ya hay una activacion en curso, espera que termine..." } } catch {}
         }
         return
     }
@@ -5643,10 +5654,13 @@ function Mn3Vp {
             }
         }
         $rows = @()
+        if ($script:repairCustomRoot -and (Test-Path $script:repairCustomRoot)) {
+            Get-ChildItem -LiteralPath $script:repairCustomRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object { if (-not $games.ContainsKey($_.Name)) { $games[$_.Name] = $_.FullName } }
+        }
         foreach ($name in $games.Keys) {
             if ($noGameFolders -contains $name) { continue }
             $fixName, $fixUrl = Ff2Xa $name $fixes
-            if (-not $fixUrl) { continue }
+            $hasFix = (-not [string]::IsNullOrEmpty($fixUrl))
             $timer = $null
             foreach ($t in $timers) { if ($t.game_name -eq $name) { $timer = $t; break } }
             $needRepair = $false
@@ -5662,7 +5676,7 @@ function Mn3Vp {
                 }
                 $needRepair = -not $anyMatch
             }
-            $rows += [PSCustomObject]@{ Game=$name; Path=$games[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=$needRepair }
+            $rows += [PSCustomObject]@{ Game=$name; Path=$games[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=($needRepair -and $hasFix); HasFix=$hasFix }
         }
         if ($rows.Count -eq 0) {
             [System.Windows.Forms.MessageBox]::Show((S("Tm8gaGF5IGp1ZWdvcyBpbnN0YWxhZG9zIGNvbiByZXBhcmFjaW9uIGRpc3BvbmlibGUu")),(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Information")
@@ -5678,9 +5692,35 @@ function Mn3Vp {
         $lbl.Font=$script:FntCard;$lbl.ForeColor=$script:White;$lbl.BackColor=$script:BG
         $lbl.Location=New-Object System.Drawing.Point(12,10);$lbl.AutoSize=$true
         $dlg.Controls.Add($lbl)
+        $txtPath = New-Object System.Windows.Forms.TextBox
+        $txtPath.Location=New-Object System.Drawing.Point(12,32)
+        $txtPath.Size=New-Object System.Drawing.Size(420,22)
+        $txtPath.ReadOnly=$true
+        $txtPath.BackColor=$script:InputBG;$txtPath.ForeColor=$script:White
+        $txtPath.BorderStyle="FixedSingle"
+        if ($script:repairCustomRoot) { $txtPath.Text=$script:repairCustomRoot }
+        $dlg.Controls.Add($txtPath)
+        $btnPath = New-Object System.Windows.Forms.Button
+        $btnPath.Location=New-Object System.Drawing.Point(440,30)
+        $btnPath.Size=New-Object System.Drawing.Size(108,24)
+        $btnPath.Text="Examinar..."
+        $btnPath.BackColor=$script:CardBG;$btnPath.ForeColor=$script:White
+        $btnPath.FlatStyle="Flat"
+        $btnPath.Add_Click({
+            $fb = New-Object System.Windows.Forms.FolderBrowserDialog
+            $fb.Description="Elegi la carpeta donde estan los juegos"
+            if ($fb.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                $script:repairCustomRoot = $fb.SelectedPath
+                $script:repairRescan = $true
+                $dlg.DialogResult=[System.Windows.Forms.DialogResult]::OK
+                $dlg.Close()
+            }
+            $fb.Dispose()
+        })
+        $dlg.Controls.Add($btnPath)
         $lv = New-Object System.Windows.Forms.ListView
-        $lv.Location=New-Object System.Drawing.Point(12,36)
-        $lv.Size=New-Object System.Drawing.Size(536,300)
+        $lv.Location=New-Object System.Drawing.Point(12,60)
+        $lv.Size=New-Object System.Drawing.Size(536,272)
         $lv.View="Details";$lv.CheckBoxes=$true;$lv.FullRowSelect=$true
         $lv.BackColor=$script:InputBG;$lv.ForeColor=$script:White
         $lv.BorderStyle="FixedSingle"
@@ -5688,7 +5728,7 @@ function Mn3Vp {
         $lv.Columns.Add("Estado",220)|Out-Null
         foreach ($r in $rows) {
             $item = New-Object System.Windows.Forms.ListViewItem($r.Game)
-            $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}else{"OK"}))|Out-Null
+            $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin fix en GitHub"}else{"OK"}))|Out-Null
             $item.Tag=$r
             $item.Checked=$r.NeedRepair
             $lv.Items.Add($item)|Out-Null
@@ -5718,6 +5758,7 @@ function Mn3Vp {
             foreach ($it in $sel) {
                 $i++
                 $r=$it.Tag
+                if (-not $r.FixUrl) { $it.SubItems[1].Text="Sin fix"; continue }
                 $st.Text="($i/$($sel.Count)) Reparando juego de $($r.Game)..."
                 $st.ForeColor=$script:Yellow
                 $pb.Style="Marquee"; $pb.MarqueeAnimationSpeed=30
@@ -5725,10 +5766,8 @@ function Mn3Vp {
                 [System.Windows.Forms.Application]::DoEvents()
                 $zip = Join-Path $env:TEMP "repair_$(Get-Random).zip"
                 try {
-                    $wc = New-Object System.Net.WebClient
-                    $wc.Headers.Add("User-Agent","Mozilla/5.0")
-                    $wc.DownloadFile($r.FixUrl, $zip)
-                    $wc.Dispose()
+                    $crR = Invoke-CurlHidden @('-s','-k','-L','--ssl-no-revoke','-H','User-Agent: Mozilla/5.0','-o',$zip,$r.FixUrl,'--max-time','300') 300
+                    if ($crR.exit -ne 0) { throw "descarga fallida" }
                     $pb.Style="Continuous"; $pb.MarqueeAnimationSpeed=0
                     if (-not (Test-Path $zip) -or (Get-Item $zip).Length -eq 0) { throw "Descarga vacia" }
                     $st.Text="($i/$($sel.Count)) Reparando juego de $($r.Game)..."
@@ -5764,6 +5803,7 @@ function Mn3Vp {
         })
         $dlg.ShowDialog() | Out-Null
         $dlg.Dispose()
+        if ($script:repairRescan) { $script:repairRescan = $false; Mn3Vp; return }
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Error en el reparador de juegos: $($_.Exception.Message)",(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Error")
     }
