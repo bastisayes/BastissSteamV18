@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.59"
+$script:version = "V1.60"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1599,11 +1599,25 @@ function Send-ConnErrorBg {
     try {
         $bt=[char]96
         $el=@("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
-        try { $phNow=Get-Content (Join-Path $env:TEMP 'bsmap_phase.log') -Raw -ErrorAction Stop; if ($phNow) { $el+="**Fase:** $($phNow.Trim())" } } catch {}
+        try { $phLines=@(Get-Content (Join-Path $env:TEMP 'bsmap_phase.log') -ErrorAction Stop | Select-Object -Last 8); if ($phLines.Count -gt 0) { $el+="**Fase:**`n$($phLines -join "`n")" } } catch {}
+        try {
+            $dg = @()
+            try { $dg += ("PS " + $PSVersionTable.PSVersion.ToString()) } catch {}
+            try { $dg += ("OS " + [Environment]::OSVersion.VersionString) } catch {}
+            try { $dg += ("64bit " + [Environment]::Is64BitProcess) } catch {}
+            try { $dg += ("Admin " + ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) } catch {}
+            try { $drvC = (Get-PSDrive C -ErrorAction Stop); $dg += ("Disco " + [math]::Round($drvC.Free/1GB,1) + "GB libres") } catch {}
+            try { $srD = Get-SteamPath; $dllD = ((Test-Path (Join-Path $srD "OpenSteamTool.dll")) -and (Test-Path (Join-Path $srD "xinput1_4.dll"))); $dg += ("Steam " + $srD + " dlls=" + $dllD) } catch { $dg += "Steam ?" }
+            try { $exR = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction Stop).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }); $dg += ("Exclusiones " + $exR.Count) } catch { $dg += "Exclusiones ?" }
+            try { $luaV = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name EnableLUA -ErrorAction Stop).EnableLUA; $dg += ("UAC " + $luaV) } catch {}
+            if ($script:lastTried) { $dg += ("Rutas: " + $script:lastTried) }
+            if ($script:lastCandErrs) { $dg += ("Fallos: " + $script:lastCandErrs) }
+            if ($dg.Count -gt 0) { $el += ("**Diag:** " + ($dg -join " | ")) }
+        } catch {}
         $el+=("**PC:** $env:COMPUTERNAME / $([Environment]::UserName)","**ClientID:** $clientId","**App:** $appVer","**Codigo:** $code","**URL servidor:** $srvUrl","**URL secundaria:** $(if ($srvUrlCf) { $srvUrlCf } else { '(no configurada)' })")
         if ($forceCf) { $el+="**Modo:** Probando de otra manera (c.)" }
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
-        try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 5 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
+        try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 10 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
         $payloadRaw = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
         $payloadRaw = -join ($payloadRaw.ToCharArray() | Where-Object { $c=[int]$_; ($c -ge 32 -and ($c -lt 55296 -or $c -gt 57343)) -or $c -eq 10 -or $c -eq 13 -or $c -eq 9 })
         $payloadJson=@{ content = $payloadRaw } | ConvertTo-Json
@@ -4434,8 +4448,9 @@ $script:subB.Add_Click({
                 } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 8
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
+                    try { $script:lastTried = ($triedUrls -join " -> ") } catch {}
                     if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
-                    if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)" }
+                    if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)"; try { $script:lastCandErrs = ($candErrs -join " || ") } catch {} }
             }
             Remove-Item $tempBody -Force -ErrorAction SilentlyContinue
                 if (-not $rr) { throw "Sin respuesta del servidor" }
@@ -6651,16 +6666,19 @@ try {
     }
 } catch {}
 $script:phaseFile = Join-Path $env:TEMP 'bsmap_phase.log'
-function Write-Phase([string]$s) { try { "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $PID v$($script:version) $s" | Set-Content -LiteralPath $script:phaseFile -Encoding UTF8 } catch {} }
+function Write-Phase([string]$s) { try { $lnPh="[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $PID v$($script:version) $s"; $fPh=$script:phaseFile; $prevPh=@(); try { $prevPh=@(Get-Content -LiteralPath $fPh -ErrorAction Stop) } catch {}; $allPh=@($prevPh + $lnPh); if ($allPh.Count -gt 25) { $allPh=@($allPh | Select-Object -Last 25) }; $allPh | Set-Content -LiteralPath $fPh -Encoding UTF8 } catch {} }
 try {
     if (Test-Path -LiteralPath $script:phaseFile) {
-        $plPrev = Get-Content -LiteralPath $script:phaseFile -Raw -ErrorAction Stop
-        if ($plPrev -notmatch 'exit-ok' -and ($plPrev -match '20\d\d-\d\d-\d\d \d\d:\d\d:\d\d')) {
+        $allPrev = @(Get-Content -LiteralPath $script:phaseFile -ErrorAction Stop)
+        $plLast = $allPrev | Select-Object -Last 1
+        if ($plLast -notmatch 'exit-ok|crash-notificado' -and ($plLast -match '20\d\d-\d\d-\d\d \d\d:\d\d:\d\d')) {
             try {
                 $ptsPrev = [datetime]::ParseExact($Matches[0].Trim(), 'yyyy-MM-dd HH:mm:ss', $null)
                 $agePrev = (Get-Date) - $ptsPrev
                 if ($agePrev.TotalHours -lt 24 -and $agePrev.TotalMinutes -gt 5) {
-                    Send-ConnErrorBg $irmCodeArg "Muerte inesperada anterior" ("La corrida anterior no termino. Ultima fase: " + $plPrev.Trim()) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version)
+                    $histPrev = ($allPrev | Select-Object -Last 5) -join "`n"
+                    Send-ConnErrorBg $irmCodeArg "Muerte inesperada anterior" ("La corrida anterior no termino. Ultimas fases:`n" + $histPrev) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version)
+                    Write-Phase "crash-notificado"
                 }
             } catch {}
         }
@@ -6745,8 +6763,9 @@ if ($irmCodeArg) {
                 } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 8
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
+                    try { $script:lastTried = ($triedUrls -join " -> ") } catch {}
                     if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
-                    if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)" }
+                    if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)"; try { $script:lastCandErrs = ($candErrs -join " || ") } catch {} }
                 }
                 Remove-Item $tempBody -Force -ErrorAction SilentlyContinue
                 if (-not $rr) { throw "Sin respuesta del servidor" }
