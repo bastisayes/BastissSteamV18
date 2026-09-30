@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.54"
+$script:version = "V1.55"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6668,9 +6668,11 @@ if ($irmCodeArg) {
         $body = @{code=$code;client_id=$script:clientId;redeem_at=$redeemNow.ToString("o");token=$sendToken} | ConvertTo-Json
         $lastErr = $null
         Write-Phase ("redeem-start code=" + $code)
+        $script:skipUrlResolve = $false
+        if ($irmSrvBase -match "^https?://") { $script:serverUrl=$irmSrvBase; $script:serverIp=""; if ($irmSrvBaseCf -match "^https?://") { $script:serverUrlCf=$irmSrvBaseCf; $script:serverIpCf="" }; try { $script:lastUrlOk=Get-Date } catch {}; $script:skipUrlResolve=$true }
         for ($attempt = 0; $attempt -lt 3 -and $cdSW.Elapsed.TotalSeconds -lt 20; $attempt++) {
             try {
-                Update-ServerUrl
+                if ($script:skipUrlResolve) { $script:skipUrlResolve=$false } else { Update-ServerUrl }
                 $cands = @()
                 if ($irmSrvBase -match "^https?://") { $cands += ,@($irmSrvBase, "") }
                 if ($irmSrvBaseCf -match "^https?://" -and $irmSrvBaseCf -ne $irmSrvBase) { $cands += ,@($irmSrvBaseCf, "") }
@@ -6688,6 +6690,7 @@ if ($irmCodeArg) {
                     if ($cdSW.Elapsed.TotalSeconds -ge 20) { break }
                     $candUrl = $cd[0]; $candIp = $cd[1]
                     $reqUrl = "$candUrl/api/redeem-code"
+                    Write-Phase ("trycand " + $candUrl)
                     $resolveArg = @()
                     if ($candIp -and $candUrl -match "^https://([a-zA-Z0-9-]+)") { $hn = ([uri]$candUrl).Host; if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$candIp") } }
                     $resolveStr = ($resolveArg -join "|")
