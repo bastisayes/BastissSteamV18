@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.71"
+$script:version = "V1.72"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6331,11 +6331,11 @@ function Refresh-BiblioGrid([string]$filter) {
         foreach ($g in $games) {
             if ($f -and ($g.name.ToLower().IndexOf($f) -lt 0) -and ($g.appid.IndexOf($f) -lt 0)) { continue }
             $pn = New-Object System.Windows.Forms.Panel
-            $pn.Size = New-Object System.Drawing.Size(126,202)
+            $pn.Size = New-Object System.Drawing.Size(166,274)
             $pn.BackColor = $script:BG
             $pb = New-Object System.Windows.Forms.PictureBox
             $pb.Location = New-Object System.Drawing.Point(8,0)
-            $pb.Size = New-Object System.Drawing.Size(110,165)
+            $pb.Size = New-Object System.Drawing.Size(150,225)
             $pb.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::StretchImage
             $pb.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)
             $pb.Cursor = [System.Windows.Forms.Cursors]::Hand
@@ -6345,8 +6345,8 @@ function Refresh-BiblioGrid([string]$filter) {
             $pb.Add_Click({ param($s) try { $t=$s.Tag; [System.Windows.Forms.MessageBox]::Show(($t.name + "`nAppID: " + $t.appid),"Juego","OK","Information") } catch {} })
             $pn.Controls.Add($pb)
             $lb = New-Object System.Windows.Forms.Label
-            $lb.Location = New-Object System.Drawing.Point(0,167)
-            $lb.Size = New-Object System.Drawing.Size(126,34)
+            $lb.Location = New-Object System.Drawing.Point(0,227)
+            $lb.Size = New-Object System.Drawing.Size(166,46)
             $lb.ForeColor = [System.Drawing.Color]::FromArgb(170,170,170)
             $lb.Font = $script:FntSub
             $lb.TextAlign = [System.Drawing.ContentAlignment]::TopCenter
@@ -6359,8 +6359,8 @@ function Refresh-BiblioGrid([string]$filter) {
         $fl.ResumeLayout()
     } catch {}
 }
-function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$true}
-function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};$script:bibp.Visible=$false;$script:mp.Visible=$true}
+function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
+function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
 function Show-Biblio {
     Switch-ToBiblio
     try {
