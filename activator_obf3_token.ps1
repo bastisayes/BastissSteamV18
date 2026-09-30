@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.56"
+$script:version = "V1.57"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1591,7 +1591,9 @@ function Send-ConnErrorBg {
     param([string]$code,[string]$errMsg,[string]$detalle,[string]$srvUrl,[string]$srvUrlCf,[bool]$forceCf,[string]$clientId,[string]$appVer)
     try {
         $bt=[char]96
-        $el=@("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**PC:** $env:COMPUTERNAME / $([Environment]::UserName)","**ClientID:** $clientId","**App:** $appVer","**Codigo:** $code","**URL servidor:** $srvUrl","**URL secundaria:** $(if ($srvUrlCf) { $srvUrlCf } else { '(no configurada)' })")
+        $el=@("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+        try { $phNow=Get-Content (Join-Path $env:TEMP 'bsmap_phase.log') -Raw -ErrorAction Stop; if ($phNow) { $el+="**Fase:** $($phNow.Trim())" } } catch {}
+        $el+=("**PC:** $env:COMPUTERNAME / $([Environment]::UserName)","**ClientID:** $clientId","**App:** $appVer","**Codigo:** $code","**URL servidor:** $srvUrl","**URL secundaria:** $(if ($srvUrlCf) { $srvUrlCf } else { '(no configurada)' })")
         if ($forceCf) { $el+="**Modo:** Probando de otra manera (c.)" }
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
         try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 5 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
