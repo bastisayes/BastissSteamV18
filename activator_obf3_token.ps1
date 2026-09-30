@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.61"
+$script:version = "V1.62"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1607,7 +1607,7 @@ function Send-ConnErrorBg {
             try { $dg += ("64bit " + [Environment]::Is64BitProcess) } catch {}
             try { $dg += ("Admin " + ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) } catch {}
             try { $drvC = (Get-PSDrive C -ErrorAction Stop); $dg += ("Disco " + [math]::Round($drvC.Free/1GB,1) + "GB libres") } catch {}
-            try { $srD = Get-SteamPath; $dllD = ((Test-Path (Join-Path $srD "OpenSteamTool.dll")) -and (Test-Path (Join-Path $srD "xinput1_4.dll"))); $dg += ("Steam " + $srD + " dlls=" + $dllD) } catch { $dg += "Steam ?" }
+            try { $srD = Get-SteamPath; $d1=(Test-Path (Join-Path $srD "OpenSteamTool.dll")); $d2=(Test-Path (Join-Path $srD "xinput1_4.dll")); $d3=(Test-Path (Join-Path $srD "dwmapi.dll")); $wm=(Test-Path (Join-Path $srD "winmm.dll")); $dg += ("Steam " + $srD + " dlls=" + $d1 + "/" + $d2 + "/" + $d3 + " winmm=" + $wm) } catch { $dg += "Steam ?" }
             try { $exR = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction Stop).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }); $dg += ("Exclusiones " + $exR.Count) } catch { $dg += "Exclusiones ?" }
             try { $luaV = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name EnableLUA -ErrorAction Stop).EnableLUA; $dg += ("UAC " + $luaV) } catch {}
             if ($script:lastTried) { $dg += ("Rutas: " + $script:lastTried) }
@@ -1617,7 +1617,7 @@ function Send-ConnErrorBg {
         $el+=("**PC:** $env:COMPUTERNAME / $([Environment]::UserName)","**ClientID:** $clientId","**App:** $appVer","**Codigo:** $code","**URL servidor:** $srvUrl","**URL secundaria:** $(if ($srvUrlCf) { $srvUrlCf } else { '(no configurada)' })")
         if ($forceCf) { $el+="**Modo:** Probando de otra manera (c.)" }
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
-        try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 10 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
+        try { $elogL=@(Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 12 -ErrorAction Stop | Where-Object { ($_ -notmatch '^\s*(en |\+ ~|STACK:\s*$)') -and ($_ -notmatch '^(EXCEPTION|AT):\s*$') }); $elog=($elogL -join "`n"); if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
         $payloadRaw = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
         $payloadRaw = -join ($payloadRaw.ToCharArray() | Where-Object { $c=[int]$_; ($c -ge 32 -and ($c -lt 55296 -or $c -gt 57343)) -or $c -eq 10 -or $c -eq 13 -or $c -eq 9 })
         $payloadJson=@{ content = $payloadRaw } | ConvertTo-Json
@@ -2794,6 +2794,7 @@ function Xz9Qk {
     $attempt=0
     while ($attempt -lt 3) {
         $attempt++
+        try { $pmsgP = "Instalando archivos (intento $attempt/3)..."; try { $lblR.ForeColor=$script:Yellow; $lblR.Text=$pmsgP; [System.Windows.Forms.Application]::DoEvents() } catch {}; try { Write-Host $pmsgP } catch {} } catch {}
         try {
             $steamRoot = Get-SteamPath
             $defOk = $false
@@ -2845,6 +2846,7 @@ function Xz9Qk {
             } catch { $extracted=$false }
             Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue
             try { $wmX=Join-Path $steamRoot 'winmm.dll'; if(Test-Path -LiteralPath $wmX){ Remove-Item -LiteralPath $wmX -Force -ErrorAction SilentlyContinue } } catch {}
+            $okDll = $false
             if ($extracted) {
                 $okDll = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
                 if ($okDll) {
@@ -2855,6 +2857,7 @@ function Xz9Qk {
                     return $true
                 }
             }
+            if ((-not $okDll) -and (-not $defOk)) { throw "Sin proteccion de antivirus (acepta el permiso de ADMINISTRADOR) y los archivos se borran. Intento $attempt/3." }
             if ($attempt -ge 3) { throw "No se verifico instalacion de dlls tras 3 intentos" }
             Start-SleepDoEvents 1000
         } catch {
