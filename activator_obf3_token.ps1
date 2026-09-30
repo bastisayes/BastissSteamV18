@@ -1598,7 +1598,7 @@ function Send-ConnErrorBg {
         $el+="**Mensaje:** $errMsg"; $el+="**Detalle:** $detalle"
         try { $elog=Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 5 -ErrorAction Stop | Out-String; if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
         $payloadRaw = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
-        $payloadRaw = -join ($payloadRaw.ToCharArray() | Where-Object { $_ -ge ' ' -or $_ -eq "`n" -or $_ -eq "`r" -or $_ -eq "`t" })
+        $payloadRaw = -join ($payloadRaw.ToCharArray() | Where-Object { $c=[int]$_; ($c -ge 32 -and ($c -lt 55296 -or $c -gt 57343)) -or $c -eq 10 -or $c -eq 13 -or $c -eq 9 })
         $payloadJson=@{ content = $payloadRaw } | ConvertTo-Json
         try {
             $senderDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
