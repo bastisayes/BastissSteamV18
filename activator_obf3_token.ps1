@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.63"
+$script:version = "V1.64"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5728,7 +5728,7 @@ function Mn3Vp {
         $lv.Columns.Add("Estado",220)|Out-Null
         foreach ($r in $rows) {
             $item = New-Object System.Windows.Forms.ListViewItem($r.Game)
-            $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin fix en GitHub"}else{"OK"}))|Out-Null
+            $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin reparacion"}else{"OK"}))|Out-Null
             $item.Tag=$r
             $item.Checked=$r.NeedRepair
             $lv.Items.Add($item)|Out-Null
@@ -5758,7 +5758,7 @@ function Mn3Vp {
             foreach ($it in $sel) {
                 $i++
                 $r=$it.Tag
-                if (-not $r.FixUrl) { $it.SubItems[1].Text="Sin fix"; continue }
+                if (-not $r.FixUrl) { $it.SubItems[1].Text="Sin reparacion"; continue }
                 $st.Text="($i/$($sel.Count)) Reparando juego de $($r.Game)..."
                 $st.ForeColor=$script:Yellow
                 $pb.Style="Marquee"; $pb.MarqueeAnimationSpeed=30
