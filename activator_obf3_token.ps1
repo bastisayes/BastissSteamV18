@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.64"
+$script:version = "V1.65"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5657,6 +5657,16 @@ function Mn3Vp {
         if ($script:repairCustomRoot -and (Test-Path $script:repairCustomRoot)) {
             Get-ChildItem -LiteralPath $script:repairCustomRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object { if (-not $games.ContainsKey($_.Name)) { $games[$_.Name] = $_.FullName } }
         }
+        $gameSrc = @{}
+        foreach ($gk in $games.Keys) { $gameSrc[$gk] = 'disk' }
+        if ($script:repairCustomRoot -and (Test-Path $script:repairCustomRoot)) {
+            foreach ($fk in $fixes.Keys) {
+                if ($fk -match '\.') { continue }
+                $dup = $false
+                foreach ($g in $games.Keys) { if ((Nn1Yw $g) -eq (Nn1Yw $fk)) { $dup = $true; break } }
+                if (-not $dup) { $games[$fk] = $script:repairCustomRoot; $gameSrc[$fk] = 'github' }
+            }
+        }
         foreach ($name in $games.Keys) {
             if ($noGameFolders -contains $name) { continue }
             $fixName, $fixUrl = Ff2Xa $name $fixes
@@ -5676,7 +5686,7 @@ function Mn3Vp {
                 }
                 $needRepair = -not $anyMatch
             }
-            $rows += [PSCustomObject]@{ Game=$name; Path=$games[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=($needRepair -and $hasFix); HasFix=$hasFix }
+            $rows += [PSCustomObject]@{ Game=$name; Path=$games[$name]; FixName=$fixName; FixUrl=$fixUrl; NeedRepair=($needRepair -and $hasFix); HasFix=$hasFix; Src=$gameSrc[$name] }
         }
         if ($rows.Count -eq 0) {
             [System.Windows.Forms.MessageBox]::Show((S("Tm8gaGF5IGp1ZWdvcyBpbnN0YWxhZG9zIGNvbiByZXBhcmFjaW9uIGRpc3BvbmlibGUu")),(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Information")
@@ -5730,7 +5740,7 @@ function Mn3Vp {
             $item = New-Object System.Windows.Forms.ListViewItem($r.Game)
             $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin reparacion"}else{"OK"}))|Out-Null
             $item.Tag=$r
-            $item.Checked=$r.NeedRepair
+            $item.Checked=($r.NeedRepair -and $r.Src -ne 'github')
             $lv.Items.Add($item)|Out-Null
         }
         $dlg.Controls.Add($lv)
