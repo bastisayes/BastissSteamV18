@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.96"
+$script:version = "V1.97"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4112,6 +4112,7 @@ $form.TopMost=$true
 $form.Add_Shown({ $this.Activate(); $this.BringToFront(); try { $this.TopMost=$false } catch {} })
 $form.Add_Shown({ try { [WinFg]::SetForegroundWindow($this.Handle) | Out-Null; [WinFg]::ShowWindow($this.Handle, 9) | Out-Null } catch {} })
 $form.Add_Shown({ try { Start-DeferredInit } catch {} })
+$form.Add_Shown({ try { Check-AppUpdate } catch {} })
 $script:lastNonMinimizedWindowState = 'Normal'
 $form.Add_Resize({
     try { $hp.Invalidate() } catch {}
@@ -7405,10 +7406,9 @@ $form.Controls.Add($script:bibp)
 Set-BiblioLayout
 $script:updateNotified=$false
 $script:updTimer=New-Object System.Windows.Forms.Timer
-$script:updTimer.Interval=120000
+$script:updTimer.Interval=60000
 $script:updTimer.Add_Tick({
     try{ Check-AppUpdate }catch{}
-    try{ $script:updTimer.Interval=1800000 }catch{}
 })
 $script:updTimer.Start()
 function Check-AppUpdate {
@@ -7777,7 +7777,8 @@ function Show-BiblioDetail($g) {
         $stripY=372; $stripW=[int](($cw-2*$PAD)/4)
         for($i=0;$i -lt 4;$i++){ $script:bdtCatT[$i].Location=New-Object System.Drawing.Point(($PAD+$i*$stripW+12),$stripY); $script:bdtCatT[$i].Size=New-Object System.Drawing.Size(($stripW-24),52) }
         $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452);$script:bdtInst.Location=New-Object System.Drawing.Point(($PAD+260),452);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+520),452);$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+770),452)
-        $script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,508);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-2*$PAD),24)
+        $script:bdtUninst.Location=New-Object System.Drawing.Point($PAD,512);$script:bdtDel.Location=New-Object System.Drawing.Point(($PAD+260),512)
+        $script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,566);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-2*$PAD),24)
         Set-BdtDescriptionLayout
     } catch {}
     $script:bdtp.Visible=$true
@@ -7950,10 +7951,35 @@ $script:bdtStore.Tag.Text="Ver en la tienda de Steam"
 $script:bdtStoreUrl=""
 $script:bdtStore.Add_Click({ try { if($script:bdtStoreUrl){ Start-Process $script:bdtStoreUrl } } catch {} })
 $script:bdtp.Controls.Add($script:bdtStore)
+$script:bdtUninst=New-BdtBtn $PAD 512 240 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(60,70,90)) $script:FntCard
+$script:bdtUninst.Tag.Text="DESINSTALAR"
+$script:bdtUninst.Add_Click({ try { $a=$script:bdtAid; if($a){ Start-Process "steam://uninstall/$a" } } catch {} })
+$script:bdtp.Controls.Add($script:bdtUninst)
+$script:bdtDel=New-BdtBtn ($PAD+260) 512 240 50 $script:CardBG $script:CardHover $script:White $script:Red $script:FntCard
+$script:bdtDel.Tag.Text="ELIMINAR JUEGO"
+$script:bdtDel.Add_Click({ try {
+    $a=$script:bdtAid; if(-not $a){return}
+    if([System.Windows.Forms.MessageBox]::Show("Se elimina la activacion de este juego. Continuar?","Eliminar juego","YesNo","Warning") -ne "Yes"){return}
+    $mans=@()
+    foreach($lib in @(Ss3Jd)){
+        foreach($sub in @('config\stplug-in','config\lua')){
+            $f=Join-Path (Join-Path $lib $sub) ($a+".lua")
+            if(Test-Path -LiteralPath $f){
+                try{ $tx=[IO.File]::ReadAllText($f); foreach($m in [regex]::Matches($tx,'setManifestid\((\d+),\s*"(\d+)"')){ $mans+=($m.Groups[1].Value+"_"+$m.Groups[2].Value+".manifest") } }catch{}
+                try{ Remove-FileHard $f }catch{}
+            }
+        }
+        $md=Join-Path $lib "config\depotcache"
+        foreach($mm in @($mans | Select-Object -Unique)){ try{ Remove-FileHard (Join-Path $md $mm) }catch{} }
+    }
+    $script:bdtStatus.Text="Sin activar"
+    [System.Windows.Forms.MessageBox]::Show("Juego eliminado.","Eliminar juego","OK","Information")
+} catch { try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Eliminar juego","OK","Warning")}catch{} } })
+$script:bdtp.Controls.Add($script:bdtDel)
 $script:bdtStatus=New-Object System.Windows.Forms.Label
 $script:bdtStatus.ForeColor=[System.Drawing.Color]::FromArgb(140,150,165);$script:bdtStatus.BackColor=$BG
 $script:bdtStatus.Font=$script:FntSub
-$script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,508);$script:bdtStatus.Size=New-Object System.Drawing.Size(600,24)
+$script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,566);$script:bdtStatus.Size=New-Object System.Drawing.Size(600,24)
 $script:bdtp.Controls.Add($script:bdtStatus)
 $form.Controls.Add($script:bdtp)
 $script:cdp=New-BufferedPanel
