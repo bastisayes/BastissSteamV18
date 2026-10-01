@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.91"
+$script:version = "V1.94"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4107,7 +4107,35 @@ $form.TopMost=$true
 $form.Add_Shown({ $this.Activate(); $this.BringToFront(); try { $this.TopMost=$false } catch {} })
 $form.Add_Shown({ try { [WinFg]::SetForegroundWindow($this.Handle) | Out-Null; [WinFg]::ShowWindow($this.Handle, 9) | Out-Null } catch {} })
 $form.Add_Shown({ try { Start-DeferredInit } catch {} })
-$form.Add_Resize({ try { $hp.Invalidate() } catch {} })
+$script:lastNonMinimizedWindowState = 'Normal'
+$form.Add_Resize({
+    try { $hp.Invalidate() } catch {}
+    try {
+        if ($form.WindowState -eq 'Minimized') {
+            foreach ($timer in @($script:bibTimer,$script:bibRenderTimer,$script:bibLoadingTimer,$script:bibNameTimer,$script:bdtDlTimer,$script:bibDetailTimer,$script:bibRepairTimer)) { if ($timer) { $timer.Stop() } }
+            return
+        }
+        $script:lastNonMinimizedWindowState = $form.WindowState
+        if ($script:bibp -and $script:bibp.Visible) {
+            Set-BiblioLayout
+            if ($script:bibGames -and $script:bibFlow.Controls.Count -eq 0 -and $script:bibRenderQueue.Count -eq 0) { Refresh-BiblioGrid $script:bibSearch.Text }
+            if ($script:bibRenderIndex -lt $script:bibRenderQueue.Count) { $script:bibRenderTimer.Start() }
+            if ($script:bibLoadingCard.Visible) { $script:bibLoadingTimer.Start() }
+            if ($script:bibCoverJobs.Count -gt 0 -or $script:bibCoverQueue.Count -gt 0) { $script:bibTimer.Start() }
+        }
+    } catch {}
+})
+$form.Add_Activated({
+    try {
+        if ($form.WindowState -eq 'Minimized') { return }
+        if ($script:bibp -and $script:bibp.Visible) {
+            Set-BiblioLayout
+            if ($script:bibGames -and $script:bibFlow.Controls.Count -eq 0 -and $script:bibRenderQueue.Count -eq 0) { Refresh-BiblioGrid $script:bibSearch.Text }
+            if ($script:bibRenderIndex -lt $script:bibRenderQueue.Count) { $script:bibRenderTimer.Start() }
+            if ($script:bibCoverJobs.Count -gt 0 -or $script:bibCoverQueue.Count -gt 0) { $script:bibTimer.Start() }
+        }
+    } catch {}
+})
 
 
 $ib=New-Object System.Drawing.Bitmap(64,64)
@@ -6465,6 +6493,9 @@ function Update-BiblioCoverCache {
     if ($script:bibCoverCacheInitialized -and $script:bibCoverCacheKey -eq $key) { return }
     $cache = @{}
     try {
+        foreach ($file in @(Get-ChildItem -LiteralPath $cd -Filter 'thumb_*.jpg' -File -ErrorAction SilentlyContinue)) {
+            if ($file.BaseName -match '^thumb_(\d+)$' -and -not $cache.ContainsKey($Matches[1])) { $cache[$Matches[1]] = $file.FullName }
+        }
         foreach ($file in @(Get-ChildItem -LiteralPath $cd -Filter '*.jpg' -File -ErrorAction SilentlyContinue)) {
             if ($file.BaseName -match '^\d+$' -and -not $cache.ContainsKey($file.BaseName)) { $cache[$file.BaseName] = $file.FullName }
         }
@@ -6484,28 +6515,115 @@ function Set-BiblioCoverPath([string]$appid, [string]$path) {
 }
 function Start-BiblioCoverBatch {
     try {
-        if (-not $script:bibCoverPool) { $script:bibCoverPool = [RunspaceFactory]::CreateRunspacePool(1,12); $script:bibCoverPool.Open() }
-        while ($script:bibCoverJobs.Count -lt 12 -and $script:bibCoverQueue.Count -gt 0) {
+        if (-not $script:bibCoverPool) { $script:bibCoverPool = [RunspaceFactory]::CreateRunspacePool(1,6); $script:bibCoverPool.Open() }
+        while ($script:bibCoverJobs.Count -lt 6 -and $script:bibCoverQueue.Count -gt 0) {
             $aid = [string]$script:bibCoverQueue[0]
             $script:bibCoverQueue.RemoveAt(0)
             $script:bibCoverQueued.Remove($aid)
-            if (Get-BiblioCoverPath $aid) { continue }
+            $needsName = $false
+            try { $needsName = [bool]$script:bibCoverNeedsName[$aid] } catch {}
+            $thumbPath = Join-Path (Join-Path $env:TEMP 'bsmap_covers') ('thumb_' + $aid + '.jpg')
+            if ((Test-Path -LiteralPath $thumbPath) -and (Get-Item -LiteralPath $thumbPath).Length -gt 500 -and -not $needsName) { continue }
             if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
             $psB = [PowerShell]::Create(); $psB.RunspacePool = $script:bibCoverPool
             [void]$psB.AddScript({
-                param($a,$dir)
-                $out = @{appid=$a;ok=$false;path=''}
+                param($a,$dir,$needName)
+                $out = @{appid=$a;ok=$false;path='';name=''}
                 try {
                     $dest = Join-Path $dir ($a + '.jpg')
-                    if ((Test-Path -LiteralPath $dest) -and (Get-Item -LiteralPath $dest).Length -gt 1000) { $out.ok=$true; $out.path=$dest; return $out }
-                    $tmp = $dest + '.part'
-                    try { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } catch {}
-                    Invoke-WebRequest -Uri ('https://cdn.cloudflare.steamstatic.com/steam/apps/' + $a + '/library_600x900.jpg') -OutFile $tmp -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-                    if ((Test-Path -LiteralPath $tmp) -and (Get-Item -LiteralPath $tmp).Length -gt 1000) { Move-Item -LiteralPath $tmp -Destination $dest -Force; $out.ok=$true; $out.path=$dest }
-                    else { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+                    $thumb = Join-Path $dir ('thumb_' + $a + '.jpg')
+                    Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+                    $sourceOk = $false
+                    $apiHeader = ''
+                    $apiChecked = $false
+                    if ($needName) {
+                        $apiChecked = $true
+                        try {
+                            $api = Invoke-RestMethod -Uri ('https://store.steampowered.com/api/appdetails?appids=' + $a + '&l=english') -UseBasicParsing -TimeoutSec 7 -ErrorAction Stop
+                            $entry = $api.PSObject.Properties[$a].Value
+                            if ($entry -and $entry.success -and $entry.data) {
+                                if ($entry.data.name) { $out.name = [string]$entry.data.name }
+                                if ($entry.data.header_image) { $apiHeader = [string]$entry.data.header_image }
+                            }
+                        } catch {}
+                    }
+                    if ((Test-Path -LiteralPath $dest) -and (Get-Item -LiteralPath $dest).Length -gt 1000) {
+                        $checkImg = $null
+                        try { $checkImg = [System.Drawing.Image]::FromFile($dest); $sourceOk = $true } catch {} finally { if ($checkImg) { $checkImg.Dispose() } }
+                    }
+                    if (-not $sourceOk) {
+                        try { Remove-Item -LiteralPath $dest -Force -ErrorAction SilentlyContinue } catch {}
+                        $tmp = $dest + '.part'
+                        $coverUrls = @(
+                            ('https://cdn.cloudflare.steamstatic.com/steam/apps/' + $a + '/library_600x900.jpg'),
+                            ('https://cdn.cloudflare.steamstatic.com/steam/apps/' + $a + '/library_600x900_2x.jpg'),
+                            ('https://cdn.cloudflare.steamstatic.com/steam/apps/' + $a + '/header.jpg')
+                        )
+                        foreach ($coverUrl in $coverUrls) {
+                            try {
+                                Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+                                Invoke-WebRequest -Uri $coverUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 7 -ErrorAction Stop
+                                if ((Test-Path -LiteralPath $tmp) -and (Get-Item -LiteralPath $tmp).Length -gt 1000) {
+                                    $checkImg = $null
+                                    try { $checkImg = [System.Drawing.Image]::FromFile($tmp); $sourceOk = $true } catch {} finally { if ($checkImg) { $checkImg.Dispose() } }
+                                    if ($sourceOk) { Move-Item -LiteralPath $tmp -Destination $dest -Force; break }
+                                }
+                            } catch {}
+                        }
+
+                        if (-not $sourceOk) {
+                            if (-not $apiChecked) {
+                                try {
+                                    $api = Invoke-RestMethod -Uri ('https://store.steampowered.com/api/appdetails?appids=' + $a + '&l=english') -UseBasicParsing -TimeoutSec 7 -ErrorAction Stop
+                                    $entry = $api.PSObject.Properties[$a].Value
+                                    if ($entry -and $entry.success -and $entry.data) {
+                                        if ($entry.data.name) { $out.name = [string]$entry.data.name }
+                                        if ($entry.data.header_image) { $apiHeader = [string]$entry.data.header_image }
+                                    }
+                                } catch {}
+                            }
+                            if ($apiHeader) {
+                                try {
+                                    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+                                    Invoke-WebRequest -Uri $apiHeader -OutFile $tmp -UseBasicParsing -TimeoutSec 7 -ErrorAction Stop
+                                    if ((Test-Path -LiteralPath $tmp) -and (Get-Item -LiteralPath $tmp).Length -gt 1000) {
+                                        $checkImg = $null
+                                        try { $checkImg = [System.Drawing.Image]::FromFile($tmp); $sourceOk = $true } catch {} finally { if ($checkImg) { $checkImg.Dispose() } }
+                                        if ($sourceOk) { Move-Item -LiteralPath $tmp -Destination $dest -Force }
+                                    }
+                                } catch {}
+                            }
+                        }
+                        if (-not $sourceOk) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue; return $out }
+                    }
+                    if (-not ((Test-Path -LiteralPath $thumb) -and (Get-Item -LiteralPath $thumb).Length -gt 500)) {
+                        $srcImg = $null; $bmp = $null; $gfx = $null
+                        try {
+                            Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+                            $srcImg = [System.Drawing.Image]::FromFile($dest)
+                            $bmp = New-Object System.Drawing.Bitmap(150,214)
+                            $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+                            $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                            $gfx.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                            $gfx.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                            $gfx.Clear([System.Drawing.Color]::Black)
+                            $scale = [Math]::Min((150.0 / $srcImg.Width),(214.0 / $srcImg.Height))
+                            $drawWidth = [int][Math]::Round($srcImg.Width * $scale)
+                            $drawHeight = [int][Math]::Round($srcImg.Height * $scale)
+                            $drawX = [int][Math]::Floor((150 - $drawWidth) / 2.0)
+                            $drawY = [int][Math]::Floor((214 - $drawHeight) / 2.0)
+                            $gfx.DrawImage($srcImg, (New-Object System.Drawing.Rectangle($drawX,$drawY,$drawWidth,$drawHeight)))
+                            $thumbTmp = $thumb + '.part'
+                            Remove-Item -LiteralPath $thumbTmp -Force -ErrorAction SilentlyContinue
+                            $bmp.Save($thumbTmp, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+                            Move-Item -LiteralPath $thumbTmp -Destination $thumb -Force
+                        } catch { Remove-Item -LiteralPath ($thumb + '.part') -Force -ErrorAction SilentlyContinue } finally { if ($gfx) { $gfx.Dispose() }; if ($bmp) { $bmp.Dispose() }; if ($srcImg) { $srcImg.Dispose() } }
+                    }
+                    if ((Test-Path -LiteralPath $thumb) -and (Get-Item -LiteralPath $thumb).Length -gt 500) { $out.ok=$true; $out.path=$thumb }
+                    else { $out.ok=$true; $out.path=$dest }
                 } catch { try { Remove-Item -LiteralPath ($dest + '.part') -Force -ErrorAction SilentlyContinue } catch {} }
                 return $out
-            }).AddArgument([string]$aid).AddArgument((Join-Path $env:TEMP 'bsmap_covers'))
+            }).AddArgument([string]$aid).AddArgument((Join-Path $env:TEMP 'bsmap_covers')).AddArgument([bool]$needsName)
             $handle = $psB.BeginInvoke()
             $script:bibCoverJobs += @{appid=$aid;ps=$psB;h=$handle}
         }
@@ -6521,9 +6639,14 @@ function Start-BiblioCovers($games) {
         if (-not $script:bibCoverAttempted) { $script:bibCoverAttempted = @{} }
         foreach ($g in $games) {
             $aid = [string]$g.appid
-            if (-not $aid -or (Get-BiblioCoverPath $aid) -or $script:bibCoverQueued.ContainsKey($aid)) { continue }
+            $thumbPath = Join-Path $cd ('thumb_' + $aid + '.jpg')
+            $hasThumb = $false
+            $needsName = ([string]$g.name -like 'Juego *' -or [string]::IsNullOrWhiteSpace([string]$g.name))
+            try { $hasThumb = (Test-Path -LiteralPath $thumbPath) -and (Get-Item -LiteralPath $thumbPath).Length -gt 500 } catch {}
+            if (-not $aid -or ($hasThumb -and -not $needsName) -or $script:bibCoverQueued.ContainsKey($aid)) { continue }
             if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
             if (@($script:bibCoverJobs | Where-Object { $_.appid -eq $aid }).Count -gt 0) { continue }
+            $script:bibCoverNeedsName[$aid] = $needsName
             [void]$script:bibCoverQueue.Add($aid)
             $script:bibCoverQueued[$aid] = $true
         }
@@ -6825,7 +6948,7 @@ function New-BiblioTile($game) {
     $pic.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
     $pic.BackColor=$script:CardBG;$pic.Cursor=[System.Windows.Forms.Cursors]::Hand;$pic.Tag=$game
     $cover=Get-BiblioCoverPath ([string]$game.appid)
-    if($cover){try{$img=[System.Drawing.Image]::FromFile($cover);$pic.Image=New-Object System.Drawing.Bitmap($img);$img.Dispose()}catch{}}
+    if($cover -and [System.IO.Path]::GetFileNameWithoutExtension($cover) -like 'thumb_*'){try{$img=[System.Drawing.Image]::FromFile($cover);$pic.Image=New-Object System.Drawing.Bitmap($img);$img.Dispose();$pic.AccessibleDescription=$cover}catch{}}
     $pic.Add_Paint({param($s,$e);if(-not $s.Image){Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.name) $true}})
     $pic.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
     $pic.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
@@ -7123,6 +7246,7 @@ $script:bibCoverCacheInitialized=$false
 $script:bibCoverQueue=New-Object System.Collections.ArrayList
 $script:bibCoverQueued=@{}
 $script:bibCoverAttempted=@{}
+$script:bibCoverNeedsName=@{}
 $script:bibCoverJobs=@()
 $script:bibCoverPool=$null
 $script:bibBoxes=@{}
@@ -7228,6 +7352,21 @@ $script:bibTimer.Add_Tick({
             $result = $null
             try { $values=@($job.ps.EndInvoke($job.h)); if($values.Count -gt 0){$result=$values[$values.Count-1]} } catch {}
             $script:bibCoverAttempted[[string]$job.appid] = Get-Date
+
+            if ($result -and $result.name) {
+                $nameId=[string]$job.appid
+                $resolvedName=[string]$result.name
+                foreach ($gameItem in @($script:bibGames)) {
+                    if ([string]$gameItem.appid -eq $nameId -and ([string]$gameItem.name -like 'Juego *' -or [string]::IsNullOrWhiteSpace([string]$gameItem.name))) {
+                        $gameItem.name=$resolvedName
+                        try { $script:GAME_NAME_BY_APPID[$nameId]=$resolvedName } catch {}
+                        try { $nameKey=Nn1Yw $resolvedName; if($nameKey -and -not $script:GAME_APPID_BY_NAME.ContainsKey($nameKey)){$script:GAME_APPID_BY_NAME[$nameKey]=$nameId} } catch {}
+                        try { if ($script:bibBoxes[$nameId] -and $script:bibBoxes[$nameId].Parent -and $script:bibBoxes[$nameId].Parent.Controls.Count -gt 1) { $script:bibBoxes[$nameId].Parent.Controls[1].Text=$resolvedName } } catch {}
+                        try { Add-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt') -Value ($resolvedName + ' (' + $nameId + ')') -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+                        break
+                    }
+                }
+            }
             if ($result -and $result.ok -and $result.path) { Set-BiblioCoverPath ([string]$job.appid) ([string]$result.path) }
             try { $job.ps.Dispose() } catch {}
         }
@@ -7235,9 +7374,21 @@ $script:bibTimer.Add_Tick({
         Start-BiblioCoverBatch
         foreach ($k in @($script:bibBoxes.Keys)) {
             $b = $null; try { $b = $script:bibBoxes[$k] } catch {}
-            if (-not $b -or $b.IsDisposed -or $b.Image) { continue }
+            if (-not $b -or $b.IsDisposed) { continue }
             $p = Get-BiblioCoverPath $k
-            if ($p) { try { $im=[System.Drawing.Image]::FromFile($p); $b.Image=New-Object System.Drawing.Bitmap($im); $im.Dispose(); $b.Invalidate() } catch {} }
+            $currentPath = [string]$b.AccessibleDescription
+            if ($p -and [System.IO.Path]::GetFileNameWithoutExtension($p) -like 'thumb_*' -and $p -ne $currentPath) {
+                $im=$null; $copy=$null
+                try {
+                    $im=[System.Drawing.Image]::FromFile($p)
+                    $copy=New-Object System.Drawing.Bitmap($im)
+                    $im.Dispose();$im=$null
+                    $oldImage=$b.Image;$b.Image=$copy;$copy=$null
+                    $b.AccessibleDescription=$p
+                    if($oldImage){$oldImage.Dispose()}
+                    $b.Invalidate()
+                } catch {} finally { if($im){$im.Dispose()};if($copy){$copy.Dispose()} }
+            }
         }
         if ($script:bibCoverJobs.Count -eq 0 -and $script:bibCoverQueue.Count -eq 0) { try { $script:bibTimer.Stop() } catch {} }
     } catch {}
@@ -7871,9 +8022,23 @@ $script:restoreMainWindow = {
     try { if ($form.IsDisposed) { return } } catch {}
     try { $form.ShowInTaskbar = $true } catch {}
     try { if (-not $form.Visible) { $form.Show() } } catch {}
-    try { $form.WindowState = 'Normal'; $form.Show(); $form.BringToFront(); $form.Activate() } catch {}
+    try {
+        $restoreState = $script:lastNonMinimizedWindowState
+        if ($null -eq $restoreState -or $restoreState -eq 'Minimized') { $restoreState = 'Normal' }
+        $form.WindowState = $restoreState
+        $form.Show(); $form.BringToFront(); $form.Activate()
+    } catch {}
     try { [WinFg]::ShowWindow($form.Handle, 9) | Out-Null; [WinFg]::SetForegroundWindow($form.Handle) | Out-Null } catch {}
     try { $script:trayIcon.Visible = $false } catch {}
+    try {
+        if ($script:bibp -and $script:bibp.Visible) {
+            Set-BiblioLayout
+            if ($script:bibGames -and $script:bibFlow.Controls.Count -eq 0 -and $script:bibRenderQueue.Count -eq 0) { Refresh-BiblioGrid $script:bibSearch.Text }
+            if ($script:bibRenderIndex -lt $script:bibRenderQueue.Count) { $script:bibRenderTimer.Start() }
+            if ($script:bibLoadingCard.Visible) { $script:bibLoadingTimer.Start() }
+            if ($script:bibCoverJobs.Count -gt 0 -or $script:bibCoverQueue.Count -gt 0) { $script:bibTimer.Start() }
+        }
+    } catch {}
 }
 $menuAbrir = New-Object System.Windows.Forms.ToolStripMenuItem("Abrir")
 $menuAbrir.Add_Click({ try { & $script:restoreMainWindow } catch {} })
@@ -7903,6 +8068,7 @@ $form.Add_FormClosing({
     param($sender, $ev)
     if (-not $script:reallyClose) {
         $ev.Cancel = $true
+        if ($form.WindowState -ne 'Minimized') { $script:lastNonMinimizedWindowState = $form.WindowState }
         $form.Hide()
         $script:trayIcon.Visible = $true
         $script:trayIcon.ShowBalloonTip(2000, "BastissSteam", "El programa sigue activo en segundo plano.", [System.Windows.Forms.ToolTipIcon]::Info)
@@ -8606,7 +8772,32 @@ try { [System.Windows.Forms.Application]::Run($form) } catch {
         throw
     }
 }
-$script:trayIcon.Dispose()
+try { $script:trayIcon.Visible = $false; $script:trayIcon.Dispose() } catch {}
+foreach ($timer in @($script:cdT,$script:rfT,$script:clpTicker,$script:urlChecker,$script:steamWatchTimer,$script:watcherLogTimer,$script:luatoolsLogTimer,$script:bibTimer,$script:bibRenderTimer,$script:bibLoadingTimer,$script:bibNameTimer,$script:bdtDlTimer,$script:bibDetailTimer,$script:bibRepairTimer)) {
+    try { if ($timer) { $timer.Stop(); $timer.Dispose() } } catch {}
+}
+$pendingStops = @()
+foreach ($job in @($script:bibCoverJobs) + @($script:bibDetailJobs) + @($script:bibNameJob,$script:bibBulkJob,$script:bibRepairJob,$script:bdtDlWatch)) {
+    if (-not $job -or -not $job.ps) { continue }
+    try {
+        if ($job.h -and -not $job.h.IsCompleted) {
+            $stopHandle = $job.ps.BeginStop($null,$null)
+            $pendingStops += @{job=$job;stop=$stopHandle}
+        } else {
+            if ($job.h) { $job.ps.EndInvoke($job.h) | Out-Null }
+            $job.ps.Dispose()
+        }
+    } catch { try { $job.ps.Dispose() } catch {} }
+}
+foreach ($pending in $pendingStops) {
+    $job=$pending.job
+    try { if ($pending.stop -and $pending.stop.AsyncWaitHandle.WaitOne(300)) { $job.ps.EndStop($pending.stop) } } catch {}
+    try { if ($job.h -and $job.h.AsyncWaitHandle.WaitOne(300)) { $job.ps.EndInvoke($job.h) | Out-Null } } catch {}
+    try { $job.ps.Dispose() } catch {}
+}
+foreach ($pool in @($script:bibCoverPool,$script:bibDetailPool,$script:bibRepairPool,$script:bgInitPool)) {
+    try { if ($pool) { $pool.Close(); $pool.Dispose() } } catch {}
+}
 if ($script:cdT) { $script:cdT.Stop(); $script:cdT.Dispose() }
 if ($script:rfT) { $script:rfT.Stop(); $script:rfT.Dispose() }
 if ($script:clpTicker) { $script:clpTicker.Stop(); $script:clpTicker.Dispose() }
