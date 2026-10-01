@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.02"
+$script:version = "V2.03"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6850,7 +6850,7 @@ function Get-BiblioGridMetrics {
     $width=[Math]::Max(180,[int]$script:bibViewport.ClientSize.Width)
     $inner=[Math]::Max(160,$width-24)
     if($script:bibView -eq 'compact'){
-        $cellWidth=100
+        $cellWidth=98
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
         $tileWidth=96;$coverWidth=96;$coverHeight=144;$tileHeight=144;$rowHeight=148
     } else {
@@ -6980,7 +6980,22 @@ function New-BiblioTile($game) {
     $pic.Cursor=[System.Windows.Forms.Cursors]::Hand;$pic.Tag=$game
     $cover=Get-BiblioCoverPath ([string]$game.appid)
     if($cover -and [System.IO.Path]::GetFileNameWithoutExtension($cover) -like 'thumb_*'){try{$img=[System.Drawing.Image]::FromFile($cover);$pic.Image=New-Object System.Drawing.Bitmap($img);$img.Dispose();$pic.AccessibleDescription=$cover}catch{}}
-    $pic.Add_Paint({param($s,$e);if(-not $s.Image){Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.name) $true}})
+    if(-not $script:bibNameOverlayFont){ $script:bibNameOverlayFont=New-Object System.Drawing.Font('Bahnschrift',10,[System.Drawing.FontStyle]::Bold) }
+    $pic.Add_Paint({param($s,$e);
+        if(-not $s.Image){Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.name) $true;return}
+        if($script:bibView -ne 'compact'){return}
+        $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+        $hh=48;$y0=$s.Height-$hh
+        $lg=New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Point(0,$y0)),(New-Object System.Drawing.Point(0,$s.Height)),[System.Drawing.Color]::FromArgb(0,0,0,0),[System.Drawing.Color]::FromArgb(225,0,0,0))
+        $g.FillRectangle($lg,(New-Object System.Drawing.Rectangle(0,$y0,$s.Width,$hh)));$lg.Dispose()
+        $nm=[string]$s.Tag.name
+        $tb=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+        $sh=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(190,0,0,0))
+        $sf=New-Object System.Drawing.StringFormat;$sf.Alignment="Center";$sf.LineAlignment="Center";$sf.Trimming="EllipsisCharacter";$sf.FormatFlags=[System.Drawing.StringFormatFlags]::NoWrap
+        $g.DrawString($nm,$script:bibNameOverlayFont,$sh,(New-Object System.Drawing.RectangleF(5,($s.Height-37),($s.Width-8),30)),$sf)
+        $g.DrawString($nm,$script:bibNameOverlayFont,$tb,(New-Object System.Drawing.RectangleF(4,($s.Height-38),($s.Width-8),30)),$sf)
+        $tb.Dispose();$sh.Dispose();$sf.Dispose()
+    })
     $pic.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
     $pic.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
     $tile.Controls.Add($pic)
