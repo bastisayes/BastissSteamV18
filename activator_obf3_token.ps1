@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.94"
+$script:version = "V1.95"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2738,8 +2738,13 @@ function Ff2Xa {
 }
 
 function Set-BibRepairProgress([string]$t) {
-    try { $script:bibRepairProgress=@{text=$t} } catch {}
-    try { if($script:bdtStatus -and -not $script:bdtStatus.IsDisposed){ $script:bdtStatus.Text=$t }; [System.Windows.Forms.Application]::DoEvents() } catch {}
+    try { if($script:bibRepairProgress -is [System.Collections.Hashtable]){ $script:bibRepairProgress['text']=$t } } catch {}
+    try {
+        $onUI=$true
+        try { if($script:bibRepairJob -and $script:bibRepairJob.h -and -not $script:bibRepairJob.h.IsCompleted){ $onUI=$false } } catch {}
+        if($onUI -and $script:bdtStatus -and -not $script:bdtStatus.IsDisposed){ $script:bdtStatus.Text=$t }
+    } catch {}
+    try { [System.Windows.Forms.Application]::DoEvents() } catch {}
 }
 function Download-FixArchive {
     param([string]$url,[string]$outFile,[string]$gameName)
@@ -2748,7 +2753,7 @@ function Download-FixArchive {
     $ProgressPreference='SilentlyContinue'
     for($attempt=1;$attempt -le 3;$attempt++){
         try {
-            Set-BibRepairProgress "Descargando fix de $gameName ($attempt/3)..."
+            Set-BibRepairProgress "Descargando reparacion..."
             Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
             $requestUrl=$url
             if($attempt -eq 2 -and $requestUrl -notmatch '[?]'){ $requestUrl+='?download=1' }
@@ -2774,7 +2779,7 @@ function Apply-FixAutomatically {
     if (-not $fixUrl) { return $false, "No hay reparacion disponible para $gameFolderName" }
     $zip = Join-Path $env:TEMP "auto_$(Get-Random).zip"
     try {
-        Set-BibRepairProgress "Preparando fix de $gameFolderName..."
+        Set-BibRepairProgress "Buscando reparacion..."
         [void](Download-FixArchive -url $fixUrl -outFile $zip -gameName $gameFolderName)
         $extractedRelative = @()
         try {
@@ -2783,7 +2788,7 @@ function Apply-FixAutomatically {
             foreach ($entry in $z.Entries) { if ($entry.Name) { $extractedRelative += $entry.FullName } }
             $z.Dispose()
         } catch {}
-        Set-BibRepairProgress "Aplicando fix a $gameFolderName..."
+        Set-BibRepairProgress "Aplicando reparacion..."
         Expand-Archive -Path $zip -DestinationPath $gamePath -Force
         if ($extractedRelative.Count -gt 0) { Am3Fs $gameFolderName $gamePath $extractedRelative }
         Aw8Nq $gameFolderName
@@ -4678,8 +4683,6 @@ $script:subB.Add_Click({
         $steamRoot = Get-SteamPath
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
         try { $lblR.ForeColor=$script:Yellow; $lblR.Text="Codigo valido"; [System.Windows.Forms.Application]::DoEvents() } catch {}
-        try { $script:patchSilentOK = Xz9Qk -Silent } catch { $script:patchSilentOK = $false }
-        if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) ([bool]$forceCf) ([string]$script:clientId) ([string]$script:version) } catch {} }
         $total=$links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt)" } catch {}
@@ -4943,6 +4946,9 @@ $script:clp.Add_Paint({param($s,$e)
     $itemStep=92
     $off = if ($script:clockOffsetSec) { $script:clockOffsetSec } else { 0 }
     $now = (Get-Date).AddSeconds(-$off)
+    $codes=@(@($codes) | Where-Object { try { ([int]$_.Duration -eq 0) -or (-not $_.ExpiresAt) -or (([datetime]$_.ExpiresAt) -gt $now) } catch { $true } })
+    try { $cBadge.Text="($($codes.Count))" } catch {}
+    $script:clpContentH=$codes.Count*$itemStep
     $firstIndex=[Math]::Max(0,[int][Math]::Floor($script:clpScroll / $itemStep))
     $lastIndex=[Math]::Min(($codes.Count - 1),[int][Math]::Floor(($script:clpScroll + $s.ClientSize.Height) / $itemStep))
     $ch2=86;$gp2=6
@@ -5564,7 +5570,7 @@ $script:sFixDl=New-CfgBtn ($sY+116) "Arreglar descarga" "Quita los manifests y a
     foreach ($d in $dirs) { if (Test-Path -LiteralPath $d) { try { $apps+=@(Get-ChildItem -LiteralPath $d -Filter *.lua -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName }) } catch {} } }
     $apps=@($apps | Sort-Object -Unique)
     if ($apps.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("Algo salio mal, intenta de nuevo mas tarde.","Solucionar descarga","OK","Warning"); return }
-    if ([System.Windows.Forms.MessageBox]::Show("Se reinstalaran los manifests de $($apps.Count) juegos para que descarguen.`n`nContinuar?", "Arreglar descarga", "YesNo", "Information") -ne "Yes") { return }
+    if ([System.Windows.Forms.MessageBox]::Show("Se van a arreglar las descargas de $($apps.Count) juegos.`n`nContinuar?", "Arreglar descarga", "YesNo", "Information") -ne "Yes") { return }
     $progForm=New-Object System.Windows.Forms.Form; $progForm.Text="Arreglar descarga"; $progForm.Size=New-Object System.Drawing.Size(420,140); $progForm.StartPosition="CenterParent"; $progForm.FormBorderStyle="FixedDialog"; $progForm.MaximizeBox=$false; $progForm.MinimizeBox=$false; $progForm.BackColor=$BG; $progForm.TopMost=$true
     $progLbl=New-Object System.Windows.Forms.Label; $progLbl.Location=New-Object System.Drawing.Point(16,16); $progLbl.Size=New-Object System.Drawing.Size(380,20); $progLbl.ForeColor=$White; $progLbl.BackColor=$BG; $progLbl.Text="Iniciando..."; $progForm.Controls.Add($progLbl)
     $progBar=New-Object System.Windows.Forms.ProgressBar; $progBar.Location=New-Object System.Drawing.Point(16,44); $progBar.Size=New-Object System.Drawing.Size(380,22); $progBar.Minimum=0; $progBar.Maximum=$apps.Count; $progBar.Value=0; $progBar.Style="Continuous"; $progForm.Controls.Add($progBar)
@@ -5870,7 +5876,7 @@ function Refresh-RepairRows {
     $lvR.Items.Clear()
     foreach ($r in $rowsR) {
         $item = New-Object System.Windows.Forms.ListViewItem($r.Game)
-        $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"Sin reparacion"}else{"OK"}))|Out-Null
+        $item.SubItems.Add($(if($r.NeedRepair){(S("UmVxdWllcmUgcmVwYXJhY2lvbg=="))}elseif(-not $r.HasFix){"No requiere reparacion"}else{"OK"}))|Out-Null
         $item.Tag=$r
         $item.Checked=($r.NeedRepair -and $r.Src -ne 'github')
         $lvR.Items.Add($item)|Out-Null
@@ -5956,7 +5962,7 @@ function Mn3Vp {
         $lv.Columns.Add("Estado",220)|Out-Null
         $script:repairLv = $lv
         if ((Refresh-RepairRows) -eq 0) {
-            [System.Windows.Forms.MessageBox]::Show((S("Tm8gaGF5IGp1ZWdvcyBpbnN0YWxhZG9zIGNvbiByZXBhcmFjaW9uIGRpc3BvbmlibGUu")),(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Information")
+            [System.Windows.Forms.MessageBox]::Show("No hay juegos para reparar.",(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")),"OK","Information")
             $dlg.Dispose()
             return
         }
@@ -5985,8 +5991,8 @@ function Mn3Vp {
             foreach ($it in $sel) {
                 $i++
                 $r=$it.Tag
-                if (-not $r.FixUrl) { $it.SubItems[1].Text="Sin reparacion"; continue }
-                $st.Text="($i/$($sel.Count)) Reparando juego de $($r.Game)..."
+                if (-not $r.FixUrl) { $it.SubItems[1].Text="No requiere reparacion"; continue }
+                $st.Text="($i/$($sel.Count)) Buscando reparacion..."
                 $st.ForeColor=$script:Yellow
                 $pb.Style="Marquee"; $pb.MarqueeAnimationSpeed=30
                 $pb.Value=0
@@ -5997,7 +6003,7 @@ function Mn3Vp {
                     if ($crR.exit -ne 0) { throw "descarga fallida" }
                     $pb.Style="Continuous"; $pb.MarqueeAnimationSpeed=0
                     if (-not (Test-Path $zip) -or (Get-Item $zip).Length -eq 0) { throw "Descarga vacia" }
-                    $st.Text="($i/$($sel.Count)) Reparando juego de $($r.Game)..."
+                    $st.Text="($i/$($sel.Count)) Reparacion disponible, reparando $($r.Game)..."
                     [System.Windows.Forms.Application]::DoEvents()
                     if (-not (Test-Path $r.Path)) { throw "No se encontro la carpeta de instalacion de $($r.Game)" }
                     $er = @()
@@ -6012,12 +6018,12 @@ function Mn3Vp {
                     if ($er.Count -gt 0) { Am3Fs $r.Game $r.Path $er }
                     Aw8Nq $r.Game
                     $it.SubItems[1].Text="Reparado"
-                    $st.Text="($i/$($sel.Count)) $($r.Game) reparado ($($er.Count) archivos)."
+                    $st.Text="($i/$($sel.Count)) $($r.Game) reparado."
                     $st.ForeColor=$script:Green
                 } catch {
                     Remove-Item $zip -Force -ErrorAction SilentlyContinue
                     $it.SubItems[1].Text="Error"
-                    $st.Text="($i/$($sel.Count)) Error en $($r.Game): $($_.Exception.Message)"
+                    $st.Text="($i/$($sel.Count)) No se pudo reparar $($r.Game)."
                     $st.ForeColor=$script:Red
                 }
                 $pb.Style="Continuous"; $pb.MarqueeAnimationSpeed=0
@@ -6274,7 +6280,7 @@ $script:sFixInd=New-CfgBtn ($sY+344) "Arreglar conexion individual" "Pone el nom
         $dlg.Controls.Add($st)
         $btnRep=New-Object System.Windows.Forms.Button
         $btnRep.Location=New-Object System.Drawing.Point(12,378); $btnRep.Size=New-Object System.Drawing.Size(550,32)
-        $btnRep.Text="Reparar seleccionado (metodo 2, y sino el 1)"; $btnRep.BackColor=$script:CardBG; $btnRep.ForeColor=$script:White; $btnRep.FlatStyle="Flat"
+        $btnRep.Text="Reparar seleccionado"; $btnRep.BackColor=$script:CardBG; $btnRep.ForeColor=$script:White; $btnRep.FlatStyle="Flat"
         $btnRep.Cursor=[System.Windows.Forms.Cursors]::Hand; $btnRep.Enabled=$false
         $dlg.Controls.Add($btnRep)
         $btnBuscar.Add_Click({
@@ -6311,25 +6317,25 @@ $script:sFixInd=New-CfgBtn ($sY+344) "Arreglar conexion individual" "Pone el nom
             if($sel.Count -eq 0){ return }
             $appid=[string]$sel[0].Tag; $gname=[string]$sel[0].Text
             $btnRep.Enabled=$false; $st.ForeColor=$script:Yellow
-            $st.Text="Metodo 2: reparando $gname (appid $appid)..."
+            $st.Text="Reparando $gname..."
             [System.Windows.Forms.Application]::DoEvents()
             $res2=Repair-UnoApp $appid
             if($res2.ok){
                 $st.ForeColor=$script:Green
-                $st.Text="OK: $gname reparada via metodo 2 (luas + $($res2.man) manifests instalados)."
-                [System.Windows.Forms.MessageBox]::Show("Listo, se reinstalo la activacion para $gname (appid $appid).`nReinicia Steam y deberia descargar.","Arreglar conexion individual","OK","Information")
+                $st.Text="OK: $gname reparado."
+                [System.Windows.Forms.MessageBox]::Show("Listo, $gname reparado.`nReinicia Steam y deberia descargar.","Arreglar conexion individual","OK","Information")
             } else {
-                $st.Text="Metodo 2 fallo ($($res2.msg)). Probando metodo 1..."
+                $st.Text="Probando otra reparacion..."
                 [System.Windows.Forms.Application]::DoEvents()
                 $ok1=Xz9Qk
                 if($ok1){
                     $st.ForeColor=$script:Green
-                    $st.Text="OK: $gname reparada via metodo 1."
-                    [System.Windows.Forms.MessageBox]::Show("El metodo 2 fallo pero el metodo 1 la arreglo. Reinicia Steam.","Arreglar conexion individual","OK","Information")
+                    $st.Text="OK: $gname reparado."
+                    [System.Windows.Forms.MessageBox]::Show("La primera no funciono pero la segunda lo arreglo. Reinicia Steam.","Arreglar conexion individual","OK","Information")
                 } else {
                     $st.ForeColor=$script:Red
-                    $st.Text="FALLO en metodo 2 y metodo 1 para $gname. Revisa tu conexion."
-                    [System.Windows.Forms.MessageBox]::Show("No se pudo reparar $gname con ninguno de los dos metodos. Revisa tu conexion e intenta de nuevo.","Arreglar conexion individual","OK","Error")
+                    $st.Text="No se pudo reparar $gname. Revisa tu conexion."
+                    [System.Windows.Forms.MessageBox]::Show("No se pudo reparar $gname. Revisa tu conexion e intenta de nuevo.","Arreglar conexion individual","OK","Error")
                 }
             }
             $btnRep.Enabled=$true
@@ -6777,8 +6783,9 @@ function New-BibBackButton([scriptblock]$click) {
         $arrow.Dispose()
         $textBrush=New-Object System.Drawing.SolidBrush($script:White)
         $font=New-Object System.Drawing.Font('Bahnschrift SemiBold',10,[System.Drawing.FontStyle]::Bold)
-        $g.DrawString('Volver',$font,$textBrush,(New-Object System.Drawing.RectangleF(37,0,($s.Width-42),$s.Height)))
-        $font.Dispose();$textBrush.Dispose()
+        $sf=New-Object System.Drawing.StringFormat;$sf.Alignment="Center";$sf.LineAlignment="Center"
+        $g.DrawString('Volver',$font,$textBrush,(New-Object System.Drawing.RectangleF(37,0,($s.Width-42),$s.Height)),$sf)
+        $font.Dispose();$textBrush.Dispose();$sf.Dispose()
     })
     return $button
 }
@@ -7476,20 +7483,22 @@ function Repair-BiblioGame([string]$appid) {
             }
         } catch {}
         if($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath)){
-            try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Buscando fix para $gfolder..."} }catch{}
+            try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
             $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
             if($fixes -and $fixes.Count -gt 0){
+                $fn,$fu = Ff2Xa $gfolder $fixes
+                if($fu){ try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparacion disponible, reparando..."}; [System.Windows.Forms.Application]::DoEvents() }catch{} }
                 $fx=Apply-FixAutomatically $gfolder $gpath $fixes
-                if($fx[0]){ $out.ok=$true;$out.msg=$fx[1];$out.method='github'; return $out }
+                if($fx[0]){ $out.ok=$true;$out.msg="Juego reparado";$out.method='github'; return $out }
             }
         }
-        try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Sin fix disponible, probando metodo 2..."} }catch{}
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $r=Repair-UnoApp $appid
-        if($r.ok){ $out.ok=$true;$out.msg="Juego reparado (metodo 2, $($r.man) manifests)";$out.method='sb'; return $out }
+        if($r.ok){ $out.ok=$true;$out.msg="Juego reparado";$out.method='sb'; return $out }
         $m2msg=$r.msg
-        try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Metodo 2 fallo, probando metodo 1..."} }catch{}
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Probando otra reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $ok1=$false; try{ $ok1=Xz9Qk -Silent }catch{}
-        if($ok1){ $out.ok=$true;$out.msg="Juego reparado (metodo 1)";$out.method='patch'; return $out }
+        if($ok1){ $out.ok=$true;$out.msg="Juego reparado";$out.method='patch'; return $out }
         $out.msg=$m2msg
     } catch { $out.msg=$_.Exception.Message }
     return $out
@@ -7572,11 +7581,11 @@ $script:bdtInstBusy=$false
                 $script:bdtRep.Invalidate()
                 if(-not $result){$result=@{ok=$false;msg=$(if($workerError){$workerError}else{'La reparacion no devolvio resultado'})}}
                 if($result.ok){
-                    $script:bdtStatus.Text='Reparado OK'
-                    if($script:bdtp.Visible -and $form.WindowState -ne 'Minimized'){[System.Windows.Forms.MessageBox]::Show(([string]$result.msg + '. Reinicia Steam.'),'Reparar','OK','Information')}
+                    $script:bdtStatus.Text='Juego reparado.'
+                    if($script:bdtp.Visible -and $form.WindowState -ne 'Minimized'){[System.Windows.Forms.MessageBox]::Show('Juego reparado. Reinicia Steam.','Reparar','OK','Information')}
                 } else {
-                    $script:bdtStatus.Text='No se pudo reparar: '+[string]$result.msg
-                    if($script:bdtp.Visible -and $form.WindowState -ne 'Minimized'){[System.Windows.Forms.MessageBox]::Show(('No se pudo reparar: '+[string]$result.msg),'Reparar','OK','Warning')}
+                    $script:bdtStatus.Text='Este juego no requiere reparacion.'
+                    if($script:bdtp.Visible -and $form.WindowState -ne 'Minimized'){[System.Windows.Forms.MessageBox]::Show('Este juego no requiere reparacion.','Reparar','OK','Information')}
                 }
                 $script:bibRepairTimer.Stop()
             } catch {
@@ -7877,7 +7886,7 @@ $script:bdtInst.Add_Click({ try {
     $rr=Repair-BiblioGame $a
     $script:bdtInstBusy=$false
     if($rr.ok){ $script:bdtStatus.Text="Activado, abriendo instalacion..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); try{ Start-Process "steam://install/$a" }catch{}; Start-BiblioDlWatch $a }
-    else { $script:bdtStatus.Text="No se pudo activar: "+$rr.msg; [System.Windows.Forms.MessageBox]::Show(("Primero hay que activar el juego y fallo: "+$rr.msg),"Instalar","OK","Warning") }
+    else { $script:bdtStatus.Text="No se pudo activar el juego."; [System.Windows.Forms.MessageBox]::Show("No se pudo activar el juego.","Instalar","OK","Warning") }
 } catch { try{$script:bdtInstBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Instalar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtInst)
 $script:bdtRep=New-BdtBtn ($PAD+520) 452 230 50 $script:CardBG $script:CardHover $script:White $script:Cyan $script:FntCard
@@ -7889,7 +7898,7 @@ $script:bdtRep.Add_Click({ try {
     $script:bdtRep.Enabled=$false
     $script:bdtRep.Tag.Text='REPARANDO...'
     $script:bdtRep.Invalidate()
-    $script:bdtStatus.Text='Preparando reparacion en segundo plano...'
+    $script:bdtStatus.Text='Buscando reparacion...'
     if(-not $script:bibRepairProgress){$script:bibRepairProgress=[hashtable]::Synchronized(@{text='Preparando reparacion...'})}
     Start-BiblioRepairAsync ([string]$a)
 } catch { try{$script:bdtRepBusy=$false;$script:bdtRep.Enabled=$true;$script:bdtRep.Tag.Text='REPARAR JUEGO';$script:bdtRep.Invalidate()}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
