@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.86"
+$script:version = "V1.87"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6840,7 +6840,7 @@ function Refresh-BiblioGrid([string]$filter) {
     }
 }
 function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};if($script:bdtp){$script:bdtp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
-function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};if($script:bdtp){$script:bdtp.Visible=$false};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
+function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};try{Stop-BiblioDlWatch}catch{};if($script:bdtp){$script:bdtp.Visible=$false};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
 function Show-Biblio {
     Switch-ToBiblio
     try {
@@ -7039,8 +7039,66 @@ function Test-BiblioInstalled([string]$appid) {
     return $false
 }
 function Test-BiblioLua([string]$appid) {
-    try { $libs=@();if($script:steamLibs){$libs=@($script:steamLibs)}else{$libs=@(Ss3Jd)};foreach ($lib in $libs) { foreach ($sub in @('config\stplug-in','config\lua')) { if (Test-Path -LiteralPath (Join-Path (Join-Path $lib $sub) ($appid + ".lua"))) { return $true } } } } catch {}
+    try { foreach ($lib in @(Ss3Jd)) { foreach ($sub in @('config\stplug-in','config\lua')) { if (Test-Path -LiteralPath (Join-Path (Join-Path $lib $sub) ($appid + ".lua"))) { return $true } } } } catch {}
     return $false
+}
+$script:bdtDlSync=[hashtable]::Synchronized(@{gb=0;done=$false;run=$false;aid=''})
+$script:bdtDlWatch=$null
+$script:bdtDlTimer=New-Object System.Windows.Forms.Timer
+$script:bdtDlTimer.Interval=2000
+$script:bdtDlTimer.Add_Tick({
+    try {
+        if(-not $script:bdtDlSync){return}
+        if($script:bdtDlSync.done){
+            try{$script:bdtDlTimer.Stop()}catch{}
+            try{ if($script:bdtStatus -and -not $script:bdtStatus.IsDisposed){$script:bdtStatus.Text="Instalado. Ya podes jugar."} }catch{}
+            return
+        }
+        try{ if($script:bdtStatus -and -not $script:bdtStatus.IsDisposed){ $g=$script:bdtDlSync.gb; if($g -gt 0){$script:bdtStatus.Text=("Descargando en Steam: "+$g+" GB...")} } }catch{}
+    } catch {}
+})
+function Stop-BiblioDlWatch {
+    try{ $script:bdtDlSync.run=$false }catch{}
+    try{ $script:bdtDlTimer.Stop() }catch{}
+    try{
+        if($script:bdtDlWatch){
+            try{ $script:bdtDlWatch.ps.EndInvoke($script:bdtDlWatch.h) }catch{}
+            try{ $script:bdtDlWatch.ps.Dispose() }catch{}
+            $script:bdtDlWatch=$null
+        }
+    }catch{}
+}
+function Start-BiblioDlWatch([string]$appid) {
+    Stop-BiblioDlWatch
+    try {
+        $script:bdtDlSync.aid=$appid; $script:bdtDlSync.gb=0; $script:bdtDlSync.done=$false; $script:bdtDlSync.run=$true
+        $libs=@(); try{ $libs=@(Ss3Jd) }catch{}
+        $ps=[PowerShell]::Create()
+        [void]$ps.AddScript({
+            param($sync,$libs)
+            try{
+                while($sync.run){
+                    try{
+                        $total=[long]0;$dn=$false
+                        foreach($lib in $libs){
+                            $dd=Join-Path (Join-Path $lib 'steamapps\downloading') $sync.aid
+                            if(Test-Path -LiteralPath $dd){
+                                foreach($f in (Get-ChildItem -LiteralPath $dd -Recurse -File -Force -ErrorAction SilentlyContinue)){ try{ $total+=$f.Length }catch{} }
+                            }
+                            $mf=Join-Path (Join-Path $lib 'steamapps') ('appmanifest_'+$sync.aid+'.acf')
+                            if(Test-Path -LiteralPath $mf){ try{ $tx=[IO.File]::ReadAllText($mf); if($tx -match '"StateFlags"\s+"4"'){ $dn=$true } }catch{} }
+                        }
+                        $sync.gb=[Math]::Round($total/1GB,2); $sync.done=$dn
+                        if($dn){ $sync.run=$false }
+                    }catch{}
+                    Start-Sleep -Seconds 5
+                }
+            }catch{}
+        }).AddArgument($script:bdtDlSync).AddArgument($libs)
+        $h=$ps.BeginInvoke()
+        $script:bdtDlWatch=@{ps=$ps;h=$h}
+        $script:bdtDlTimer.Start()
+    } catch {}
 }
 function Repair-BiblioGame([string]$appid) {
     $out=@{ok=$false;msg='';method=''}
@@ -7264,6 +7322,7 @@ function Start-BiblioDetailJobs([string]$appid) {
 }
 function Show-BiblioDetail($g) {
     if (-not $g) { return }
+    try { Stop-BiblioDlWatch } catch {}
     try { $script:bibTimer.Stop() } catch {}
     $script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false
     $aid=[string]$g.appid; $nm=[string]$g.name
@@ -7311,7 +7370,7 @@ function Show-BiblioDetail($g) {
     $script:bdtp.Visible=$true
     Start-BiblioDetailJobs $aid
 }
-function Switch-BackToBiblio{try{$script:bdtp.Visible=$false}catch{};$script:bibp.Visible=$true;try{if(($script:bibCoverJobs -and $script:bibCoverJobs.Count -gt 0) -or ($script:bibCoverQueue -and $script:bibCoverQueue.Count -gt 0)){$script:bibTimer.Start()}}catch{}}
+function Switch-BackToBiblio{try{Stop-BiblioDlWatch}catch{};try{$script:bdtp.Visible=$false}catch{};$script:bibp.Visible=$true;try{if(($script:bibCoverJobs -and $script:bibCoverJobs.Count -gt 0) -or ($script:bibCoverQueue -and $script:bibCoverQueue.Count -gt 0)){$script:bibTimer.Start()}}catch{}}
 $script:bdtp=New-BufferedPanel
 $script:bdtp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:bdtp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bdtp.BackColor=$BG;$script:bdtp.Visible=$false
@@ -7450,12 +7509,12 @@ $script:bdtInst.Tag.Text="INSTALAR"
 $script:bdtInstUrl=""
 $script:bdtInst.Add_Click({ try {
     if($script:bdtInstBusy){return}; $a=$script:bdtAid; if(-not $a){return}
-    if(Test-BiblioLua $a){ try{ Start-Process "steam://install/$a" }catch{}; return }
+    if(Test-BiblioLua $a){ try{ Start-Process "steam://install/$a" }catch{}; $script:bdtStatus.Text="Instalacion iniciada en Steam..."; Start-BiblioDlWatch $a; return }
     $script:bdtInstBusy=$true
     $script:bdtStatus.Text="Activando el juego antes de instalar..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
     $rr=Repair-BiblioGame $a
     $script:bdtInstBusy=$false
-    if($rr.ok){ $script:bdtStatus.Text="Activado, abriendo instalacion..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); try{ Start-Process "steam://install/$a" }catch{} }
+    if($rr.ok){ $script:bdtStatus.Text="Activado, abriendo instalacion..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); try{ Start-Process "steam://install/$a" }catch{}; Start-BiblioDlWatch $a }
     else { $script:bdtStatus.Text="No se pudo activar: "+$rr.msg; [System.Windows.Forms.MessageBox]::Show(("Primero hay que activar el juego y fallo: "+$rr.msg),"Instalar","OK","Warning") }
 } catch { try{$script:bdtInstBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Instalar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtInst)
