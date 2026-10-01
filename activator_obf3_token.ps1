@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.87"
+$script:version = "V1.88"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1451,10 +1451,14 @@ function Initialize-GameNameMap {
     try { if ($PSScriptRoot) { $cand += (Join-Path $PSScriptRoot 'lua_nombres_1173_final.txt') } } catch {}
     try { $cand += (Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_1173_final.txt') } catch {}
     try { $cand += (Join-Path ([Environment]::GetFolderPath('Desktop')) 'lua_nombres_1173_final.txt') } catch {}
+    $files = @()
     foreach ($c in $cand) {
-        if ($c -and (Test-Path -LiteralPath $c)) { try { $raw = [System.IO.File]::ReadAllText($c); break } catch {} }
+        if ($c -and (Test-Path -LiteralPath $c)) { $files += $c }
     }
-    if (-not $raw) { $raw = $script:GAME_NAME_DATA }
+    try { $cacheFile = (Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt'); if (Test-Path -LiteralPath $cacheFile) { $files += $cacheFile } } catch {}
+    $raw = ''
+    foreach ($fx in $files) { try { $raw += "`n" + [System.IO.File]::ReadAllText($fx) } catch {} }
+    if (-not $raw.Trim()) { $raw = $script:GAME_NAME_DATA }
     foreach ($line in ($raw -split "`r?`n")) {
         $line = $line.Trim()
         if (-not $line) { continue }
@@ -1463,7 +1467,9 @@ function Initialize-GameNameMap {
         $nm = $m.Groups[1].Value.Trim()
         $id = $m.Groups[2].Value
         if (-not $id -or -not $nm) { continue }
-        if (-not $byId.ContainsKey($id)) { $byId[$id] = $nm; [void]$order.Add($id) }
+        if (($nm -match '\(no data\)') -and $byId.ContainsKey($id)) { continue }
+        if (-not $byId.ContainsKey($id)) { [void]$order.Add($id) }
+        $byId[$id] = $nm
         $key = Nn1Yw $nm
         if ($key -and -not $byName.ContainsKey($key)) { $byName[$key] = $id }
     }
@@ -6841,6 +6847,93 @@ function Refresh-BiblioGrid([string]$filter) {
 }
 function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};if($script:bdtp){$script:bdtp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
 function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};try{Stop-BiblioDlWatch}catch{};if($script:bdtp){$script:bdtp.Visible=$false};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
+$script:bibNameJob=$null
+$script:bibNameCacheFrom=0
+$script:bibNameTimer=New-Object System.Windows.Forms.Timer
+$script:bibNameTimer.Interval=3000
+$script:bibNameTimer.Add_Tick({
+    try {
+        Update-BiblioNamesFromCache
+        $nj=$script:bibNameJob
+        if(-not $nj){ try{$script:bibNameTimer.Stop()}catch{}; return }
+        if($nj.h.IsCompleted){
+            try{ $nj.ps.EndInvoke($nj.h) }catch{}
+            try{ $nj.ps.Dispose() }catch{}
+            $script:bibNameJob=$null
+            Update-BiblioNamesFromCache
+            try{$script:bibNameTimer.Stop()}catch{}
+        }
+    } catch {}
+})
+function Update-BiblioNamesFromCache {
+    try {
+        $cache=Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt'
+        if(-not (Test-Path -LiteralPath $cache)){ return }
+        $all=@(Get-Content -LiteralPath $cache -ErrorAction SilentlyContinue)
+        if(-not $all -or $all.Count -eq 0){ return }
+        $from=0; try{ $from=[int]$script:bibNameCacheFrom }catch{}
+        if($from -lt 0){ $from=0 }
+        for($i=$from;$i -lt $all.Count;$i++){
+            $m=[regex]::Match($all[$i],'^(.*?)\s*\((\d+)\)\s*$')
+            if(-not $m.Success){ continue }
+            $nm=$m.Groups[1].Value.Trim(); $id=$m.Groups[2].Value
+            if(-not $id -or -not $nm -or ($nm -match '\(no data\)')){ continue }
+            try{ $script:GAME_NAME_BY_APPID[$id]=$nm }catch{}
+            try{ $key=Nn1Yw $nm; if($key -and -not $script:GAME_APPID_BY_NAME.ContainsKey($key)){ $script:GAME_APPID_BY_NAME[$key]=$id } }catch{}
+        }
+        $script:bibNameCacheFrom=$all.Count
+        if(-not $script:GAME_NAME_BY_APPID){ return }
+        foreach($g in @($script:bibGames)){
+            if($g.name -like 'Juego *'){
+                $id=[string]$g.appid
+                if($script:GAME_NAME_BY_APPID.ContainsKey($id)){
+                    $nn=$script:GAME_NAME_BY_APPID[$id]
+                    if($nn -and ($nn -notmatch '\(no data\)')){
+                        $g.name=$nn
+                        try{
+                            $pb=$script:bibBoxes[$id]
+                            if($pb -and -not $pb.IsDisposed -and $pb.Parent -and -not $pb.Parent.IsDisposed){
+                                foreach($cc in @($pb.Parent.Controls)){ if($cc -is [System.Windows.Forms.Label]){ $cc.Text=$nn; break } }
+                            }
+                        }catch{}
+                    }
+                }
+            }
+        }
+    } catch {}
+}
+function Start-BiblioNameBackfill {
+    try {
+        try{ if($script:bibNameJob){ return } }catch{}
+        $missing=@()
+        foreach ($g in @($script:bibGames)) { if ($g.name -like 'Juego *') { $missing += [string]$g.appid } }
+        if ($missing.Count -eq 0) { return }
+        $cache=Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt'
+        try{ $ex=@(Get-Content -LiteralPath $cache -ErrorAction SilentlyContinue); $script:bibNameCacheFrom=$ex.Count }catch{ $script:bibNameCacheFrom=0 }
+        $ps=[PowerShell]::Create()
+        [void]$ps.AddScript({
+            param($ids,$cacheFile)
+            try {
+                foreach ($id in $ids) {
+                    try {
+                        $j=Invoke-RestMethod -Uri ("https://store.steampowered.com/api/appdetails?appids=$id&l=spanish") -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+                        $d=$j.PSObject.Properties[$id].Value
+                        if ($d -and $d.success -and $d.data -and $d.data.name) {
+                            $nm=[string]$d.data.name
+                            if ($nm -and ($nm -notmatch '\(no data\)')) {
+                                try { Add-Content -LiteralPath $cacheFile -Value ($nm + " (" + $id + ")") -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+                            }
+                        }
+                    } catch {}
+                    Start-Sleep -Milliseconds 300
+                }
+            } catch {}
+        }).AddArgument($missing).AddArgument($cache)
+        $h=$ps.BeginInvoke()
+        $script:bibNameJob=@{ps=$ps;h=$h}
+        $script:bibNameTimer.Start()
+    } catch {}
+}
 function Show-Biblio {
     Switch-ToBiblio
     try {
@@ -6865,6 +6958,8 @@ function Show-Biblio {
         Refresh-BiblioGrid ''
         Start-BiblioCovers $script:bibGames
         $script:bibTimer.Start()
+        try{ Update-BiblioNamesFromCache }catch{}
+        Start-BiblioNameBackfill
     } catch {
         try{$script:bibSuppressSearch=$false;$script:bibOpenWatch=$null;$script:bibLoadingTimer.Stop();$script:bibLoadingCard.Visible=$false}catch{}
     }
