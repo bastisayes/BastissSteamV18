@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.01"
+$script:version = "V2.02"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6850,9 +6850,9 @@ function Get-BiblioGridMetrics {
     $width=[Math]::Max(180,[int]$script:bibViewport.ClientSize.Width)
     $inner=[Math]::Max(160,$width-24)
     if($script:bibView -eq 'compact'){
-        $cellWidth=106
+        $cellWidth=100
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
-        $tileWidth=100;$coverWidth=92;$coverHeight=92;$tileHeight=142;$rowHeight=150
+        $tileWidth=96;$coverWidth=96;$coverHeight=144;$tileHeight=144;$rowHeight=148
     } else {
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
         $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
@@ -6887,7 +6887,7 @@ function Set-BiblioGridScroll {
         $tile.Size=New-Object System.Drawing.Size($metrics.TileWidth,$metrics.TileHeight)
         if($tile.Controls.Count -gt 1){
             $pic=$tile.Controls[0];$label=$tile.Controls[1]
-            $pic.Location=New-Object System.Drawing.Point(5,5)
+            if($script:bibView -eq 'compact'){ $pic.Location=New-Object System.Drawing.Point(0,0) } else { $pic.Location=New-Object System.Drawing.Point(5,5) }
             $pic.Size=New-Object System.Drawing.Size($metrics.CoverWidth,$metrics.CoverHeight)
             $label.Location=New-Object System.Drawing.Point(6,($metrics.CoverHeight+10))
             $label.Size=New-Object System.Drawing.Size(($metrics.TileWidth-12),44)
@@ -6960,16 +6960,24 @@ function Show-BiblioLoading([string]$title,[string]$subtitle) {
 }
 function New-BiblioTile($game) {
     $tile=New-BufferedPanel
-    $tile.BackColor=$script:CardBG
+    if($script:bibView -eq 'compact'){ $tile.BackColor=$BG } else { $tile.BackColor=$script:CardBG }
     $tile.Tag=@{Hover=$false;Game=$game}
-    $tile.Add_Paint({param($s,$e);$e.Graphics.SmoothingMode='AntiAlias';$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR;$br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}));$pen=New-Object System.Drawing.Pen($(if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}),$(if($s.Tag.Hover){1.6}else{1}));$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p);$br.Dispose();$pen.Dispose();$p.Dispose()})
+    $tile.Add_Paint({param($s,$e);$e.Graphics.SmoothingMode='AntiAlias';if($script:bibView -eq 'compact' -and -not $s.Tag.Hover){return};$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR;$br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}));$pen=New-Object System.Drawing.Pen($(if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}),$(if($s.Tag.Hover){1.6}else{1}));$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p);$br.Dispose();$pen.Dispose();$p.Dispose()})
     $tile.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
     $tile.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
     $pic=New-Object System.Windows.Forms.PictureBox
-    $pic.Location=New-Object System.Drawing.Point(5,5)
-    $pic.Size=New-Object System.Drawing.Size(150,214)
-    $pic.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
-    $pic.BackColor=$script:CardBG;$pic.Cursor=[System.Windows.Forms.Cursors]::Hand;$pic.Tag=$game
+    if($script:bibView -eq 'compact'){
+        $pic.Location=New-Object System.Drawing.Point(0,0)
+        $pic.Size=New-Object System.Drawing.Size(96,144)
+        $pic.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::StretchImage
+        $pic.BackColor=$BG
+    } else {
+        $pic.Location=New-Object System.Drawing.Point(5,5)
+        $pic.Size=New-Object System.Drawing.Size(150,214)
+        $pic.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
+        $pic.BackColor=$script:CardBG
+    }
+    $pic.Cursor=[System.Windows.Forms.Cursors]::Hand;$pic.Tag=$game
     $cover=Get-BiblioCoverPath ([string]$game.appid)
     if($cover -and [System.IO.Path]::GetFileNameWithoutExtension($cover) -like 'thumb_*'){try{$img=[System.Drawing.Image]::FromFile($cover);$pic.Image=New-Object System.Drawing.Bitmap($img);$img.Dispose();$pic.AccessibleDescription=$cover}catch{}}
     $pic.Add_Paint({param($s,$e);if(-not $s.Image){Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.name) $true}})
