@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.77"
+$script:version = "V1.78"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6449,36 +6449,58 @@ function Show-BiblioDetail($g) {
     $script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false
     $aid=[string]$g.appid; $nm=[string]$g.name
     $script:bdtAid=$aid
-    $script:bdtHero.Image=$null
+    $script:bdtCap.Image=$null
     $script:bdtTitle.Text=$nm
-    $script:bdtAppid.Text=("AppID: " + $aid)
-    $inst=Test-BiblioInstalled $aid; $lua=Test-BiblioLua $aid
-    $st="No instalado"; if($inst){$st="Instalado"}; if($lua){$st+="  |  Activado"}else{$st+="  |  Sin activar"}
-    $script:bdtStatus.Text=$st
-    if($inst){$script:bdtPlay.Text="JUGAR";$script:bdtPlay.Tag="steam://rungameid/$aid"}else{$script:bdtPlay.Text="INSTALAR";$script:bdtPlay.Tag="steam://install/$aid"}
     $script:bdtDesc.Text="Cargando informacion..."
-    $hp2=Join-Path $env:TEMP 'bsmap_covers'; $hfp=Join-Path $hp2 ($aid+"_hero.jpg")
-    if(Test-Path -LiteralPath $hfp){ try{$script:bdtHero.Image=[System.Drawing.Image]::FromFile($hfp)}catch{} }
-    else { try { (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudflare.steamstatic.com/steam/apps/$aid/hero_capsule.jpg",$hfp); $script:bdtHero.Image=[System.Drawing.Image]::FromFile($hfp) } catch { try{Remove-Item $hfp -Force -ErrorAction SilentlyContinue}catch{} } }
-    $desc="Sin descripcion disponible."; $gen=""
+    $script:bdtPlat.Text="Steam"
+    $script:bdtStatus.Text=""
+    $script:bdtFechaV.Text="-";$script:bdtDevV.Text="-";$script:bdtPubV.Text="-";$script:bdtTagV.Text="-"
+    for($i=0;$i -lt 4;$i++){ try{$script:bdtCatT[$i].Text=""}catch{} }
+    $inst=Test-BiblioInstalled $aid; $lua=Test-BiblioLua $aid
+    $est="No instalado"; if($inst){$est="Instalado"}; if($lua){$est+=" | Activado"}else{$est+=" | Sin activar"}
+    $script:bdtEst=$est
+    if($inst){$script:bdtPlay.Text="JUGAR";$script:bdtPlay.Tag="steam://rungameid/$aid"}else{$script:bdtPlay.Text="INSTALAR";$script:bdtPlay.Tag="steam://install/$aid"}
+    $script:bdtStore.Tag="https://store.steampowered.com/app/$aid"
+    $cd=Join-Path $env:TEMP 'bsmap_covers'; $cfp=Join-Path $cd ($aid+"_head.jpg")
+    if(Test-Path -LiteralPath $cfp){ try{$script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp)}catch{} }
+    else { try { (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudflare.steamstatic.com/steam/apps/$aid/header.jpg",$cfp); $script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp) } catch { try{Remove-Item $cfp -Force -ErrorAction SilentlyContinue}catch{} } }
+    $genres=@()
     try {
         $j=Invoke-RestMethod -Uri ("https://store.steampowered.com/api/appdetails?appids=$aid&l=spanish") -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
         $d=$j.PSObject.Properties[$aid].Value; if($d -and $d.success -and $d.data){
-            if($d.data.short_description){$desc=[System.Net.WebUtility]::HtmlDecode(($d.data.short_description -replace '<[^>]+>','')).Trim()}
-            try{$gen=((@($d.data.genres) | ForEach-Object{$_.description}) -join ', ')}catch{}
-        }
-    } catch {}
-    $script:bdtDesc.Text=$desc
-    if($gen){$script:bdtAppid.Text=("AppID: "+$aid+"   |   "+$gen)}
+            $dd=$d.data
+            if($dd.name -and ($nm -like 'Juego *')){ $script:bdtTitle.Text=[string]$dd.name }
+            if($dd.short_description){$script:bdtDesc.Text=[System.Net.WebUtility]::HtmlDecode(($dd.short_description -replace '<[^>]+>','')).Trim()}
+            else { $script:bdtDesc.Text="Sin descripcion disponible." }
+            try{ if($dd.release_date -and $dd.release_date.date){$script:bdtFechaV.Text=[string]$dd.release_date.date} }catch{}
+            try{ if($dd.developers){$script:bdtDevV.Text=((@($dd.developers)) -join ', ')} }catch{}
+            try{ if($dd.publishers){$script:bdtPubV.Text=((@($dd.publishers)) -join ', ')} }catch{}
+            try{ if($dd.genres){$genres=@(@($dd.genres) | ForEach-Object{$_.description}); $script:bdtTagV.Text=($genres -join ', ')} }catch{}
+            try{ $ci=0; foreach($c in @($dd.categories)){ if($ci -gt 3){break}; $script:bdtCatT[$ci].Text=[string]$c.description; $ci++ } }catch{}
+        } else { $script:bdtDesc.Text="Sin descripcion disponible." }
+    } catch { $script:bdtDesc.Text="Sin descripcion disponible." }
+    $pl="Steam"; if($genres.Count -gt 0){$pl+="   |   "+($genres -join '   |   ')}
+    $script:bdtPlat.Text=$pl+"      |      "+$script:bdtEst
     try {
         $cw=$form.ClientSize.Width
-        $hw=[int]([Math]::Min(560,$cw*0.38)); if($hw -lt 300){$hw=300}
-        $script:bdtHero.Location=New-Object System.Drawing.Point($PAD,52);$script:bdtHero.Size=New-Object System.Drawing.Size($hw,300)
-        $script:bdtTitle.Location=New-Object System.Drawing.Point(($PAD+$hw+$PAD),60);$script:bdtTitle.Size=New-Object System.Drawing.Size(($cw-($PAD+$hw+$PAD)-$PAD),60)
-        $script:bdtAppid.Location=New-Object System.Drawing.Point(($PAD+$hw+$PAD),124);$script:bdtAppid.Size=New-Object System.Drawing.Size(($cw-($PAD+$hw+$PAD)-$PAD),24)
-        $script:bdtStatus.Location=New-Object System.Drawing.Point(($PAD+$hw+$PAD),150);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-($PAD+$hw+$PAD)-$PAD),24)
-        $script:bdtDesc.Location=New-Object System.Drawing.Point($PAD,362);$script:bdtDesc.Size=New-Object System.Drawing.Size(($cw-2*$PAD),130)
-        $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,502);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+240),502)
+        $capW=460; if($cw -lt 1000){$capW=[int]($cw*0.44)}
+        $script:bdtCap.Location=New-Object System.Drawing.Point($PAD,52);$script:bdtCap.Size=New-Object System.Drawing.Size($capW,215)
+        $tx=($PAD+$capW+24); $colW=280
+        $midW=($cw-$tx-$PAD-$colW-24); if($midW -lt 200){$midW=200}
+        $colX=($cw-$PAD-$colW)
+        $script:bdtTitle.Location=New-Object System.Drawing.Point($tx,58);$script:bdtTitle.Size=New-Object System.Drawing.Size($midW,72)
+        $script:bdtPlat.Location=New-Object System.Drawing.Point($tx,134);$script:bdtPlat.Size=New-Object System.Drawing.Size($midW,26)
+        $script:bdtInfoH.Location=New-Object System.Drawing.Point($tx,166);$script:bdtInfoH.Size=New-Object System.Drawing.Size($midW,28)
+        $script:bdtDesc.Location=New-Object System.Drawing.Point($tx,196);$script:bdtDesc.Size=New-Object System.Drawing.Size($midW,150)
+        $script:bdtFechaC.Location=New-Object System.Drawing.Point($colX,58);$script:bdtFechaV.Location=New-Object System.Drawing.Point($colX,80)
+        $script:bdtDevC.Location=New-Object System.Drawing.Point($colX,116);$script:bdtDevV.Location=New-Object System.Drawing.Point($colX,138)
+        $script:bdtPubC.Location=New-Object System.Drawing.Point($colX,174);$script:bdtPubV.Location=New-Object System.Drawing.Point($colX,196)
+        $script:bdtTagC.Location=New-Object System.Drawing.Point($colX,232);$script:bdtTagV.Location=New-Object System.Drawing.Point($colX,254)
+        $script:bdtTagV.Size=New-Object System.Drawing.Size($colW,80)
+        $stripY=372; $stripW=[int](($cw-2*$PAD)/4)
+        for($i=0;$i -lt 4;$i++){ $script:bdtCatT[$i].Location=New-Object System.Drawing.Point(($PAD+$i*$stripW+12),$stripY); $script:bdtCatT[$i].Size=New-Object System.Drawing.Size(($stripW-24),52) }
+        $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+320),452);$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+570),452)
+        $script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,508);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-2*$PAD),24)
     } catch {}
     $script:bdtp.Visible=$true
 }
@@ -6496,53 +6518,121 @@ $script:bdtBack.FlatStyle="Flat";$script:bdtBack.FlatAppearance.BorderColor=$scr
 $script:bdtBack.Font=$script:FntCard;$script:bdtBack.Cursor=[System.Windows.Forms.Cursors]::Hand
 $script:bdtBack.Add_Click({Switch-BackToBiblio})
 $script:bdtp.Controls.Add($script:bdtBack)
-$script:bdtHero=New-Object System.Windows.Forms.PictureBox
-$script:bdtHero.Location=New-Object System.Drawing.Point($PAD,52)
-$script:bdtHero.Size=New-Object System.Drawing.Size(420,300)
-$script:bdtHero.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
-$script:bdtHero.BackColor=[System.Drawing.Color]::FromArgb(10,14,24)
-$script:bdtp.Controls.Add($script:bdtHero)
+$script:bdtCap=New-Object System.Windows.Forms.PictureBox
+$script:bdtCap.Location=New-Object System.Drawing.Point($PAD,52)
+$script:bdtCap.Size=New-Object System.Drawing.Size(460,215)
+$script:bdtCap.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
+$script:bdtCap.BackColor=[System.Drawing.Color]::FromArgb(10,14,24)
+$script:bdtp.Controls.Add($script:bdtCap)
 $script:bdtTitle=New-Object System.Windows.Forms.Label
-$script:bdtTitle.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",20,[System.Drawing.FontStyle]::Bold)
+$script:bdtTitle.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",24,[System.Drawing.FontStyle]::Bold)
 $script:bdtTitle.ForeColor=$script:White;$script:bdtTitle.BackColor=$BG
-$script:bdtTitle.Location=New-Object System.Drawing.Point(450,60);$script:bdtTitle.Size=New-Object System.Drawing.Size(400,60)
+$script:bdtTitle.Location=New-Object System.Drawing.Point(502,58);$script:bdtTitle.Size=New-Object System.Drawing.Size(500,72)
+$script:bdtTitle.AutoEllipsis=$true
 $script:bdtTitle.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bdtp.Controls.Add($script:bdtTitle)
-$script:bdtAppid=New-Object System.Windows.Forms.Label
-$script:bdtAppid.ForeColor=$script:Cyan;$script:bdtAppid.BackColor=$BG
-$script:bdtAppid.Font=$script:FntSub
-$script:bdtAppid.Location=New-Object System.Drawing.Point(450,124);$script:bdtAppid.Size=New-Object System.Drawing.Size(400,24)
-$script:bdtAppid.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
-$script:bdtp.Controls.Add($script:bdtAppid)
-$script:bdtStatus=New-Object System.Windows.Forms.Label
-$script:bdtStatus.ForeColor=[System.Drawing.Color]::FromArgb(170,170,170);$script:bdtStatus.BackColor=$BG
-$script:bdtStatus.Font=$script:FntSub
-$script:bdtStatus.Location=New-Object System.Drawing.Point(450,150);$script:bdtStatus.Size=New-Object System.Drawing.Size(400,24)
-$script:bdtStatus.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
-$script:bdtp.Controls.Add($script:bdtStatus)
+$script:bdtPlat=New-Object System.Windows.Forms.Label
+$script:bdtPlat.ForeColor=[System.Drawing.Color]::FromArgb(140,150,165);$script:bdtPlat.BackColor=$BG
+$script:bdtPlat.Font=$script:FntSub
+$script:bdtPlat.Location=New-Object System.Drawing.Point(502,134);$script:bdtPlat.Size=New-Object System.Drawing.Size(500,26)
+$script:bdtPlat.AutoEllipsis=$true
+$script:bdtPlat.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtPlat)
+$script:bdtInfoH=New-Object System.Windows.Forms.Label
+$script:bdtInfoH.Text="Informacion general"
+$script:bdtInfoH.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold)
+$script:bdtInfoH.ForeColor=$script:White;$script:bdtInfoH.BackColor=$BG
+$script:bdtInfoH.Location=New-Object System.Drawing.Point(502,166);$script:bdtInfoH.Size=New-Object System.Drawing.Size(500,28)
+$script:bdtInfoH.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtInfoH)
 $script:bdtDesc=New-Object System.Windows.Forms.TextBox
 $script:bdtDesc.Multiline=$true;$script:bdtDesc.ReadOnly=$true;$script:bdtDesc.ScrollBars="Vertical";$script:bdtDesc.BorderStyle="None"
-$script:bdtDesc.BackColor=$BG;$script:bdtDesc.ForeColor=[System.Drawing.Color]::FromArgb(200,200,200)
+$script:bdtDesc.BackColor=$BG;$script:bdtDesc.ForeColor=[System.Drawing.Color]::FromArgb(175,185,200)
 $script:bdtDesc.Font=$script:FntSub
-$script:bdtDesc.Location=New-Object System.Drawing.Point($PAD,362);$script:bdtDesc.Size=New-Object System.Drawing.Size(($FW-2*$PAD),130)
+$script:bdtDesc.Location=New-Object System.Drawing.Point(502,196);$script:bdtDesc.Size=New-Object System.Drawing.Size(500,150)
 $script:bdtDesc.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bdtp.Controls.Add($script:bdtDesc)
+$script:bdtFechaC=New-Object System.Windows.Forms.Label
+$script:bdtFechaC.Text="Fecha de lanzamiento";$script:bdtFechaC.ForeColor=[System.Drawing.Color]::FromArgb(120,130,145);$script:bdtFechaC.BackColor=$BG;$script:bdtFechaC.Font=$script:FntSub
+$script:bdtFechaC.Location=New-Object System.Drawing.Point(1100,58);$script:bdtFechaC.Size=New-Object System.Drawing.Size(280,20)
+$script:bdtFechaC.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtFechaC)
+$script:bdtFechaV=New-Object System.Windows.Forms.Label
+$script:bdtFechaV.ForeColor=$script:White;$script:bdtFechaV.BackColor=$BG;$script:bdtFechaV.Font=$script:FntSub
+$script:bdtFechaV.Location=New-Object System.Drawing.Point(1100,80);$script:bdtFechaV.Size=New-Object System.Drawing.Size(280,24)
+$script:bdtFechaV.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtFechaV)
+$script:bdtDevC=New-Object System.Windows.Forms.Label
+$script:bdtDevC.Text="Desarrollador";$script:bdtDevC.ForeColor=[System.Drawing.Color]::FromArgb(120,130,145);$script:bdtDevC.BackColor=$BG;$script:bdtDevC.Font=$script:FntSub
+$script:bdtDevC.Location=New-Object System.Drawing.Point(1100,116);$script:bdtDevC.Size=New-Object System.Drawing.Size(280,20)
+$script:bdtDevC.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtDevC)
+$script:bdtDevV=New-Object System.Windows.Forms.Label
+$script:bdtDevV.ForeColor=$script:White;$script:bdtDevV.BackColor=$BG;$script:bdtDevV.Font=$script:FntSub
+$script:bdtDevV.Location=New-Object System.Drawing.Point(1100,138);$script:bdtDevV.Size=New-Object System.Drawing.Size(280,24)
+$script:bdtDevV.AutoEllipsis=$true
+$script:bdtDevV.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtDevV)
+$script:bdtPubC=New-Object System.Windows.Forms.Label
+$script:bdtPubC.Text="Editor";$script:bdtPubC.ForeColor=[System.Drawing.Color]::FromArgb(120,130,145);$script:bdtPubC.BackColor=$BG;$script:bdtPubC.Font=$script:FntSub
+$script:bdtPubC.Location=New-Object System.Drawing.Point(1100,174);$script:bdtPubC.Size=New-Object System.Drawing.Size(280,20)
+$script:bdtPubC.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtPubC)
+$script:bdtPubV=New-Object System.Windows.Forms.Label
+$script:bdtPubV.ForeColor=$script:White;$script:bdtPubV.BackColor=$BG;$script:bdtPubV.Font=$script:FntSub
+$script:bdtPubV.Location=New-Object System.Drawing.Point(1100,196);$script:bdtPubV.Size=New-Object System.Drawing.Size(280,24)
+$script:bdtPubV.AutoEllipsis=$true
+$script:bdtPubV.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtPubV)
+$script:bdtTagC=New-Object System.Windows.Forms.Label
+$script:bdtTagC.Text="Etiquetas";$script:bdtTagC.ForeColor=[System.Drawing.Color]::FromArgb(120,130,145);$script:bdtTagC.BackColor=$BG;$script:bdtTagC.Font=$script:FntSub
+$script:bdtTagC.Location=New-Object System.Drawing.Point(1100,232);$script:bdtTagC.Size=New-Object System.Drawing.Size(280,20)
+$script:bdtTagC.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtTagC)
+$script:bdtTagV=New-Object System.Windows.Forms.Label
+$script:bdtTagV.ForeColor=$script:White;$script:bdtTagV.BackColor=$BG;$script:bdtTagV.Font=$script:FntSub
+$script:bdtTagV.Location=New-Object System.Drawing.Point(1100,254);$script:bdtTagV.Size=New-Object System.Drawing.Size(280,80)
+$script:bdtTagV.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtTagV)
+$script:bdtCatT=@()
+for($i=0;$i -lt 4;$i++){
+    $ct=New-Object System.Windows.Forms.Label
+    $ct.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",12,[System.Drawing.FontStyle]::Bold)
+    $ct.ForeColor=$script:White;$ct.BackColor=$BG
+    $ct.Location=New-Object System.Drawing.Point(($PAD+$i*300+12),372);$ct.Size=New-Object System.Drawing.Size(276,52)
+    $script:bdtp.Controls.Add($ct)
+    $script:bdtCatT+=$ct
+}
 $script:bdtPlay=New-Object System.Windows.Forms.Button
-$script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,502)
-$script:bdtPlay.Size=New-Object System.Drawing.Size(220,44)
-$script:bdtPlay.BackColor=$script:Cyan;$script:bdtPlay.ForeColor=[System.Drawing.Color]::Black
-$script:bdtPlay.FlatStyle="Flat";$script:bdtPlay.Font=$script:FntCard;$script:bdtPlay.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452)
+$script:bdtPlay.Size=New-Object System.Drawing.Size(300,50)
+$script:bdtPlay.BackColor=[System.Drawing.Color]::FromArgb(27,127,198);$script:bdtPlay.ForeColor=[System.Drawing.Color]::White
+$script:bdtPlay.FlatStyle="Flat";$script:bdtPlay.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold);$script:bdtPlay.Cursor=[System.Windows.Forms.Cursors]::Hand
 $script:bdtPlay.Add_Click({ param($s) try { Start-Process $s.Tag } catch {} })
 $script:bdtp.Controls.Add($script:bdtPlay)
 $script:bdtRep=New-Object System.Windows.Forms.Button
 $script:bdtRep.Text="REPARAR JUEGO"
-$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+240),502)
-$script:bdtRep.Size=New-Object System.Drawing.Size(220,44)
+$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+320),452)
+$script:bdtRep.Size=New-Object System.Drawing.Size(230,50)
 $script:bdtRep.BackColor=$script:CardBG;$script:bdtRep.ForeColor=$script:White
 $script:bdtRep.FlatStyle="Flat";$script:bdtRep.FlatAppearance.BorderColor=$script:Cyan
 $script:bdtRep.Font=$script:FntCard;$script:bdtRep.Cursor=[System.Windows.Forms.Cursors]::Hand
 $script:bdtRep.Add_Click({ try { $a=$script:bdtAid; if(-not $a){return}; $script:bdtRep.Enabled=$false; $script:bdtStatus.Text="Reparando..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); $r=Repair-UnoApp $a; $script:bdtRep.Enabled=$true; if($r.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show("Juego reparado correctamente.","Reparar","OK","Information") } else { $script:bdtStatus.Text="Reparacion: "+$r.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$r.msg),"Reparar","OK","Warning") } } catch { try{$script:bdtRep.Enabled=$true}catch{} } })
 $script:bdtp.Controls.Add($script:bdtRep)
+$script:bdtStore=New-Object System.Windows.Forms.Button
+$script:bdtStore.Text="Ver en la tienda de Steam"
+$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+570),452)
+$script:bdtStore.Size=New-Object System.Drawing.Size(280,50)
+$script:bdtStore.BackColor=$script:CardBG;$script:bdtStore.ForeColor=$script:White
+$script:bdtStore.FlatStyle="Flat";$script:bdtStore.FlatAppearance.BorderColor=[System.Drawing.Color]::FromArgb(60,70,90)
+$script:bdtStore.Font=$script:FntCard;$script:bdtStore.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:bdtStore.Add_Click({ param($s) try { Start-Process $s.Tag } catch {} })
+$script:bdtp.Controls.Add($script:bdtStore)
+$script:bdtStatus=New-Object System.Windows.Forms.Label
+$script:bdtStatus.ForeColor=[System.Drawing.Color]::FromArgb(140,150,165);$script:bdtStatus.BackColor=$BG
+$script:bdtStatus.Font=$script:FntSub
+$script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,508);$script:bdtStatus.Size=New-Object System.Drawing.Size(600,24)
+$script:bdtp.Controls.Add($script:bdtStatus)
 $form.Controls.Add($script:bdtp)
 $script:cdp=New-BufferedPanel
 $script:cdp.Location=New-Object System.Drawing.Point(0,$CY)
