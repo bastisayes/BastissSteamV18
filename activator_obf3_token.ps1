@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.85"
+$script:version = "V1.86"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -7145,7 +7145,8 @@ function Start-BiblioRepairAsync([string]$appid) {
                 try{$values=@($job.ps.EndInvoke($job.h));if($values.Count -gt 0){$result=$values[$values.Count-1]}}catch{$workerError=$_.Exception.Message}
                 try{$job.ps.Dispose()}catch{}
                 $script:bibRepairJob=$null
-                $script:bdtRepBusy=$false
+$script:bdtRepBusy=$false
+$script:bdtInstBusy=$false
                 $script:bdtRep.Enabled=$true
                 $script:bdtRep.Tag.Text='REPARAR JUEGO'
                 $script:bdtRep.Invalidate()
@@ -7447,7 +7448,16 @@ $script:bdtp.Controls.Add($script:bdtPlay)
 $script:bdtInst=New-BdtBtn ($PAD+260) 452 240 50 $script:CardBG $script:CardHover $script:White $script:Cyan (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
 $script:bdtInst.Tag.Text="INSTALAR"
 $script:bdtInstUrl=""
-$script:bdtInst.Add_Click({ try { if($script:bdtInstUrl){ Start-Process $script:bdtInstUrl } } catch {} })
+$script:bdtInst.Add_Click({ try {
+    if($script:bdtInstBusy){return}; $a=$script:bdtAid; if(-not $a){return}
+    if(Test-BiblioLua $a){ try{ Start-Process "steam://install/$a" }catch{}; return }
+    $script:bdtInstBusy=$true
+    $script:bdtStatus.Text="Activando el juego antes de instalar..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+    $rr=Repair-BiblioGame $a
+    $script:bdtInstBusy=$false
+    if($rr.ok){ $script:bdtStatus.Text="Activado, abriendo instalacion..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); try{ Start-Process "steam://install/$a" }catch{} }
+    else { $script:bdtStatus.Text="No se pudo activar: "+$rr.msg; [System.Windows.Forms.MessageBox]::Show(("Primero hay que activar el juego y fallo: "+$rr.msg),"Instalar","OK","Warning") }
+} catch { try{$script:bdtInstBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Instalar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtInst)
 $script:bdtRep=New-BdtBtn ($PAD+520) 452 230 50 $script:CardBG $script:CardHover $script:White $script:Cyan $script:FntCard
 $script:bdtRep.Tag.Text="REPARAR JUEGO"
