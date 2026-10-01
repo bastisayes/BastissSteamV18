@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.06"
+$script:version = "V2.07"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6634,17 +6634,17 @@ function Start-BiblioCoverBatch {
                         try {
                             Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
                             $srcImg = [System.Drawing.Image]::FromFile($dest)
-                            $bmp = New-Object System.Drawing.Bitmap(150,214)
+                            $bmp = New-Object System.Drawing.Bitmap(300,428)
                             $gfx = [System.Drawing.Graphics]::FromImage($bmp)
                             $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
                             $gfx.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
                             $gfx.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
                             $gfx.Clear([System.Drawing.Color]::Black)
-                            $scale = [Math]::Min((150.0 / $srcImg.Width),(214.0 / $srcImg.Height))
+                            $scale = [Math]::Min((300.0 / $srcImg.Width),(428.0 / $srcImg.Height))
                             $drawWidth = [int][Math]::Round($srcImg.Width * $scale)
                             $drawHeight = [int][Math]::Round($srcImg.Height * $scale)
-                            $drawX = [int][Math]::Floor((150 - $drawWidth) / 2.0)
-                            $drawY = [int][Math]::Floor((214 - $drawHeight) / 2.0)
+                            $drawX = [int][Math]::Floor((300 - $drawWidth) / 2.0)
+                            $drawY = [int][Math]::Floor((300 - $drawHeight) / 2.0)
                             $gfx.DrawImage($srcImg, (New-Object System.Drawing.Rectangle($drawX,$drawY,$drawWidth,$drawHeight)))
                             $thumbTmp = $thumb + '.part'
                             Remove-Item -LiteralPath $thumbTmp -Force -ErrorAction SilentlyContinue
@@ -6666,6 +6666,7 @@ function Start-BiblioCovers($games) {
     try {
         $cd = Join-Path $env:TEMP 'bsmap_covers'
         if (-not (Test-Path -LiteralPath $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
+        try { $vmark=Join-Path $cd 'thumbv2.done'; if(-not (Test-Path -LiteralPath $vmark)){ Get-ChildItem -LiteralPath $cd -Filter 'thumb_*.jpg' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Set-Content -LiteralPath $vmark '2' -Encoding ASCII -ErrorAction SilentlyContinue } } catch {}
         Update-BiblioCoverCache
         if (-not $script:bibCoverQueue) { $script:bibCoverQueue = New-Object System.Collections.ArrayList }
         if (-not $script:bibCoverQueued) { $script:bibCoverQueued = @{} }
@@ -7307,6 +7308,15 @@ function Show-Biblio {
             try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $r=999999; try{ if($topRank.ContainsKey([string]$_.appid)){ $r=[int]$topRank[[string]$_.appid] } }catch{}; $r }}, @{Expression={ $s=0; if(-not $script:bibCoverCache.ContainsKey([string]$_.appid)){$s+=8}; if($_.name -like 'Juego *'){$s+=4}; if(-not $instIds.ContainsKey([string]$_.appid)){$s+=2}; $s }}, @{Expression={$_.name}}) } catch {}
             $script:bibSortedCacheKey=$sortKey
             $script:bibSortedGamesCache=@($script:bibGames)
+            try {
+                $P=[Math]::Max(1,[int][Math]::Ceiling($script:bibGames.Count/96.0))
+                if($P -gt 1){
+                    $dl=@()
+                    for($pp=0;$pp -lt $P;$pp++){ for($kk=$pp;$kk -lt $script:bibGames.Count;$kk+=$P){ $dl+=$script:bibGames[$kk] } }
+                    $script:bibGames=$dl
+                    $script:bibSortedGamesCache=@($dl)
+                }
+            } catch {}
         }
         $script:bibFilterKey = $null
         $script:bibPage = 0
@@ -7798,10 +7808,10 @@ function Start-BiblioDetailJobs([string]$appid) {
         $script:bibDetailJobs = @()
         if (-not $script:bibDetailPool) { $script:bibDetailPool=[RunspaceFactory]::CreateRunspacePool(1,2); $script:bibDetailPool.Open() }
         $coverDir = Join-Path $env:TEMP 'bsmap_covers'
-        $headerPath = Join-Path $coverDir ($appid+'_head.jpg')
+        $headerPath = Join-Path $coverDir ($appid+'_hero.jpg')
         if (-not (Test-Path -LiteralPath $headerPath)) {
             $psH=[PowerShell]::Create();$psH.RunspacePool=$script:bibDetailPool
-            [void]$psH.AddScript({ param($id,$dir,$path); $r=@{kind='header';appid=$id;ok=$false;path=$path}; try { if(-not(Test-Path -LiteralPath $dir)){New-Item -ItemType Directory -Path $dir -Force|Out-Null}; Invoke-WebRequest -Uri ('https://cdn.cloudflare.steamstatic.com/steam/apps/'+$id+'/header.jpg') -OutFile ($path+'.part') -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop; if((Test-Path -LiteralPath ($path+'.part')) -and (Get-Item -LiteralPath ($path+'.part')).Length -gt 1000){Move-Item -LiteralPath ($path+'.part') -Destination $path -Force;$r.ok=$true} } catch { try{Remove-Item -LiteralPath ($path+'.part') -Force -ErrorAction SilentlyContinue}catch{} }; return $r }).AddArgument($appid).AddArgument($coverDir).AddArgument($headerPath)
+            [void]$psH.AddScript({ param($id,$dir,$path); $r=@{kind='header';appid=$id;ok=$false;path=$path}; try { if(-not(Test-Path -LiteralPath $dir)){New-Item -ItemType Directory -Path $dir -Force|Out-Null}; Invoke-WebRequest -Uri ('https://cdn.cloudflare.steamstatic.com/steam/apps/'+$id+'/hero_capsule.jpg') -OutFile ($path+'.part') -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop; if((Test-Path -LiteralPath ($path+'.part')) -and (Get-Item -LiteralPath ($path+'.part')).Length -gt 1000){Move-Item -LiteralPath ($path+'.part') -Destination $path -Force;$r.ok=$true} } catch { try{Remove-Item -LiteralPath ($path+'.part') -Force -ErrorAction SilentlyContinue}catch{} }; return $r }).AddArgument($appid).AddArgument($coverDir).AddArgument($headerPath)
             $script:bibDetailJobs += @{kind='header';appid=$appid;ps=$psH;h=$psH.BeginInvoke()}
         }
         $apiCache = Join-Path $env:TEMP ('bsmap_biblio_detail_'+$appid+'.json')
@@ -7870,7 +7880,7 @@ function Show-BiblioDetail($g) {
     $script:bdtPlay.Tag.Text='JUGAR';$script:bdtPlayUrl='steam://rungameid/'+$aid;$script:bdtPlay.Invalidate()
     $script:bdtInstUrl='steam://install/'+$aid
     $script:bdtStoreUrl='https://store.steampowered.com/app/'+$aid
-    $headerPath=Join-Path (Join-Path $env:TEMP 'bsmap_covers') ($aid+'_head.jpg')
+    $headerPath=Join-Path (Join-Path $env:TEMP 'bsmap_covers') ($aid+'_hero.jpg')
     if(Test-Path -LiteralPath $headerPath){Set-BiblioDetailCover $headerPath}else{$cp=Get-BiblioCoverPath $aid;if($cp){Set-BiblioDetailCover $cp}}
     if($script:bdtCapPlaceholder){$script:bdtCapPlaceholder.Tag.GameName=$nm;$script:bdtCapPlaceholder.Visible=(-not $script:bdtCap.Image);$script:bdtCapPlaceholder.Invalidate()}
     try {
