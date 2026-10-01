@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.90"
+$script:version = "V1.91"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6422,7 +6422,7 @@ function Get-BiblioGames {
             catch { [void]$sigBuilder.Append($dirPath).Append('|missing;') }
         }
     }
-    $cacheKey = $sigBuilder.ToString()
+    $cacheKey = $sigBuilder.ToString() + '|v=' + $script:version
     if ($script:bibGamesCacheKey -eq $cacheKey -and $null -ne $script:bibGamesCache) { return ,$script:bibGamesCache }
     $diskCache = Join-Path $env:TEMP 'bsmap_biblio_games.json'
     try {
