@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.11"
+$script:version = "V2.12"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6634,17 +6634,19 @@ function Start-BiblioCoverBatch {
                         try {
                             Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
                             $srcImg = [System.Drawing.Image]::FromFile($dest)
-                            $bmp = New-Object System.Drawing.Bitmap(300,428)
+                            $bmp = New-Object System.Drawing.Bitmap(300,450)
                             $gfx = [System.Drawing.Graphics]::FromImage($bmp)
                             $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
                             $gfx.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
                             $gfx.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
                             $gfx.Clear([System.Drawing.Color]::Black)
-                            $scale = [Math]::Min((300.0 / $srcImg.Width),(428.0 / $srcImg.Height))
+                            $sr=[Math]::Round($srcImg.Width/[double]$srcImg.Height,3)
+                            if([Math]::Abs($sr-0.667) -lt 0.02){ $scale=300.0/$srcImg.Width }
+                            else{ $scale=[Math]::Max((300.0 / $srcImg.Width),(450.0 / $srcImg.Height)) }
                             $drawWidth = [int][Math]::Round($srcImg.Width * $scale)
                             $drawHeight = [int][Math]::Round($srcImg.Height * $scale)
                             $drawX = [int][Math]::Floor((300 - $drawWidth) / 2.0)
-                            $drawY = [int][Math]::Floor((300 - $drawHeight) / 2.0)
+                            $drawY = [int][Math]::Floor((450 - $drawHeight) / 2.0)
                             $gfx.DrawImage($srcImg, (New-Object System.Drawing.Rectangle($drawX,$drawY,$drawWidth,$drawHeight)))
                             $thumbTmp = $thumb + '.part'
                             Remove-Item -LiteralPath $thumbTmp -Force -ErrorAction SilentlyContinue
@@ -6666,7 +6668,7 @@ function Start-BiblioCovers($games) {
     try {
         $cd = Join-Path $env:TEMP 'bsmap_covers'
         if (-not (Test-Path -LiteralPath $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
-        try { $vmark=Join-Path $cd 'thumbv2.done'; if(-not (Test-Path -LiteralPath $vmark)){ Get-ChildItem -LiteralPath $cd -Filter 'thumb_*.jpg' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Set-Content -LiteralPath $vmark '2' -Encoding ASCII -ErrorAction SilentlyContinue } } catch {}
+        try { $vmark=Join-Path $cd 'thumbv3.done'; if(-not (Test-Path -LiteralPath $vmark)){ Get-ChildItem -LiteralPath $cd -Filter 'thumb_*.jpg' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Set-Content -LiteralPath $vmark '3' -Encoding ASCII -ErrorAction SilentlyContinue } } catch {}
         Update-BiblioCoverCache
         if (-not $script:bibCoverQueue) { $script:bibCoverQueue = New-Object System.Collections.ArrayList }
         if (-not $script:bibCoverQueued) { $script:bibCoverQueued = @{} }
@@ -6877,9 +6879,9 @@ function Get-BiblioGridMetrics {
     $width=[Math]::Max(180,[int]$script:bibViewport.ClientSize.Width)
     $inner=[Math]::Max(160,$width-24)
     if($script:bibView -eq 'compact'){
-        $cellWidth=98
+        $cellWidth=96
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
-        $tileWidth=96;$coverWidth=96;$coverHeight=144;$tileHeight=144;$rowHeight=148
+        $tileWidth=96;$coverWidth=96;$coverHeight=144;$tileHeight=144;$rowHeight=144
     } else {
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
         $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
@@ -7497,13 +7499,15 @@ function Reset-BiblioBadCover([string]$appid,[object]$box) {
         if($srcOk){
             try{
                 $si=[System.Drawing.Image]::FromFile($src)
-                $bmp=New-Object System.Drawing.Bitmap(300,428)
+                $bmp=New-Object System.Drawing.Bitmap(300,450)
                 $gfx=[System.Drawing.Graphics]::FromImage($bmp)
                 $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
                 $gfx.Clear([System.Drawing.Color]::Black)
-                $sc=[Math]::Min((300.0/$si.Width),(428.0/$si.Height))
+                $sr2=[Math]::Round($si.Width/[double]$si.Height,3)
+                if([Math]::Abs($sr2-0.667) -lt 0.02){ $sc=300.0/$si.Width }
+                else{ $sc=[Math]::Max((300.0/$si.Width),(450.0/$si.Height)) }
                 $dw=[int][Math]::Round($si.Width*$sc);$dh=[int][Math]::Round($si.Height*$sc)
-                $dx=[int][Math]::Floor((300-$dw)/2.0);$dy=[int][Math]::Floor((428-$dh)/2.0)
+                $dx=[int][Math]::Floor((300-$dw)/2.0);$dy=[int][Math]::Floor((450-$dh)/2.0)
                 $gfx.DrawImage($si,(New-Object System.Drawing.Rectangle($dx,$dy,$dw,$dh)))
                 $gfx.Dispose()
                 $si.Dispose()
