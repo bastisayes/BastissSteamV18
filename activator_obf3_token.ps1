@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.05"
+$script:version = "V2.06"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2707,6 +2707,12 @@ function Gl9Dz {
     return $prev[$m]
 }
 
+$script:bibEditionWords=@('definitive edition','definitive','remastered','remaster','remake','enhanced edition','enhanced','anniversary edition','anniversary','complete edition','complete','deluxe edition','deluxe','ultimate edition','ultimate','game of the year','goty','collection','directors cut','directors','extended edition','extended','gold edition','gold','premium edition','premium','standard edition','standard','classic','edition')
+function Remove-BibEdition([string]$s) {
+    $t=' '+$s+' '
+    foreach($w in $script:bibEditionWords){ try{ $t=$t -replace ('\s'+[regex]::Escape($w)+'\s'),' ' }catch{} }
+    return $t.Trim()
+}
 function Ff2Xa {
     param([string]$gameFolderName, [hashtable]$fixes)
     if ($fixes.ContainsKey($gameFolderName)) { return $gameFolderName, $fixes[$gameFolderName] }
@@ -2734,6 +2740,26 @@ function Ff2Xa {
             elseif ($shorter -notmatch '\s' -and $longer.EndsWith($shorter)) { $s = $maxLen; if ($s -gt $bestScore) { $bestScore = $s; $bestFix = $f; $bestUrl = $fixes[$f] } }
         }
     }
+    if(-not $bestFix){
+        $gBase=Nn1Yw (Remove-BibEdition (([string]$gameFolderName).ToLower()))
+        if($gBase){
+            foreach($f in $fixes.Keys){
+                $fBase=Nn1Yw (Remove-BibEdition (([string]$f).ToLower()))
+                if($fBase -and $fBase -eq $gBase){ return $f, $fixes[$f] }
+            }
+        }
+    }
+    if(-not $bestFix){
+        $bestD=999
+        foreach($f in $fixes.Keys){
+            $ff2=Nn1Yw (Ec8Tu $f)
+            if(-not $ff2){continue}
+            $mx=[Math]::Max($ff2.Length,$gfnExpanded.Length)
+            if($mx -lt 6){continue}
+            $d=Gl9Dz $ff2 $gfnExpanded
+            if($d -le [Math]::Floor($mx*0.2) -and $d -lt $bestD){ $bestD=$d; $bestFix=$f; $bestUrl=$fixes[$f] }
+        }
+    }
     return $bestFix, $bestUrl
 }
 
@@ -2753,7 +2779,7 @@ function Download-FixArchive {
     $ProgressPreference='SilentlyContinue'
     for($attempt=1;$attempt -le 3;$attempt++){
         try {
-            Set-BibRepairProgress "Descargando reparacion..."
+            Set-BibRepairProgress "Buscando reparacion..."
             Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
             $requestUrl=$url
             if($attempt -eq 2 -and $requestUrl -notmatch '[?]'){ $requestUrl+='?download=1' }
@@ -6984,9 +7010,16 @@ function New-BiblioTile($game) {
     $tile=New-BufferedPanel
     if($script:bibView -eq 'compact'){ $tile.BackColor=$BG } else { $tile.BackColor=$script:CardBG }
     $tile.Tag=@{Hover=$false;Game=$game}
-    $tile.Add_Paint({param($s,$e);$e.Graphics.SmoothingMode='AntiAlias';if($script:bibView -eq 'compact' -and -not $s.Tag.Hover){return};$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR;$br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}));$pen=New-Object System.Drawing.Pen($(if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}),$(if($s.Tag.Hover){1.6}else{1}));$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p);$br.Dispose();$pen.Dispose();$p.Dispose()})
-    $tile.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
-    $tile.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
+    $tile.Add_Paint({param($s,$e)
+        $e.Graphics.SmoothingMode='AntiAlias'
+        if($script:bibView -eq 'compact' -and -not $s.Tag.Hover){return}
+        $p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR
+        $br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}))
+        $pen=New-Object System.Drawing.Pen($(if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}),$(if($s.Tag.Hover){1.6}else{1}))
+        try{$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p)}finally{$br.Dispose();$pen.Dispose();$p.Dispose()}
+    })
+    $tile.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate();if($s.Controls.Count -gt 0){$s.Controls[0].Invalidate()}})
+    $tile.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate();if($s.Controls.Count -gt 0){$s.Controls[0].Invalidate()}})
     $pic=New-Object System.Windows.Forms.PictureBox
     if($script:bibView -eq 'compact'){
         $pic.Location=New-Object System.Drawing.Point(0,0)
@@ -7003,8 +7036,19 @@ function New-BiblioTile($game) {
     $cover=Get-BiblioCoverPath ([string]$game.appid)
     if($cover -and [System.IO.Path]::GetFileNameWithoutExtension($cover) -like 'thumb_*'){try{$img=[System.Drawing.Image]::FromFile($cover);if($script:bibView -eq 'compact'){ $pic.Image=New-BiblioBakedImage $img ([string]$game.name) } else { $pic.Image=New-Object System.Drawing.Bitmap($img) };$img.Dispose();$pic.AccessibleDescription=$cover}catch{}}
     if(-not $script:bibNameOverlayFont){ $script:bibNameOverlayFont=New-Object System.Drawing.Font('Bahnschrift',10,[System.Drawing.FontStyle]::Bold) }
-    $pic.Add_Paint({param($s,$e);
-        if(-not $s.Image){Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.name) $true;return}
+    $pic.Add_MouseEnter({param($s);if($s.Parent){$s.Parent.Tag.Hover=$true;$s.Parent.Invalidate()};$s.Invalidate()})
+    $pic.Add_MouseLeave({param($s);if($s.Parent){$s.Parent.Tag.Hover=$false;$s.Parent.Invalidate()};$s.Invalidate()})
+    $pic.Add_Paint({param($s,$e)
+        $g=$e.Graphics;$g.SmoothingMode='AntiAlias'
+        if(-not $s.Image){Draw-BiblioPlaceholder $g $s.Width $s.Height ([string]$s.Tag.name) $true}
+        elseif($s.Parent -and $s.Parent.Tag.Hover){
+            $g.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBilinear
+            $g.DrawImage($s.Image,(New-Object System.Drawing.Rectangle(-4,-6,($s.Width+8),($s.Height+12))))
+        }
+        $frame=New-RR 1 1 ($s.Width-3) ($s.Height-3) 7
+        $frameColor=if($s.Parent -and $s.Parent.Tag.Hover){$script:Cyan}else{$script:CardBorder}
+        $framePen=New-Object System.Drawing.Pen($frameColor,$(if($s.Parent -and $s.Parent.Tag.Hover){2}else{1}))
+        try{$g.DrawPath($framePen,$frame)}finally{$framePen.Dispose();$frame.Dispose()}
     })
     $pic.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
     $pic.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
@@ -7016,6 +7060,8 @@ function New-BiblioTile($game) {
     $label.TextAlign=[System.Drawing.ContentAlignment]::MiddleCenter;$label.AutoEllipsis=$true
     $label.Text=[string]$game.name;$label.Cursor=[System.Windows.Forms.Cursors]::Hand;$label.Tag=$game
     $label.Visible=($script:bibView -eq 'grande')
+    $label.Add_MouseEnter({param($s);if($s.Parent){$s.Parent.Tag.Hover=$true;$s.Parent.Invalidate();$s.Parent.Controls[0].Invalidate()}})
+    $label.Add_MouseLeave({param($s);if($s.Parent){$s.Parent.Tag.Hover=$false;$s.Parent.Invalidate();$s.Parent.Controls[0].Invalidate()}})
     $label.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
     $label.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
     $tile.Controls.Add($label)
