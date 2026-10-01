@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.76"
+$script:version = "V1.77"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4188,6 +4188,7 @@ function Refresh-AllText{
     $script:c3.Tag.Title=T "idioma";$script:c3.Tag.Sub=T "idiomaSub";$script:c3.Invalidate()
     $script:c4.Tag.Title=T "desinstalar";$script:c4.Tag.Sub=T (S("ZGVzaW5zdGFsYXJTdWI="));$script:c4.Invalidate()
     $script:cWeb.Tag.Title=T "web";$script:cWeb.Tag.Sub=T "webSub";$script:cWeb.Invalidate()
+    $script:cTikTok.Tag.Title=T "tiktok";$script:cTikTok.Tag.Sub=T "tiktokSub";$script:cTikTok.Invalidate()
     $script:c5.Tag.Title=T "discord";$script:c5.Tag.Sub=T (S("ZGlzY29yZFN1Yg=="));$script:c5.Invalidate()
     $script:salBtn.Invalidate()
     $script:rTit.Text=T "canjear";$script:rSubL.Text=T (S("Y2FuamVhclN1Yg=="))
@@ -4261,8 +4262,10 @@ $script:mp.Controls.Add($script:c1)
 
 $script:cWeb=New-Card -X $PAD -Y $TIK_Y -W $HW -H $FCH -Title (T "web") -Sub (T "webSub") -Icon "webpage" -Click {Start-Process (D "aHR0cHM6Ly9iYXN0aXNzc3RlYW0ubmV0bGlmeS5hcHA=")}
 $script:mp.Controls.Add($script:cWeb)
-$script:cBiblio=New-Card -X ($PAD+$HW+$GAP) -Y $TIK_Y -W $HW -H $FCH -Title "Biblioteca" -Sub "Juegos con portada" -Icon "lightning" -Click { Show-Biblio }
+$script:cBiblio=New-Card -X $PAD -Y $WEB_Y -W $CW -H $FCH -Title "Biblioteca" -Sub "Juegos con portada" -Icon "lightning" -Click { Show-Biblio }
 $script:mp.Controls.Add($script:cBiblio)
+$script:cTikTok=New-Card -X ($PAD+$HW+$GAP) -Y $TIK_Y -W $HW -H $FCH -Title (T "tiktok") -Sub (T "tiktokSub") -Icon "tiktok" -Click {Start-Process (D "aHR0cHM6Ly93d3cudGlrdG9rLmNvbS9AYmFzdGlzc3N0ZWFtP2xhbmc9ZXM=")}
+$script:mp.Controls.Add($script:cTikTok)
 
 
 
@@ -6345,7 +6348,7 @@ function Refresh-BiblioGrid([string]$filter) {
             $pb.Tag = $g
             $cp = Get-BiblioCoverPath $g.appid
             if ($cp) { try { $pb.Image = [System.Drawing.Image]::FromFile($cp) } catch {} }
-            $pb.Add_Click({ param($s) try { $t=$s.Tag; [System.Windows.Forms.MessageBox]::Show(($t.name + "`nAppID: " + $t.appid),"Juego","OK","Information") } catch {} })
+            $pb.Add_Click({ param($s) try { Show-BiblioDetail $s.Tag } catch {} })
             $pn.Controls.Add($pb)
             $lb = New-Object System.Windows.Forms.Label
             $lb.Location = New-Object System.Drawing.Point(0,257)
@@ -6362,12 +6365,13 @@ function Refresh-BiblioGrid([string]$filter) {
         $fl.ResumeLayout()
     } catch {}
 }
-function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
-function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
+function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};if($script:bdtp){$script:bdtp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
+function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};if($script:bdtp){$script:bdtp.Visible=$false};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
 function Show-Biblio {
     Switch-ToBiblio
     try {
         $script:bibGames = Get-BiblioGames
+        try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $pp=Get-BiblioCoverPath $_.appid; if($pp){0}else{1} }}, @{Expression={ if($_.name -like 'Juego *'){1}else{0} }}, @{Expression={$_.name}}) } catch {}
         $script:bibSearch.Text = ""
         Refresh-BiblioGrid ""
         Start-BiblioCovers $script:bibGames
@@ -6431,6 +6435,115 @@ $script:bibJobs = @()
 $script:bibBoxes = @{}
 $script:bibGames = @()
 $form.Controls.Add($script:bibp)
+function Test-BiblioInstalled([string]$appid) {
+    try { foreach ($lib in @(Ss3Jd)) { $mf = Join-Path $lib "steamapps\appmanifest_$appid.acf"; if (Test-Path -LiteralPath $mf) { return $true } } } catch {}
+    return $false
+}
+function Test-BiblioLua([string]$appid) {
+    try { foreach ($lib in @(Ss3Jd)) { foreach ($sub in @('config\stplug-in','config\lua')) { if (Test-Path -LiteralPath (Join-Path (Join-Path $lib $sub) ($appid + ".lua"))) { return $true } } } } catch {}
+    return $false
+}
+function Show-BiblioDetail($g) {
+    if (-not $g) { return }
+    try { $script:bibTimer.Stop() } catch {}
+    $script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false
+    $aid=[string]$g.appid; $nm=[string]$g.name
+    $script:bdtAid=$aid
+    $script:bdtHero.Image=$null
+    $script:bdtTitle.Text=$nm
+    $script:bdtAppid.Text=("AppID: " + $aid)
+    $inst=Test-BiblioInstalled $aid; $lua=Test-BiblioLua $aid
+    $st="No instalado"; if($inst){$st="Instalado"}; if($lua){$st+="  |  Activado"}else{$st+="  |  Sin activar"}
+    $script:bdtStatus.Text=$st
+    if($inst){$script:bdtPlay.Text="JUGAR";$script:bdtPlay.Tag="steam://rungameid/$aid"}else{$script:bdtPlay.Text="INSTALAR";$script:bdtPlay.Tag="steam://install/$aid"}
+    $script:bdtDesc.Text="Cargando informacion..."
+    $hp2=Join-Path $env:TEMP 'bsmap_covers'; $hfp=Join-Path $hp2 ($aid+"_hero.jpg")
+    if(Test-Path -LiteralPath $hfp){ try{$script:bdtHero.Image=[System.Drawing.Image]::FromFile($hfp)}catch{} }
+    else { try { (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudflare.steamstatic.com/steam/apps/$aid/hero_capsule.jpg",$hfp); $script:bdtHero.Image=[System.Drawing.Image]::FromFile($hfp) } catch { try{Remove-Item $hfp -Force -ErrorAction SilentlyContinue}catch{} } }
+    $desc="Sin descripcion disponible."; $gen=""
+    try {
+        $j=Invoke-RestMethod -Uri ("https://store.steampowered.com/api/appdetails?appids=$aid&l=spanish") -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+        $d=$j.PSObject.Properties[$aid].Value; if($d -and $d.success -and $d.data){
+            if($d.data.short_description){$desc=[System.Net.WebUtility]::HtmlDecode(($d.data.short_description -replace '<[^>]+>','')).Trim()}
+            try{$gen=((@($d.data.genres) | ForEach-Object{$_.description}) -join ', ')}catch{}
+        }
+    } catch {}
+    $script:bdtDesc.Text=$desc
+    if($gen){$script:bdtAppid.Text=("AppID: "+$aid+"   |   "+$gen)}
+    try {
+        $cw=$form.ClientSize.Width
+        $hw=[int]([Math]::Min(560,$cw*0.38)); if($hw -lt 300){$hw=300}
+        $script:bdtHero.Location=New-Object System.Drawing.Point($PAD,52);$script:bdtHero.Size=New-Object System.Drawing.Size($hw,300)
+        $script:bdtTitle.Location=New-Object System.Drawing.Point(($PAD+$hw+$PAD),60);$script:bdtTitle.Size=New-Object System.Drawing.Size(($cw-($PAD+$hw+$PAD)-$PAD),60)
+        $script:bdtAppid.Location=New-Object System.Drawing.Point(($PAD+$hw+$PAD),124);$script:bdtAppid.Size=New-Object System.Drawing.Size(($cw-($PAD+$hw+$PAD)-$PAD),24)
+        $script:bdtStatus.Location=New-Object System.Drawing.Point(($PAD+$hw+$PAD),150);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-($PAD+$hw+$PAD)-$PAD),24)
+        $script:bdtDesc.Location=New-Object System.Drawing.Point($PAD,362);$script:bdtDesc.Size=New-Object System.Drawing.Size(($cw-2*$PAD),130)
+        $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,502);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+240),502)
+    } catch {}
+    $script:bdtp.Visible=$true
+}
+function Switch-BackToBiblio{try{$script:bdtp.Visible=$false}catch{};$script:bibp.Visible=$true;try{if($script:bibJobs -and $script:bibJobs.Count -gt 0){$script:bibTimer.Start()}}catch{}}
+$script:bdtp=New-BufferedPanel
+$script:bdtp.Location=New-Object System.Drawing.Point(0,$CY)
+$script:bdtp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bdtp.BackColor=$BG;$script:bdtp.Visible=$false
+$script:bdtp.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtBack=New-Object System.Windows.Forms.Button
+$script:bdtBack.Text="Volver"
+$script:bdtBack.Location=New-Object System.Drawing.Point($PAD,10)
+$script:bdtBack.Size=New-Object System.Drawing.Size(100,32)
+$script:bdtBack.BackColor=$script:CardBG;$script:bdtBack.ForeColor=$script:White
+$script:bdtBack.FlatStyle="Flat";$script:bdtBack.FlatAppearance.BorderColor=$script:Cyan
+$script:bdtBack.Font=$script:FntCard;$script:bdtBack.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:bdtBack.Add_Click({Switch-BackToBiblio})
+$script:bdtp.Controls.Add($script:bdtBack)
+$script:bdtHero=New-Object System.Windows.Forms.PictureBox
+$script:bdtHero.Location=New-Object System.Drawing.Point($PAD,52)
+$script:bdtHero.Size=New-Object System.Drawing.Size(420,300)
+$script:bdtHero.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
+$script:bdtHero.BackColor=[System.Drawing.Color]::FromArgb(10,14,24)
+$script:bdtp.Controls.Add($script:bdtHero)
+$script:bdtTitle=New-Object System.Windows.Forms.Label
+$script:bdtTitle.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",20,[System.Drawing.FontStyle]::Bold)
+$script:bdtTitle.ForeColor=$script:White;$script:bdtTitle.BackColor=$BG
+$script:bdtTitle.Location=New-Object System.Drawing.Point(450,60);$script:bdtTitle.Size=New-Object System.Drawing.Size(400,60)
+$script:bdtTitle.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtTitle)
+$script:bdtAppid=New-Object System.Windows.Forms.Label
+$script:bdtAppid.ForeColor=$script:Cyan;$script:bdtAppid.BackColor=$BG
+$script:bdtAppid.Font=$script:FntSub
+$script:bdtAppid.Location=New-Object System.Drawing.Point(450,124);$script:bdtAppid.Size=New-Object System.Drawing.Size(400,24)
+$script:bdtAppid.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtAppid)
+$script:bdtStatus=New-Object System.Windows.Forms.Label
+$script:bdtStatus.ForeColor=[System.Drawing.Color]::FromArgb(170,170,170);$script:bdtStatus.BackColor=$BG
+$script:bdtStatus.Font=$script:FntSub
+$script:bdtStatus.Location=New-Object System.Drawing.Point(450,150);$script:bdtStatus.Size=New-Object System.Drawing.Size(400,24)
+$script:bdtStatus.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtStatus)
+$script:bdtDesc=New-Object System.Windows.Forms.TextBox
+$script:bdtDesc.Multiline=$true;$script:bdtDesc.ReadOnly=$true;$script:bdtDesc.ScrollBars="Vertical";$script:bdtDesc.BorderStyle="None"
+$script:bdtDesc.BackColor=$BG;$script:bdtDesc.ForeColor=[System.Drawing.Color]::FromArgb(200,200,200)
+$script:bdtDesc.Font=$script:FntSub
+$script:bdtDesc.Location=New-Object System.Drawing.Point($PAD,362);$script:bdtDesc.Size=New-Object System.Drawing.Size(($FW-2*$PAD),130)
+$script:bdtDesc.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtDesc)
+$script:bdtPlay=New-Object System.Windows.Forms.Button
+$script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,502)
+$script:bdtPlay.Size=New-Object System.Drawing.Size(220,44)
+$script:bdtPlay.BackColor=$script:Cyan;$script:bdtPlay.ForeColor=[System.Drawing.Color]::Black
+$script:bdtPlay.FlatStyle="Flat";$script:bdtPlay.Font=$script:FntCard;$script:bdtPlay.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:bdtPlay.Add_Click({ param($s) try { Start-Process $s.Tag } catch {} })
+$script:bdtp.Controls.Add($script:bdtPlay)
+$script:bdtRep=New-Object System.Windows.Forms.Button
+$script:bdtRep.Text="REPARAR JUEGO"
+$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+240),502)
+$script:bdtRep.Size=New-Object System.Drawing.Size(220,44)
+$script:bdtRep.BackColor=$script:CardBG;$script:bdtRep.ForeColor=$script:White
+$script:bdtRep.FlatStyle="Flat";$script:bdtRep.FlatAppearance.BorderColor=$script:Cyan
+$script:bdtRep.Font=$script:FntCard;$script:bdtRep.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:bdtRep.Add_Click({ try { $a=$script:bdtAid; if(-not $a){return}; $script:bdtRep.Enabled=$false; $script:bdtStatus.Text="Reparando..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); $r=Repair-UnoApp $a; $script:bdtRep.Enabled=$true; if($r.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show("Juego reparado correctamente.","Reparar","OK","Information") } else { $script:bdtStatus.Text="Reparacion: "+$r.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$r.msg),"Reparar","OK","Warning") } } catch { try{$script:bdtRep.Enabled=$true}catch{} } })
+$script:bdtp.Controls.Add($script:bdtRep)
+$form.Controls.Add($script:bdtp)
 $script:cdp=New-BufferedPanel
 $script:cdp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:cdp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:cdp.BackColor=$BG;$script:cdp.Visible=$false
