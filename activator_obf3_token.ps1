@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.72"
+$script:version = "V1.75"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1475,7 +1475,7 @@ function Get-GameNameByAppId([string]$appid) {
     if (-not $script:GAME_NAME_BY_APPID) { Initialize-GameNameMap }
     $k = [string]$appid
     if ($k -and $script:GAME_NAME_BY_APPID.ContainsKey($k)) { return $script:GAME_NAME_BY_APPID[$k] }
-    return $k
+    return "Juego $k"
 }
 function Get-NameAliasTokens([string]$tok) {
     switch ($tok) {
@@ -3942,10 +3942,10 @@ try {
 
 
 
-$PAD=18;$FW=480;$CW=$FW-(2*$PAD);$GAP=10
+$PAD=18;$FW=960;$CW=$FW-(2*$PAD);$GAP=10
 $HW=[int](($CW-$GAP)/2);$CH=76;$FCH=68
 
-$HH=115;$CY=$HH
+$HH=230;$CY=$HH
 
 $R1Y=0;$R2Y=$CH+$GAP
 $WEB_Y=$R2Y+$CH+12;$DISC_Y=$WEB_Y+$FCH+$GAP;$TIK_Y=$DISC_Y+$FCH+$GAP
@@ -3959,11 +3959,12 @@ $form=New-Object System.Windows.Forms.Form
 $form.Text="BastissSteam activator"
 $form.ClientSize=New-Object System.Drawing.Size($FW,$FH)
 $form.StartPosition="CenterScreen";$form.BackColor=$BG
-$form.FormBorderStyle="FixedSingle";$form.MaximizeBox=$false
+$form.FormBorderStyle="Sizable";$form.MaximizeBox=$true
 $form.TopMost=$true
 $form.Add_Shown({ $this.Activate(); $this.BringToFront(); try { $this.TopMost=$false } catch {} })
 $form.Add_Shown({ try { [WinFg]::SetForegroundWindow($this.Handle) | Out-Null; [WinFg]::ShowWindow($this.Handle, 9) | Out-Null } catch {} })
 $form.Add_Shown({ try { Start-DeferredInit } catch {} })
+$form.Add_Resize({ try { $hp.Invalidate() } catch {} })
 
 
 $ib=New-Object System.Drawing.Bitmap(64,64)
@@ -3987,7 +3988,7 @@ $form.Add_HandleCreated({$v=[int]1;[DwmHelper]::DwmSetWindowAttribute($form.Hand
 
 $hp=New-BufferedPanel
 $hp.Location=New-Object System.Drawing.Point(0,0)
-$hp.Size=New-Object System.Drawing.Size($FW,$HH);$hp.BackColor=$BG
+$hp.Size=New-Object System.Drawing.Size($FW,$HH);$hp.BackColor=$BG;$hp.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $hp.Add_Paint({
     param($s,$e)
     $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
@@ -6331,11 +6332,12 @@ function Refresh-BiblioGrid([string]$filter) {
         foreach ($g in $games) {
             if ($f -and ($g.name.ToLower().IndexOf($f) -lt 0) -and ($g.appid.IndexOf($f) -lt 0)) { continue }
             $pn = New-Object System.Windows.Forms.Panel
-            $pn.Size = New-Object System.Drawing.Size(166,274)
-            $pn.BackColor = $script:BG
+            $pn.Size = New-Object System.Drawing.Size(200,330)
+            $pn.BackColor = $script:CardBG
+            $pn.Margin = New-Object System.Windows.Forms.Padding(10)
             $pb = New-Object System.Windows.Forms.PictureBox
             $pb.Location = New-Object System.Drawing.Point(8,0)
-            $pb.Size = New-Object System.Drawing.Size(150,225)
+            $pb.Size = New-Object System.Drawing.Size(184,276)
             $pb.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::StretchImage
             $pb.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)
             $pb.Cursor = [System.Windows.Forms.Cursors]::Hand
@@ -6345,9 +6347,9 @@ function Refresh-BiblioGrid([string]$filter) {
             $pb.Add_Click({ param($s) try { $t=$s.Tag; [System.Windows.Forms.MessageBox]::Show(($t.name + "`nAppID: " + $t.appid),"Juego","OK","Information") } catch {} })
             $pn.Controls.Add($pb)
             $lb = New-Object System.Windows.Forms.Label
-            $lb.Location = New-Object System.Drawing.Point(0,227)
-            $lb.Size = New-Object System.Drawing.Size(166,46)
-            $lb.ForeColor = [System.Drawing.Color]::FromArgb(170,170,170)
+            $lb.Location = New-Object System.Drawing.Point(0,278)
+            $lb.Size = New-Object System.Drawing.Size(200,50)
+            $lb.ForeColor = $script:White
             $lb.Font = $script:FntSub
             $lb.TextAlign = [System.Drawing.ContentAlignment]::TopCenter
             $lb.AutoEllipsis = $true
@@ -6373,7 +6375,7 @@ function Show-Biblio {
 }
 $script:bibp=New-BufferedPanel
 $script:bibp.Location=New-Object System.Drawing.Point(0,$CY)
-$script:bibp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bibp.BackColor=$BG;$script:bibp.Visible=$false
+$script:bibp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bibp.BackColor=$BG;$script:bibp.Visible=$false;$script:bibp.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bibBack=New-Object System.Windows.Forms.Button
 $script:bibBack.Text="Volver"
 $script:bibBack.Location=New-Object System.Drawing.Point($PAD,10)
@@ -6391,6 +6393,7 @@ $script:bibp.Controls.Add($script:bibTitle)
 $script:bibSearch=New-Object System.Windows.Forms.TextBox
 $script:bibSearch.Location=New-Object System.Drawing.Point($PAD,50)
 $script:bibSearch.Size=New-Object System.Drawing.Size(($FW-2*$PAD),24)
+$script:bibSearch.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bibSearch.BackColor=$script:InputBG;$script:bibSearch.ForeColor=$script:White
 $script:bibSearch.BorderStyle="FixedSingle"
 $script:bibSearch.Add_TextChanged({ Refresh-BiblioGrid $script:bibSearch.Text })
@@ -6399,6 +6402,8 @@ $script:bibFlow=New-Object System.Windows.Forms.FlowLayoutPanel
 $script:bibFlow.Location=New-Object System.Drawing.Point(0,82)
 $script:bibFlow.Size=New-Object System.Drawing.Size($FW,(($FH-$CY)-82))
 $script:bibFlow.BackColor=$BG;$script:bibFlow.AutoScroll=$true;$script:bibFlow.WrapContents=$true
+$script:bibFlow.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bibFlow.Padding=New-Object System.Windows.Forms.Padding(12)
 $script:bibFlow.FlowDirection=[System.Windows.Forms.FlowDirection]::LeftToRight
 $script:bibp.Controls.Add($script:bibFlow)
 $script:bibTimer=New-Object System.Windows.Forms.Timer
