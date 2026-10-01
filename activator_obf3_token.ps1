@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.09"
+$script:version = "V2.10"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6598,7 +6598,7 @@ function Start-BiblioCoverBatch {
                                 Invoke-WebRequest -Uri $coverUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 7 -ErrorAction Stop
                                 if ((Test-Path -LiteralPath $tmp) -and (Get-Item -LiteralPath $tmp).Length -gt 1000) {
                                     $checkImg = $null
-                                    try { $checkImg = [System.Drawing.Image]::FromFile($tmp); $sourceOk = $true } catch {} finally { if ($checkImg) { $checkImg.Dispose() } }
+                                    try { $checkImg = [System.Drawing.Image]::FromFile($tmp); $sourceOk = $true; try{ $cbw=$checkImg.Width;$cbh=$checkImg.Height; $cdk=0; for($cyy=$cbh-1;$cyy -ge [Math]::Max(0,$cbh-161);$cyy-=4){ $cmx=0;$cmn=9999; foreach($cxx in @(10,[int]($cbw/4),[int]($cbw/2),[int](3*$cbw/4),($cbw-10))){ $cpx=$checkImg.GetPixel($cxx,$cyy); $ss=($cpx.R+$cpx.G+$cpx.B); if($ss -gt $cmx){$cmx=$ss}; if($ss -lt $cmn){$cmn=$ss} }; if(($cmx -lt 45) -and (($cmx-$cmn) -lt 25)){ $cdk=($cbh-1-$cyy) } else { break } }; if($cdk -gt [Math]::Max(30,[int]($cbh*0.12))){ $sourceOk=$false } }catch{} } catch { $sourceOk=$false } finally { if ($checkImg) { $checkImg.Dispose() } }
                                     if ($sourceOk) { Move-Item -LiteralPath $tmp -Destination $dest -Force; break }
                                 }
                             } catch {}
@@ -6620,9 +6620,9 @@ function Start-BiblioCoverBatch {
                                     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
                                     Invoke-WebRequest -Uri $apiHeader -OutFile $tmp -UseBasicParsing -TimeoutSec 7 -ErrorAction Stop
                                     if ((Test-Path -LiteralPath $tmp) -and (Get-Item -LiteralPath $tmp).Length -gt 1000) {
-                                        $checkImg = $null
-                                        try { $checkImg = [System.Drawing.Image]::FromFile($tmp); $sourceOk = $true } catch {} finally { if ($checkImg) { $checkImg.Dispose() } }
-                                        if ($sourceOk) { Move-Item -LiteralPath $tmp -Destination $dest -Force }
+                                    $checkImg = $null
+                                    try { $checkImg = [System.Drawing.Image]::FromFile($tmp); $sourceOk = $true; try{ $cbw=$checkImg.Width;$cbh=$checkImg.Height; $cdk=0; for($cyy=$cbh-1;$cyy -ge [Math]::Max(0,$cbh-161);$cyy-=4){ $cmx=0;$cmn=9999; foreach($cxx in @(10,[int]($cbw/4),[int]($cbw/2),[int](3*$cbw/4),($cbw-10))){ $cpx=$checkImg.GetPixel($cxx,$cyy); $ss=($cpx.R+$cpx.G+$cpx.B); if($ss -gt $cmx){$cmx=$ss}; if($ss -lt $cmn){$cmn=$ss} }; if(($cmx -lt 45) -and (($cmx-$cmn) -lt 25)){ $cdk=($cbh-1-$cyy) } else { break } }; if($cdk -gt [Math]::Max(30,[int]($cbh*0.12))){ $sourceOk=$false } }catch{} } catch { $sourceOk=$false } finally { if ($checkImg) { $checkImg.Dispose() } }
+                                    if ($sourceOk) { Move-Item -LiteralPath $tmp -Destination $dest -Force }
                                     }
                                 } catch {}
                             }
@@ -7464,6 +7464,87 @@ $script:bibp.Controls.Add($script:bibPrev);$script:bibp.Controls.Add($script:bib
 $script:bibWheel={ param($s,$e); Set-BiblioWheel $s $e }
 $script:bibViewport.Add_MouseWheel($script:bibWheel);$script:bibFlow.Add_MouseWheel($script:bibWheel);$script:bibp.Add_MouseWheel($script:bibWheel)
 $script:bibp.Add_Resize({ try { Set-BiblioLayout } catch {} })
+$script:bibBandChecked=@{}
+function Test-BiblioImageHasBand([string]$path) {
+    $bad=$false
+    $im=$null
+    try{
+        if(-not (Test-Path -LiteralPath $path)){ return $false }
+        $im=[System.Drawing.Image]::FromFile($path)
+        $bw=$im.Width;$bh=$im.Height
+        if($bw -gt 20 -and $bh -gt 20){
+            $dark=0
+            for($yy=$bh-1;$yy -ge [Math]::Max(0,$bh-161);$yy-=4){
+                $mx=0;$mn=9999
+                foreach($xx in @(10,[int]($bw/4),[int]($bw/2),[int](3*$bw/4),($bw-10))){
+                    $cc=$im.GetPixel($xx,$yy); $ss=($cc.R+$cc.G+$cc.B)
+                    if($ss -gt $mx){$mx=$ss}; if($ss -lt $mn){$mn=$ss}
+                }
+                if(($mx -lt 45) -and (($mx-$mn) -lt 25)){$dark=($bh-1-$yy)} else {break}
+            }
+            if($dark -gt [Math]::Max(30,[int]($bh*0.12))){$bad=$true}
+        }
+    }catch{} finally { try{if($im){$im.Dispose()}}catch{} }
+    return $bad
+}
+function Reset-BiblioBadCover([string]$appid,[object]$box) {
+    try{
+        $cd=Join-Path $env:TEMP 'bsmap_covers'
+        $src=Join-Path $cd ($appid+'.jpg')
+        $thm=Join-Path $cd ('thumb_'+$appid+'.jpg')
+        $srcOk=$false
+        try{ if((Test-Path -LiteralPath $src) -and -not (Test-BiblioImageHasBand $src)){ $srcOk=$true } }catch{}
+        if($srcOk){
+            try{
+                $si=[System.Drawing.Image]::FromFile($src)
+                $bmp=New-Object System.Drawing.Bitmap(300,428)
+                $gfx=[System.Drawing.Graphics]::FromImage($bmp)
+                $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $gfx.Clear([System.Drawing.Color]::Black)
+                $sc=[Math]::Min((300.0/$si.Width),(428.0/$si.Height))
+                $dw=[int][Math]::Round($si.Width*$sc);$dh=[int][Math]::Round($si.Height*$sc)
+                $dx=[int][Math]::Floor((300-$dw)/2.0);$dy=[int][Math]::Floor((428-$dh)/2.0)
+                $gfx.DrawImage($si,(New-Object System.Drawing.Rectangle($dx,$dy,$dw,$dh)))
+                $gfx.Dispose()
+                $si.Dispose()
+                $tmp=$thm+'.part'
+                try{ Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }catch{}
+                $bmp.Save($tmp,[System.Drawing.Imaging.ImageFormat]::Jpeg)
+                $bmp.Dispose()
+                Move-Item -LiteralPath $tmp -Destination $thm -Force
+                try{ if($script:bibCoverCache){ $script:bibCoverCache[$appid]=$thm } }catch{}
+            }catch{}
+        } else {
+            foreach($fn in @(($appid+'.jpg'),('thumb_'+$appid+'.jpg'))){
+                try{ Remove-Item -LiteralPath (Join-Path $cd $fn) -Force -ErrorAction SilentlyContinue }catch{}
+            }
+            try{ if($script:bibCoverCache){ $script:bibCoverCache.Remove($appid) } }catch{}
+            try{ if($script:bibCoverAttempted){ $script:bibCoverAttempted.Remove($appid) } }catch{}
+        }
+        try{
+            if($box -and -not $box.IsDisposed){
+                $old=$box.Image; $box.Image=$null; $box.AccessibleDescription=''
+                if($old){$old.Dispose()}
+                $box.Invalidate()
+            }
+        }catch{}
+        if(-not $srcOk){
+            try{
+                if(-not $script:bibCoverQueue){ $script:bibCoverQueue=New-Object System.Collections.ArrayList }
+                if(-not $script:bibCoverQueued){ $script:bibCoverQueued=@{} }
+                $already=$false
+                try{ $already=$script:bibCoverQueued.ContainsKey($appid) }catch{}
+                if(-not $already){
+                    foreach($j in @($script:bibCoverJobs)){ try{ if([string]$j.appid -eq $appid){ $already=$true; break } }catch{} }
+                }
+                if(-not $already){
+                    [void]$script:bibCoverQueue.Add($appid)
+                    $script:bibCoverQueued[$appid]=$true
+                }
+            }catch{}
+        }
+    }catch{}
+}
 $script:bibTimer=New-Object System.Windows.Forms.Timer
 $script:bibTimer.Interval=450
 $script:bibTimer.Add_Tick({
@@ -7500,6 +7581,11 @@ $script:bibTimer.Add_Tick({
             if (-not $b -or $b.IsDisposed) { continue }
             $p = Get-BiblioCoverPath $k
             $currentPath = [string]$b.AccessibleDescription
+            $bandKey='band:'+$p
+            if($p -and -not $script:bibBandChecked.ContainsKey($bandKey)){
+                $script:bibBandChecked[$bandKey]=$true
+                if(Test-BiblioImageHasBand $p){ Reset-BiblioBadCover $k $b; continue }
+            }
             if ($p -and [System.IO.Path]::GetFileNameWithoutExtension($p) -like 'thumb_*' -and $p -ne $currentPath) {
                 $im=$null; $copy=$null
                 try {
