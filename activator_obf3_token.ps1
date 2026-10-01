@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.07"
+$script:version = "V2.08"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -7042,10 +7042,6 @@ function New-BiblioTile($game) {
     $pic.Add_Paint({param($s,$e)
         $g=$e.Graphics;$g.SmoothingMode='AntiAlias'
         if(-not $s.Image){Draw-BiblioPlaceholder $g $s.Width $s.Height ([string]$s.Tag.name) $true}
-        elseif($s.Parent -and $s.Parent.Tag.Hover){
-            $g.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBilinear
-            $g.DrawImage($s.Image,(New-Object System.Drawing.Rectangle(-4,-6,($s.Width+8),($s.Height+12))))
-        }
         $frame=New-RR 1 1 ($s.Width-3) ($s.Height-3) 7
         $frameColor=if($s.Parent -and $s.Parent.Tag.Hover){$script:Cyan}else{$script:CardBorder}
         $framePen=New-Object System.Drawing.Pen($frameColor,$(if($s.Parent -and $s.Parent.Tag.Hover){2}else{1}))
@@ -7305,18 +7301,9 @@ function Show-Biblio {
         else {
             $instIds=@{}; try{ $instIds=Get-BiblioInstalledIds }catch{}
             $topRank=@{}; try{ $topRank=$script:bibTopRank }catch{}
-            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $r=999999; try{ if($topRank.ContainsKey([string]$_.appid)){ $r=[int]$topRank[[string]$_.appid] } }catch{}; $r }}, @{Expression={ $s=0; if(-not $script:bibCoverCache.ContainsKey([string]$_.appid)){$s+=8}; if($_.name -like 'Juego *'){$s+=4}; if(-not $instIds.ContainsKey([string]$_.appid)){$s+=2}; $s }}, @{Expression={$_.name}}) } catch {}
+            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $r=999999; try{ if($topRank.ContainsKey([string]$_.appid)){ $r=[int]$topRank[[string]$_.appid] } }catch{}; $r }}, @{Expression={ $s=0; if(-not $instIds.ContainsKey([string]$_.appid)){$s+=32}; if(-not $script:bibCoverCache.ContainsKey([string]$_.appid)){$s+=8}; if($_.name -like 'Juego *'){$s+=4}; $s }}, @{Expression={$_.name}}) } catch {}
             $script:bibSortedCacheKey=$sortKey
             $script:bibSortedGamesCache=@($script:bibGames)
-            try {
-                $P=[Math]::Max(1,[int][Math]::Ceiling($script:bibGames.Count/96.0))
-                if($P -gt 1){
-                    $dl=@()
-                    for($pp=0;$pp -lt $P;$pp++){ for($kk=$pp;$kk -lt $script:bibGames.Count;$kk+=$P){ $dl+=$script:bibGames[$kk] } }
-                    $script:bibGames=$dl
-                    $script:bibSortedGamesCache=@($dl)
-                }
-            } catch {}
         }
         $script:bibFilterKey = $null
         $script:bibPage = 0
