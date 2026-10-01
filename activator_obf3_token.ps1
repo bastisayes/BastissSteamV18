@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.04"
+$script:version = "V2.05"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5644,7 +5644,7 @@ $script:sLuaTools=New-CfgBtn ($sY+174) "Reparar juegos" "Arregla los juegos que 
               Invoke-WebRequest -Uri "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/repair_luatools.ps1" -OutFile $luatoolsPath -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop
             } catch {}
         }
-        if (-not (Test-Path $luatoolsPath)) { [System.Windows.Forms.MessageBox]::Show("No se pudo obtener repair_luatools.ps1 en $luatoolsPath. Revisa tu internet.","Reparar juegos","OK","Warning") | Out-Null; return }
+        if (-not (Test-Path $luatoolsPath)) { [System.Windows.Forms.MessageBox]::Show("No se pudo obtener el archivo de reparacion. Revisa tu internet.","Reparar juegos","OK","Warning") | Out-Null; return }
         Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$luatoolsPath) -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 }
