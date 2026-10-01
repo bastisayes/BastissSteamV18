@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.12"
+$script:version = "V2.14"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6553,14 +6553,16 @@ function Start-BiblioCoverBatch {
             $aid = [string]$script:bibCoverQueue[0]
             $script:bibCoverQueue.RemoveAt(0)
             $script:bibCoverQueued.Remove($aid)
+            $needsThumb = $false
+            try { $needsThumb=[bool]$script:bibCoverNeedsThumb[$aid]; $script:bibCoverNeedsThumb.Remove($aid) } catch {}
             $needsName = $false
             try { $needsName = [bool]$script:bibCoverNeedsName[$aid] } catch {}
             $thumbPath = Join-Path (Join-Path $env:TEMP 'bsmap_covers') ('thumb_' + $aid + '.jpg')
-            if ((Test-Path -LiteralPath $thumbPath) -and (Get-Item -LiteralPath $thumbPath).Length -gt 500 -and -not $needsName) { continue }
+            if ((Test-Path -LiteralPath $thumbPath) -and (Get-Item -LiteralPath $thumbPath).Length -gt 500 -and -not $needsName -and -not $needsThumb) { continue }
             if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
             $psB = [PowerShell]::Create(); $psB.RunspacePool = $script:bibCoverPool
             [void]$psB.AddScript({
-                param($a,$dir,$needName)
+                param($a,$dir,$needName,$forceThumb)
                 $out = @{appid=$a;ok=$false;path='';name=''}
                 try {
                     $dest = Join-Path $dir ($a + '.jpg')
@@ -6629,36 +6631,43 @@ function Start-BiblioCoverBatch {
                         }
                         if (-not $sourceOk) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue; return $out }
                     }
-                    if (-not ((Test-Path -LiteralPath $thumb) -and (Get-Item -LiteralPath $thumb).Length -gt 500)) {
-                        $srcImg = $null; $bmp = $null; $gfx = $null
+                    if ($forceThumb -or -not ((Test-Path -LiteralPath $thumb) -and (Get-Item -LiteralPath $thumb).Length -gt 500)) {
+                        $srcImg=$null;$bmp=$null;$gfx=$null;$softBmp=$null;$softGfx=$null;$shade=$null
                         try {
                             Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
-                            $srcImg = [System.Drawing.Image]::FromFile($dest)
-                            $bmp = New-Object System.Drawing.Bitmap(300,450)
-                            $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-                            $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                            $gfx.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-                            $gfx.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-                            $gfx.Clear([System.Drawing.Color]::Black)
-                            $sr=[Math]::Round($srcImg.Width/[double]$srcImg.Height,3)
-                            if([Math]::Abs($sr-0.667) -lt 0.02){ $scale=300.0/$srcImg.Width }
-                            else{ $scale=[Math]::Max((300.0 / $srcImg.Width),(450.0 / $srcImg.Height)) }
-                            $drawWidth = [int][Math]::Round($srcImg.Width * $scale)
-                            $drawHeight = [int][Math]::Round($srcImg.Height * $scale)
-                            $drawX = [int][Math]::Floor((300 - $drawWidth) / 2.0)
-                            $drawY = [int][Math]::Floor((450 - $drawHeight) / 2.0)
-                            $gfx.DrawImage($srcImg, (New-Object System.Drawing.Rectangle($drawX,$drawY,$drawWidth,$drawHeight)))
-                            $thumbTmp = $thumb + '.part'
+                            $srcImg=[System.Drawing.Image]::FromFile($dest)
+                            $bmp=New-Object System.Drawing.Bitmap(300,450)
+                            $gfx=[System.Drawing.Graphics]::FromImage($bmp)
+                            $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                            $gfx.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                            $gfx.PixelOffsetMode=[System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                            $softBmp=New-Object System.Drawing.Bitmap(30,45)
+                            $softGfx=[System.Drawing.Graphics]::FromImage($softBmp)
+                            $softGfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                            $softGfx.Clear([System.Drawing.Color]::Black)
+                            $bgScale=[Math]::Max((30.0/$srcImg.Width),(45.0/$srcImg.Height))
+                            $bgW=[int][Math]::Round($srcImg.Width*$bgScale);$bgH=[int][Math]::Round($srcImg.Height*$bgScale)
+                            $bgX=[int][Math]::Floor((30-$bgW)/2.0);$bgY=[int][Math]::Floor((45-$bgH)/2.0)
+                            $softGfx.DrawImage($srcImg,(New-Object System.Drawing.Rectangle($bgX,$bgY,$bgW,$bgH)))
+                            $softGfx.Dispose();$softGfx=$null
+                            $gfx.DrawImage($softBmp,(New-Object System.Drawing.Rectangle(0,0,300,450)))
+                            $shade=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(100,0,0,0))
+                            $gfx.FillRectangle($shade,0,0,300,450);$shade.Dispose();$shade=$null
+                            $fitScale=[Math]::Min((300.0/$srcImg.Width),(450.0/$srcImg.Height))
+                            $fitW=[int][Math]::Round($srcImg.Width*$fitScale);$fitH=[int][Math]::Round($srcImg.Height*$fitScale)
+                            $fitX=[int][Math]::Floor((300-$fitW)/2.0);$fitY=[int][Math]::Floor((450-$fitH)/2.0)
+                            $gfx.DrawImage($srcImg,(New-Object System.Drawing.Rectangle($fitX,$fitY,$fitW,$fitH)))
+                            $thumbTmp=$thumb+'.part'
                             Remove-Item -LiteralPath $thumbTmp -Force -ErrorAction SilentlyContinue
-                            $bmp.Save($thumbTmp, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+                            $bmp.Save($thumbTmp,[System.Drawing.Imaging.ImageFormat]::Jpeg)
                             Move-Item -LiteralPath $thumbTmp -Destination $thumb -Force
-                        } catch { Remove-Item -LiteralPath ($thumb + '.part') -Force -ErrorAction SilentlyContinue } finally { if ($gfx) { $gfx.Dispose() }; if ($bmp) { $bmp.Dispose() }; if ($srcImg) { $srcImg.Dispose() } }
+                        } catch { Remove-Item -LiteralPath ($thumb + '.part') -Force -ErrorAction SilentlyContinue } finally { if($shade){$shade.Dispose()};if($softGfx){$softGfx.Dispose()};if($softBmp){$softBmp.Dispose()};if($gfx){$gfx.Dispose()};if($bmp){$bmp.Dispose()};if($srcImg){$srcImg.Dispose()} }
                     }
                     if ((Test-Path -LiteralPath $thumb) -and (Get-Item -LiteralPath $thumb).Length -gt 500) { $out.ok=$true; $out.path=$thumb }
                     else { $out.ok=$true; $out.path=$dest }
                 } catch { try { Remove-Item -LiteralPath ($dest + '.part') -Force -ErrorAction SilentlyContinue } catch {} }
                 return $out
-            }).AddArgument([string]$aid).AddArgument((Join-Path $env:TEMP 'bsmap_covers')).AddArgument([bool]$needsName)
+            }).AddArgument([string]$aid).AddArgument((Join-Path $env:TEMP 'bsmap_covers')).AddArgument([bool]$needsName).AddArgument([bool]$needsThumb)
             $handle = $psB.BeginInvoke()
             $script:bibCoverJobs += @{appid=$aid;ps=$psB;h=$handle}
         }
@@ -6668,21 +6677,34 @@ function Start-BiblioCovers($games) {
     try {
         $cd = Join-Path $env:TEMP 'bsmap_covers'
         if (-not (Test-Path -LiteralPath $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
-        try { $vmark=Join-Path $cd 'thumbv3.done'; if(-not (Test-Path -LiteralPath $vmark)){ Get-ChildItem -LiteralPath $cd -Filter 'thumb_*.jpg' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Set-Content -LiteralPath $vmark '3' -Encoding ASCII -ErrorAction SilentlyContinue } } catch {}
+        if($null -eq $script:bibCoverNeedsThumb){$script:bibCoverNeedsThumb=@{}}
+        if($null -eq $script:bibThumbMigrated){$script:bibThumbMigrated=@{}}
+        if(-not $script:bibThumbMigrationInitialized){
+            try{
+                $vmark=Join-Path $cd 'thumbv4.done'
+                if(-not (Test-Path -LiteralPath $vmark)){Set-Content -LiteralPath $vmark '4' -Encoding ASCII -ErrorAction SilentlyContinue}
+                $script:bibThumbMigrationTime=(Get-Item -LiteralPath $vmark -ErrorAction Stop).LastWriteTimeUtc
+            }catch{$script:bibThumbMigrationTime=$null}
+            $script:bibThumbMigrationInitialized=$true
+        }
         Update-BiblioCoverCache
         if (-not $script:bibCoverQueue) { $script:bibCoverQueue = New-Object System.Collections.ArrayList }
-        if (-not $script:bibCoverQueued) { $script:bibCoverQueued = @{} }
         if (-not $script:bibCoverAttempted) { $script:bibCoverAttempted = @{} }
+        $script:bibCoverQueue.Clear()
+        $script:bibCoverQueued=@{}
         foreach ($g in $games) {
             $aid = [string]$g.appid
             $thumbPath = Join-Path $cd ('thumb_' + $aid + '.jpg')
-            $hasThumb = $false
+            $thumbInfo=$null;$hasThumb=$false
             $needsName = ([string]$g.name -like 'Juego *' -or [string]::IsNullOrWhiteSpace([string]$g.name))
-            try { $hasThumb = (Test-Path -LiteralPath $thumbPath) -and (Get-Item -LiteralPath $thumbPath).Length -gt 500 } catch {}
-            if (-not $aid -or ($hasThumb -and -not $needsName) -or $script:bibCoverQueued.ContainsKey($aid)) { continue }
+            $needsThumb=$false
+            try{$thumbInfo=Get-Item -LiteralPath $thumbPath -ErrorAction Stop;$hasThumb=($thumbInfo.Length -gt 500)}catch{}
+            if($hasThumb -and $script:bibThumbMigrationTime -and -not $script:bibThumbMigrated.ContainsKey($aid)){$needsThumb=($thumbInfo.LastWriteTimeUtc -lt $script:bibThumbMigrationTime)}
+            if (-not $aid -or ($hasThumb -and -not $needsName -and -not $needsThumb)) { continue }
             if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
             if (@($script:bibCoverJobs | Where-Object { $_.appid -eq $aid }).Count -gt 0) { continue }
             $script:bibCoverNeedsName[$aid] = $needsName
+            $script:bibCoverNeedsThumb[$aid] = $needsThumb
             [void]$script:bibCoverQueue.Add($aid)
             $script:bibCoverQueued[$aid] = $true
         }
@@ -6826,6 +6848,16 @@ function Draw-BiblioPlaceholder($graphics,[int]$width,[int]$height,[string]$titl
     $rect=New-Object System.Drawing.Rectangle(0,0,$width,$height)
     $back=New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect,[System.Drawing.Color]::FromArgb(34,52,78),[System.Drawing.Color]::FromArgb(12,18,29),42)
     $graphics.FillRectangle($back,$rect);$back.Dispose()
+    if($script:bibShimmerPhase -gt 0){
+        $band=[Math]::Max(18,[int]($width*0.2));$travel=$width+$band
+        $glowX=([int]$script:bibShimmerPhase % $travel)-$band
+        if($glowX -lt $width -and ($glowX+$band) -gt 0){
+            $glowRect=New-Object System.Drawing.Rectangle($glowX,0,$band,$height)
+            $glow=New-Object System.Drawing.Drawing2D.LinearGradientBrush($glowRect,[System.Drawing.Color]::FromArgb(0,255,255,255),[System.Drawing.Color]::FromArgb(32,$script:Cyan),0)
+            $glow.SetBlendTriangularShape(0.5)
+            $graphics.FillRectangle($glow,$glowRect);$glow.Dispose()
+        }
+    }
     $decoration=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(22,$script:Cyan),1)
     for($i=0;$i -lt 5;$i++){
         $x=[int](($i+1)*$width/6)
@@ -6895,6 +6927,65 @@ function Get-BiblioGridMetrics {
 }
 function Set-BiblioGridScroll {
     if(-not $script:bibFlow -or -not $script:bibViewport){return}
+    if(-not $script:bibFlow.Tag -or -not $script:bibFlow.Tag.ContainsKey('BiblioBackdrop')){
+        $script:bibFlow.Tag=@{BiblioBackdrop=$true}
+        $script:bibFlow.Add_Paint({
+            param($s,$e)
+            $g=$e.Graphics;$w=[Math]::Max(1,[int]$s.ClientSize.Width);$clip=$e.ClipRectangle
+            $viewH=[Math]::Max(1,[int]$script:bibViewport.ClientSize.Height);$scrollOffset=[int](-$s.Top)
+            $base=$null;$lightPath=$null;$lightBrush=$null;$bluePath=$null;$blueBrush=$null;$dots=$null;$rail=$null;$ring=$null;$shelf=$null;$curvePath=$null;$curvePen=$null
+            try{
+                $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $backRect=New-Object System.Drawing.Rectangle(0,$scrollOffset,$w,$viewH)
+                $base=New-Object System.Drawing.Drawing2D.LinearGradientBrush($backRect,[System.Drawing.Color]::FromArgb(16,27,44),[System.Drawing.Color]::FromArgb(9,14,24),90)
+                $g.FillRectangle($base,$clip)
+                $lightPath=New-Object System.Drawing.Drawing2D.GraphicsPath
+                $lightPath.AddEllipse(-300,($scrollOffset-330),1120,920)
+                $lightBrush=New-Object System.Drawing.Drawing2D.PathGradientBrush($lightPath)
+                $lightBrush.CenterColor=[System.Drawing.Color]::FromArgb(62,0,180,230)
+                $lightBrush.SurroundColors=[System.Drawing.Color[]]@([System.Drawing.Color]::FromArgb(0,11,15,25))
+                $g.FillPath($lightBrush,$lightPath)
+                $bluePath=New-Object System.Drawing.Drawing2D.GraphicsPath
+                $bluePath.AddEllipse(($w-730),($scrollOffset+$viewH-620),980,900)
+                $blueBrush=New-Object System.Drawing.Drawing2D.PathGradientBrush($bluePath)
+                $blueBrush.CenterColor=[System.Drawing.Color]::FromArgb(52,70,91,205)
+                $blueBrush.SurroundColors=[System.Drawing.Color[]]@([System.Drawing.Color]::FromArgb(0,11,15,25))
+                $g.FillPath($blueBrush,$bluePath)
+                $dots=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34,104,149,180))
+                $spacing=52
+                $dotScreenTop=[int]($clip.Top+$s.Top)
+                $dotY=[int]([Math]::Floor($dotScreenTop/[double]$spacing)*$spacing+26)-$s.Top
+                $dotX=[int]([Math]::Floor($clip.Left/[double]$spacing)*$spacing+26)
+                for($dy=$dotY;$dy -lt $clip.Bottom;$dy+=$spacing){
+                    for($dx=$dotX;$dx -lt $clip.Right;$dx+=$spacing){$g.FillEllipse($dots,$dx,$dy,2,2)}
+                }
+                $rail=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(30,0,180,230),1)
+                $g.DrawLine($rail,6,$scrollOffset,6,($scrollOffset+$viewH))
+                $g.DrawLine($rail,($w-7),$scrollOffset,($w-7),($scrollOffset+$viewH))
+                $ring=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(29,0,180,230),1.2)
+                $g.DrawEllipse($ring,($w-465),($scrollOffset+24),430,430)
+                $g.DrawEllipse($ring,($w-410),($scrollOffset+79),320,320)
+                $curvePath=New-Object System.Drawing.Drawing2D.GraphicsPath
+                $curvePath.AddBezier(-90,($scrollOffset+$viewH*0.78),($w*0.18),($scrollOffset+$viewH*0.52),($w*0.68),($scrollOffset+$viewH*0.96),($w+90),($scrollOffset+$viewH*0.70))
+                $curvePen=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(34,0,180,230),1.4)
+                $g.DrawPath($curvePen,$curvePath)
+                if($script:bibView -eq 'grande' -and $script:bibGridMetrics){
+                    if($shelf){$shelf.Dispose()}
+                    $shelf=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(24,0,180,230),1)
+                    $step=[Math]::Max(1,[int]$script:bibGridMetrics.RowHeight)
+                    $rowY=12+[int][Math]::Ceiling(($clip.Top-12)/[double]$step)*$step+[int]$script:bibGridMetrics.TileHeight+6
+                    for($yy=$rowY;$yy -lt $clip.Bottom;$yy+=$step){$g.DrawLine($shelf,24,$yy,($w-24),$yy)}
+                }
+            }catch{}finally{
+                if($shelf){$shelf.Dispose()};if($curvePen){$curvePen.Dispose()};if($curvePath){$curvePath.Dispose()}
+                if($ring){$ring.Dispose()};if($rail){$rail.Dispose()};if($dots){$dots.Dispose()}
+                if($blueBrush){$blueBrush.Dispose()};if($bluePath){$bluePath.Dispose()}
+                if($lightBrush){$lightBrush.Dispose()};if($lightPath){$lightPath.Dispose()}
+                if($base){$base.Dispose()}
+            }
+        })
+    }
+
     $metrics=Get-BiblioGridMetrics
     $script:bibGridMetrics=$metrics
     $script:bibFlow.Width=$metrics.Width
@@ -6989,24 +7080,37 @@ function Show-BiblioLoading([string]$title,[string]$subtitle) {
 }
 function New-BiblioBakedImage($srcImg,$gameName) {
     $bmp=New-Object System.Drawing.Bitmap(96,144)
-    $gfx=$null
+    $gfx=$null;$softBmp=$null;$softGfx=$null;$shade=$null;$lg=$null;$tb=$null;$sh=$null;$sf=$null
     try{
         $gfx=[System.Drawing.Graphics]::FromImage($bmp)
         $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $gfx.SmoothingMode='AntiAlias';$gfx.TextRenderingHint='ClearTypeGridFit'
-        $gfx.Clear([System.Drawing.Color]::Black)
-        $gfx.DrawImage($srcImg,(New-Object System.Drawing.Rectangle(0,0,96,144)))
-        $hh=48;$y0=144-$hh
+        $gfx.SmoothingMode='HighQuality';$gfx.PixelOffsetMode='HighQuality';$gfx.TextRenderingHint='ClearTypeGridFit'
+        $softBmp=New-Object System.Drawing.Bitmap(12,18)
+        $softGfx=[System.Drawing.Graphics]::FromImage($softBmp)
+        $softGfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $softGfx.Clear([System.Drawing.Color]::Black)
+        $bgScale=[Math]::Max((12.0/$srcImg.Width),(18.0/$srcImg.Height))
+        $bgW=[int][Math]::Round($srcImg.Width*$bgScale);$bgH=[int][Math]::Round($srcImg.Height*$bgScale)
+        $bgX=[int][Math]::Floor((12-$bgW)/2.0);$bgY=[int][Math]::Floor((18-$bgH)/2.0)
+        $softGfx.DrawImage($srcImg,(New-Object System.Drawing.Rectangle($bgX,$bgY,$bgW,$bgH)))
+        $softGfx.Dispose();$softGfx=$null
+        $gfx.DrawImage($softBmp,(New-Object System.Drawing.Rectangle(0,0,96,144)))
+        $shade=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(96,0,0,0))
+        $gfx.FillRectangle($shade,0,0,96,144);$shade.Dispose();$shade=$null
+        $fitScale=[Math]::Min((96.0/$srcImg.Width),(144.0/$srcImg.Height))
+        $fitW=[int][Math]::Round($srcImg.Width*$fitScale);$fitH=[int][Math]::Round($srcImg.Height*$fitScale)
+        $fitX=[int][Math]::Floor((96-$fitW)/2.0);$fitY=[int][Math]::Floor((144-$fitH)/2.0)
+        $gfx.DrawImage($srcImg,(New-Object System.Drawing.Rectangle($fitX,$fitY,$fitW,$fitH)))
+        $y0=96
         $lg=New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Point(0,$y0)),(New-Object System.Drawing.Point(0,144)),[System.Drawing.Color]::FromArgb(0,0,0,0),[System.Drawing.Color]::FromArgb(225,0,0,0))
-        $gfx.FillRectangle($lg,(New-Object System.Drawing.Rectangle(0,$y0,96,$hh)));$lg.Dispose()
+        $gfx.FillRectangle($lg,(New-Object System.Drawing.Rectangle(0,$y0,96,48)));$lg.Dispose();$lg=$null
         if(-not $script:bibNameOverlayFont){ $script:bibNameOverlayFont=New-Object System.Drawing.Font('Bahnschrift',10,[System.Drawing.FontStyle]::Bold) }
         $tb=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
         $sh=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(190,0,0,0))
-        $sf=New-Object System.Drawing.StringFormat;$sf.Alignment="Center";$sf.LineAlignment="Center";$sf.Trimming="EllipsisCharacter";$sf.FormatFlags=[System.Drawing.StringFormatFlags]::NoWrap
+        $sf=New-Object System.Drawing.StringFormat;$sf.Alignment='Center';$sf.LineAlignment='Center';$sf.Trimming='EllipsisCharacter';$sf.FormatFlags=[System.Drawing.StringFormatFlags]::NoWrap
         $gfx.DrawString([string]$gameName,$script:bibNameOverlayFont,$sh,(New-Object System.Drawing.RectangleF(5,107,88,30)),$sf)
         $gfx.DrawString([string]$gameName,$script:bibNameOverlayFont,$tb,(New-Object System.Drawing.RectangleF(4,106,88,30)),$sf)
-        $tb.Dispose();$sh.Dispose();$sf.Dispose()
-    }catch{} finally { if($gfx){$gfx.Dispose()} }
+    }catch{} finally { if($lg){$lg.Dispose()};if($shade){$shade.Dispose()};if($tb){$tb.Dispose()};if($sh){$sh.Dispose()};if($sf){$sf.Dispose()};if($softGfx){$softGfx.Dispose()};if($softBmp){$softBmp.Dispose()};if($gfx){$gfx.Dispose()} }
     return $bmp
 }
 function New-BiblioTile($game) {
@@ -7019,7 +7123,17 @@ function New-BiblioTile($game) {
         $p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR
         $br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}))
         $pen=New-Object System.Drawing.Pen($(if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}),$(if($s.Tag.Hover){1.6}else{1}))
-        try{$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p)}finally{$br.Dispose();$pen.Dispose();$p.Dispose()}
+        $shadowPen=$null;$glowPen=$null;$state=$null
+        try{
+            if($s.Tag.Hover){
+                $state=$e.Graphics.Save();$e.Graphics.TranslateTransform(0,2)
+                $shadowPen=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(70,0,0,0),3)
+                $e.Graphics.DrawPath($shadowPen,$p);$e.Graphics.Restore($state);$state=$null
+                $glowPen=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(42,$script:Cyan),5)
+                $e.Graphics.DrawPath($glowPen,$p)
+            }
+            $e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p)
+        }finally{if($state){$e.Graphics.Restore($state)};if($shadowPen){$shadowPen.Dispose()};if($glowPen){$glowPen.Dispose()};$br.Dispose();$pen.Dispose();$p.Dispose()}
     })
     $tile.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate();if($s.Controls.Count -gt 0){$s.Controls[0].Invalidate()}})
     $tile.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate();if($s.Controls.Count -gt 0){$s.Controls[0].Invalidate()}})
@@ -7044,6 +7158,10 @@ function New-BiblioTile($game) {
     $pic.Add_Paint({param($s,$e)
         $g=$e.Graphics;$g.SmoothingMode='AntiAlias'
         if(-not $s.Image){Draw-BiblioPlaceholder $g $s.Width $s.Height ([string]$s.Tag.name) $true}
+        elseif($s.Parent -and $s.Parent.Tag.Hover){
+            $g.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBilinear
+            $g.DrawImage($s.Image,(New-Object System.Drawing.Rectangle(-4,-6,($s.Width+8),($s.Height+12))))
+        }
         $frame=New-RR 1 1 ($s.Width-3) ($s.Height-3) 7
         $frameColor=if($s.Parent -and $s.Parent.Tag.Hover){$script:Cyan}else{$script:CardBorder}
         $framePen=New-Object System.Drawing.Pen($frameColor,$(if($s.Parent -and $s.Parent.Tag.Hover){2}else{1}))
@@ -7093,6 +7211,26 @@ function Refresh-BiblioGrid([string]$filter) {
         $pageGames=@()
         if($start -lt $total){$last=[Math]::Min($total-1,$start+$pageSize-1);$pageGames=@($script:bibFilteredGames[$start..$last])}
         $script:bibPageGames=$pageGames
+        $script:bibPendingFilterKey=$filterKey
+        $fadeFrom=$null
+        try{
+            if($script:bibFadeOverlay -and -not $script:bibFadeOverlay.IsDisposed){
+                $oldFade=$script:bibFadeOverlay
+                try{$script:bibViewport.Controls.Remove($oldFade)}catch{}
+                try{if($oldFade.Tag.From){$oldFade.Tag.From.Dispose()};if($oldFade.Tag.To){$oldFade.Tag.To.Dispose()}}catch{}
+                try{$oldFade.Dispose()}catch{}
+                $script:bibFadeOverlay=$null
+            }
+            if($script:bibFadeFrom){$script:bibFadeFrom.Dispose();$script:bibFadeFrom=$null}
+            $isPageOrViewChange=($null -ne $script:bibLastRenderedPage) -and ($script:bibLastRenderedFilterKey -eq $filterKey) -and (($script:bibLastRenderedPage -ne $script:bibPage) -or ($script:bibLastRenderedView -ne $script:bibView))
+            if($isPageOrViewChange -and $script:bibViewport.Visible -and $script:bibFlow.Visible -and $script:bibViewport.Width -gt 0 -and $script:bibViewport.Height -gt 0){
+                $fadeFrom=New-Object System.Drawing.Bitmap($script:bibViewport.Width,$script:bibViewport.Height)
+                $script:bibViewport.DrawToBitmap($fadeFrom,(New-Object System.Drawing.Rectangle(0,0,$script:bibViewport.Width,$script:bibViewport.Height)))
+            }
+        }catch{if($fadeFrom){$fadeFrom.Dispose();$fadeFrom=$null}}
+        $script:bibFadeFrom=$fadeFrom
+        if($script:bibOpenWatch -and -not $script:bibOpenReadyMs){$script:bibOpenReadyMs=$script:bibOpenWatch.ElapsedMilliseconds}
+        $script:bibGridWatch=[System.Diagnostics.Stopwatch]::StartNew()
         $fl.SuspendLayout()
         try{
             foreach($old in @($fl.Controls)){
@@ -7113,15 +7251,18 @@ function Refresh-BiblioGrid([string]$filter) {
         if($script:bibPrev.Tag){$script:bibPrev.Tag.Enabled=$script:bibPrev.Enabled;$script:bibPrev.Invalidate()}
         if($script:bibNext.Tag){$script:bibNext.Tag.Enabled=$script:bibNext.Enabled;$script:bibNext.Invalidate()}
         if($total -eq 0){
+            if($script:bibFadeFrom){$script:bibFadeFrom.Dispose();$script:bibFadeFrom=$null}
+            $script:bibLastRenderedPage=[int]$script:bibPage;$script:bibLastRenderedView=[string]$script:bibView;$script:bibLastRenderedFilterKey=$filterKey
             if($script:bibLoadingTimer){$script:bibLoadingTimer.Stop()}
             $script:bibLoadingCard.Visible=$false
             if($script:bibDownloadedOnly){$script:bibEmptyState.Text='No hay juegos descargados en esta biblioteca.'}
             else{$script:bibEmptyState.Text='No se encontraron juegos.'}
             $script:bibEmptyState.Visible=$true
-            if($script:bibOpenWatch){$script:bibOpenWatch.Stop();try{Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_biblio_perf.log') -Value ('open_ms={0};games=0;page={1}' -f $script:bibOpenWatch.ElapsedMilliseconds,$script:bibPageSize) -Encoding ASCII}catch{};$script:bibOpenWatch=$null}
+            if($script:bibOpenWatch){$script:bibOpenWatch.Stop();$openMs=[int]$script:bibOpenWatch.ElapsedMilliseconds;$readyMs=[int]$script:bibOpenReadyMs;try{Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_biblio_perf.log') -Value ('ready_ms={0}; grid_ms=0; open_ms={1}; games=0; page={2}' -f $readyMs,$openMs,$script:bibPageSize) -Encoding ASCII}catch{};$script:bibOpenWatch=$null}
         }else{
             $subtitle=if($script:bibDownloadedOnly){'{0} juegos descargados' -f $total}else{'{0} juegos disponibles' -f $total}
             Show-BiblioLoading 'Preparando tu biblioteca' $subtitle
+            Start-BiblioCovers $pageGames
             $script:bibEmptyState.Visible=$false
             if($script:bibRenderTimer){$script:bibRenderTimer.Start()}
         }
@@ -7295,6 +7436,8 @@ function Show-Biblio {
     try {
         $timer=[System.Diagnostics.Stopwatch]::StartNew()
         $script:bibOpenWatch=$timer
+        $script:bibOpenReadyMs=0
+        $script:bibGridWatch=$null
         Show-BiblioLoading 'Buscando tu biblioteca' 'Leyendo la lista de juegos...'
         try{[System.Windows.Forms.Application]::DoEvents()}catch{}
         $script:bibGames = Get-BiblioGames
@@ -7316,7 +7459,7 @@ function Show-Biblio {
         $script:bibSearch.Text = ''
         $script:bibSuppressSearch=$false
         Refresh-BiblioGrid ''
-        Start-BiblioCovers $script:bibGames
+        Start-BiblioCovers $script:bibPageGames
         $script:bibTimer.Start()
         try{ Update-BiblioNamesFromCache }catch{}
         Start-BiblioBulkNames
@@ -7362,6 +7505,15 @@ $script:bibFilteredGames=@()
 $script:bibRenderQueue=@()
 $script:bibRenderIndex=0
 $script:bibOpenWatch=$null
+$script:bibOpenReadyMs=0
+$script:bibGridWatch=$null
+$script:bibShimmerPhase=0
+$script:bibFadeOverlay=$null
+$script:bibFadeFrom=$null
+$script:bibLastRenderedPage=$null
+$script:bibLastRenderedView=$null
+$script:bibLastRenderedFilterKey=$null
+$script:bibPendingFilterKey=$null
 $script:bibFilterKey=$null
 $script:bibGamesCacheKey=''
 $script:bibGamesCache=$null
@@ -7418,9 +7570,29 @@ $script:bibViewport.Controls.Add($script:bibEmptyState)
 $script:bibLoadingTimer=New-Object System.Windows.Forms.Timer
 $script:bibLoadingTimer.Interval=85
 $script:bibLoadingTimer.Add_Tick({
-    if(-not $script:bibLoadingCard.Visible){$script:bibLoadingTimer.Stop();return}
-    $script:bibLoadingCard.Tag.Angle=([int]$script:bibLoadingCard.Tag.Angle+38)%360
-    $script:bibLoadingCard.Invalidate()
+    $loading=[bool]$script:bibLoadingCard.Visible
+    if($loading){$script:bibLoadingCard.Tag.Angle=([int]$script:bibLoadingCard.Tag.Angle+38)%360;$script:bibLoadingCard.Invalidate()}
+    $fade=$script:bibFadeOverlay
+    if($fade -and -not $fade.IsDisposed){
+        $fade.Tag.Alpha=[Math]::Max(0,[int]$fade.Tag.Alpha-85)
+        $fade.Invalidate()
+        if([int]$fade.Tag.Alpha -le 0){
+            try{$script:bibViewport.Controls.Remove($fade)}catch{}
+            $from=$fade.Tag.From;$to=$fade.Tag.To;$fade.Tag.From=$null;$fade.Tag.To=$null
+            try{if($from){$from.Dispose()};if($to){$to.Dispose()}}catch{}
+            try{$fade.Dispose()}catch{}
+            $script:bibFadeOverlay=$null
+        }
+    }
+    $script:bibShimmerPhase=([int]$script:bibShimmerPhase+22)%600
+    $missing=0
+    foreach($pic in @($script:bibBoxes.Values)){
+        if(-not $pic -or $pic.IsDisposed -or $pic.Image -or -not $pic.Parent){continue}
+        $top=[int]$pic.Parent.Top+[int]$script:bibFlow.Top
+        if(($top+$pic.Height) -lt 0 -or $top -gt $script:bibViewport.ClientSize.Height){continue}
+        $missing++;$pic.Invalidate()
+    }
+    if(-not $loading -and $missing -eq 0 -and -not $script:bibFadeOverlay){$script:bibLoadingTimer.Stop()}
 })
 $script:bibRenderTimer=New-Object System.Windows.Forms.Timer
 $script:bibRenderTimer.Interval=20
@@ -7439,12 +7611,47 @@ $script:bibRenderTimer.Add_Tick({
         Set-BiblioGridScroll
         if($script:bibRenderIndex -ge $script:bibRenderQueue.Count){
             $script:bibRenderTimer.Stop()
-            $script:bibLoadingTimer.Stop()
             $script:bibLoadingCard.Visible=$false
             $script:bibFlow.Visible=$true
+$missingCount=@($script:bibBoxes.Values|Where-Object{-not $_.Image}).Count
+            if($script:bibFadeFrom){
+                $fadeTo=$null
+                try{
+                    $fadeTo=New-Object System.Drawing.Bitmap($script:bibViewport.Width,$script:bibViewport.Height)
+                    $script:bibViewport.DrawToBitmap($fadeTo,(New-Object System.Drawing.Rectangle(0,0,$script:bibViewport.Width,$script:bibViewport.Height)))
+                    $fade=New-BufferedPanel
+                    $fade.Location=New-Object System.Drawing.Point(0,0);$fade.Size=$script:bibViewport.ClientSize;$fade.BackColor=$script:BG
+                    $fade.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+                    $fade.Tag=@{From=$script:bibFadeFrom;To=$fadeTo;Alpha=255}
+                    $fade.Add_Paint({
+                        param($s,$e)
+                        $g=$e.Graphics;$from=$s.Tag.From;$to=$s.Tag.To
+                        if($to){$g.DrawImage($to,(New-Object System.Drawing.Rectangle(0,0,$s.Width,$s.Height)))}
+                        if($from -and [int]$s.Tag.Alpha -gt 0){
+                            $ia=$null
+                            try{
+                                $ia=New-Object System.Drawing.Imaging.ImageAttributes
+                                $cm=New-Object System.Drawing.Imaging.ColorMatrix
+                                $cm.Matrix33=[single]([Math]::Max(0,[int]$s.Tag.Alpha)/255.0)
+                                $ia.SetColorMatrix($cm)
+                                $g.DrawImage($from,(New-Object System.Drawing.Rectangle(0,0,$s.Width,$s.Height)),0,0,$from.Width,$from.Height,[System.Drawing.GraphicsUnit]::Pixel,$ia)
+                            }catch{}finally{if($ia){$ia.Dispose()}}
+                        }
+                    })
+                    $script:bibViewport.Controls.Add($fade);$fade.BringToFront();$script:bibFadeOverlay=$fade;$script:bibFadeFrom=$null
+                    $script:bibLastRenderedPage=[int]$script:bibPage;$script:bibLastRenderedView=[string]$script:bibView;$script:bibLastRenderedFilterKey=[string]$script:bibPendingFilterKey
+                }catch{
+                    if($script:bibFadeFrom){$script:bibFadeFrom.Dispose();$script:bibFadeFrom=$null}
+                    if($fadeTo){$fadeTo.Dispose()}
+                    $script:bibLastRenderedPage=[int]$script:bibPage;$script:bibLastRenderedView=[string]$script:bibView;$script:bibLastRenderedFilterKey=[string]$script:bibPendingFilterKey
+                }
+            }else{
+                $script:bibLastRenderedPage=[int]$script:bibPage;$script:bibLastRenderedView=[string]$script:bibView;$script:bibLastRenderedFilterKey=[string]$script:bibPendingFilterKey
+            }
+            if($missingCount -gt 0 -or $script:bibFadeOverlay){$script:bibLoadingTimer.Start()}else{$script:bibLoadingTimer.Stop()}
             if($script:bibOpenWatch){
                 $script:bibOpenWatch.Stop()
-                try{Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_biblio_perf.log') -Value ('open_ms={0}; games={1}; page={2}' -f $script:bibOpenWatch.ElapsedMilliseconds,$script:bibGames.Count,$script:bibPageSize) -Encoding ASCII}catch{}
+                $openMs=[int]$script:bibOpenWatch.ElapsedMilliseconds;$readyMs=[int]$script:bibOpenReadyMs;$gridMs=[Math]::Max(0,$openMs-$readyMs);try{Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_biblio_perf.log') -Value ('ready_ms={0}; grid_ms={1}; open_ms={2}; games={3}; page={4}; view={5}' -f $readyMs,$gridMs,$openMs,$script:bibGames.Count,$script:bibPageSize,$script:bibView) -Encoding ASCII}catch{}
                 $script:bibOpenWatch=$null
             }
         }
@@ -7452,7 +7659,7 @@ $script:bibRenderTimer.Add_Tick({
         try{$script:bibRenderTimer.Stop();$script:bibFlow.ResumeLayout($true);$script:bibLoadingTimer.Stop();$script:bibLoadingCard.Visible=$false;$script:bibFlow.Visible=$true}catch{}
     }
 })
-$script:bibScroll=New-DarkScrollBar { param($v); if($script:bibFlow){$script:bibFlow.Location=New-Object System.Drawing.Point(0,-[int]$v)} }
+$script:bibScroll=New-DarkScrollBar { param($v); if($script:bibFlow){$script:bibFlow.Location=New-Object System.Drawing.Point(0,-[int]$v)}; if($script:bibLoadingTimer -and -not $script:bibLoadingTimer.Enabled){$script:bibLoadingTimer.Start()} }
 $script:bibScroll.Location=New-Object System.Drawing.Point(($FW-$PAD-14),84)
 $script:bibScroll.Size=New-Object System.Drawing.Size(14,500)
 $script:bibScroll.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right)
@@ -7497,27 +7704,36 @@ function Reset-BiblioBadCover([string]$appid,[object]$box) {
         $srcOk=$false
         try{ if((Test-Path -LiteralPath $src) -and -not (Test-BiblioImageHasBand $src)){ $srcOk=$true } }catch{}
         if($srcOk){
+            $si=$null;$bmp=$null;$gfx=$null;$softBmp=$null;$softGfx=$null;$shade=$null
             try{
                 $si=[System.Drawing.Image]::FromFile($src)
                 $bmp=New-Object System.Drawing.Bitmap(300,450)
                 $gfx=[System.Drawing.Graphics]::FromImage($bmp)
                 $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                $gfx.Clear([System.Drawing.Color]::Black)
-                $sr2=[Math]::Round($si.Width/[double]$si.Height,3)
-                if([Math]::Abs($sr2-0.667) -lt 0.02){ $sc=300.0/$si.Width }
-                else{ $sc=[Math]::Max((300.0/$si.Width),(450.0/$si.Height)) }
-                $dw=[int][Math]::Round($si.Width*$sc);$dh=[int][Math]::Round($si.Height*$sc)
-                $dx=[int][Math]::Floor((300-$dw)/2.0);$dy=[int][Math]::Floor((450-$dh)/2.0)
-                $gfx.DrawImage($si,(New-Object System.Drawing.Rectangle($dx,$dy,$dw,$dh)))
-                $gfx.Dispose()
-                $si.Dispose()
+                $gfx.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $gfx.PixelOffsetMode=[System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                $softBmp=New-Object System.Drawing.Bitmap(30,45)
+                $softGfx=[System.Drawing.Graphics]::FromImage($softBmp)
+                $softGfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $softGfx.Clear([System.Drawing.Color]::Black)
+                $bgScale=[Math]::Max((30.0/$si.Width),(45.0/$si.Height))
+                $bgW=[int][Math]::Round($si.Width*$bgScale);$bgH=[int][Math]::Round($si.Height*$bgScale)
+                $bgX=[int][Math]::Floor((30-$bgW)/2.0);$bgY=[int][Math]::Floor((45-$bgH)/2.0)
+                $softGfx.DrawImage($si,(New-Object System.Drawing.Rectangle($bgX,$bgY,$bgW,$bgH)))
+                $softGfx.Dispose();$softGfx=$null
+                $gfx.DrawImage($softBmp,(New-Object System.Drawing.Rectangle(0,0,300,450)))
+                $shade=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(100,0,0,0))
+                $gfx.FillRectangle($shade,0,0,300,450);$shade.Dispose();$shade=$null
+                $fitScale=[Math]::Min((300.0/$si.Width),(450.0/$si.Height))
+                $fitW=[int][Math]::Round($si.Width*$fitScale);$fitH=[int][Math]::Round($si.Height*$fitScale)
+                $fitX=[int][Math]::Floor((300-$fitW)/2.0);$fitY=[int][Math]::Floor((450-$fitH)/2.0)
+                $gfx.DrawImage($si,(New-Object System.Drawing.Rectangle($fitX,$fitY,$fitW,$fitH)))
                 $tmp=$thm+'.part'
-                try{ Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }catch{}
+                try{Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}catch{}
                 $bmp.Save($tmp,[System.Drawing.Imaging.ImageFormat]::Jpeg)
-                $bmp.Dispose()
                 Move-Item -LiteralPath $tmp -Destination $thm -Force
-                try{ if($script:bibCoverCache){ $script:bibCoverCache[$appid]=$thm } }catch{}
-            }catch{}
+                try{if($script:bibCoverCache){$script:bibCoverCache[$appid]=$thm}}catch{}
+            }catch{}finally{if($shade){$shade.Dispose()};if($softGfx){$softGfx.Dispose()};if($softBmp){$softBmp.Dispose()};if($gfx){$gfx.Dispose()};if($bmp){$bmp.Dispose()};if($si){$si.Dispose()}}
         } else {
             foreach($fn in @(($appid+'.jpg'),('thumb_'+$appid+'.jpg'))){
                 try{ Remove-Item -LiteralPath (Join-Path $cd $fn) -Force -ErrorAction SilentlyContinue }catch{}
@@ -7575,7 +7791,7 @@ $script:bibTimer.Add_Tick({
                     }
                 }
             }
-            if ($result -and $result.ok -and $result.path) { Set-BiblioCoverPath ([string]$job.appid) ([string]$result.path) }
+            if ($result -and $result.ok -and $result.path) { Set-BiblioCoverPath ([string]$job.appid) ([string]$result.path); if([System.IO.Path]::GetFileNameWithoutExtension([string]$result.path) -like 'thumb_*'){$script:bibThumbMigrated[[string]$job.appid]=$true}; try{$refreshBox=$script:bibBoxes[[string]$job.appid];if($refreshBox -and -not $refreshBox.IsDisposed){$refreshBox.AccessibleDescription=''}}catch{} }
             try { $job.ps.Dispose() } catch {}
         }
         $script:bibCoverJobs = $alive
