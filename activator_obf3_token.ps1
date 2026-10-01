@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.98"
+$script:version = "V1.99"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6854,13 +6854,9 @@ function Get-BiblioGridMetrics {
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
         $tileWidth=104;$coverWidth=94;$coverHeight=94;$tileHeight=148;$rowHeight=156
     } else {
-        $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
-        $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
-        $tileWidth=[Math]::Max(128,$cellWidth-12)
-        $coverWidth=[Math]::Max(110,$tileWidth-10)
-        $coverHeight=[Math]::Max(156,[int][Math]::Round($coverWidth*1.42))
-        $tileHeight=$coverHeight+64
-        $rowHeight=$tileHeight+12
+        $cellWidth=168
+        $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
+        $tileWidth=160;$coverWidth=150;$coverHeight=213;$tileHeight=223;$rowHeight=231
     }
     return @{Width=$width;Inner=$inner;Columns=$columns;CellWidth=$cellWidth;TileWidth=$tileWidth;CoverWidth=$coverWidth;CoverHeight=$coverHeight;TileHeight=$tileHeight;RowHeight=$rowHeight}
 }
@@ -6941,8 +6937,8 @@ function Set-BiblioMode([bool]$downloadedOnly) {
     if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
 }
 function Switch-BiblioView{
-    if($script:bibView -eq 'compact'){ $script:bibView='grande'; $script:bibViewBtn.Tag.Text='Vista compacta' }
-    else { $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande' }
+    if($script:bibView -eq 'compact'){ $script:bibView='grande'; $script:bibViewBtn.Tag.Text='Vista compacta'; $script:bibPageSize=96 }
+    else { $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande'; $script:bibPageSize=72 }
     $script:bibViewBtn.Invalidate()
     $script:bibPage=0;$script:bibFilterKey=$null
     if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
@@ -6982,6 +6978,7 @@ function New-BiblioTile($game) {
     if($script:bibView -eq 'compact'){ if(-not $script:bibCompactFont){ $script:bibCompactFont=New-Object System.Drawing.Font('Bahnschrift',8) }; $label.Font=$script:bibCompactFont } else { $label.Font=$script:FntSub }
     $label.TextAlign=[System.Drawing.ContentAlignment]::MiddleCenter;$label.AutoEllipsis=$true
     $label.Text=[string]$game.name;$label.Cursor=[System.Windows.Forms.Cursors]::Hand;$label.Tag=$game
+    $label.Visible=($script:bibView -eq 'compact')
     $label.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
     $label.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
     $tile.Controls.Add($label)
@@ -7210,12 +7207,15 @@ function Show-Biblio {
         if ($script:bibSortedCacheKey -eq $sortKey -and $script:bibSortedGamesCache) { $script:bibGames=@($script:bibSortedGamesCache) }
         else {
             $instIds=@{}; try{ $instIds=Get-BiblioInstalledIds }catch{}
-            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $s=0; if(-not $script:bibCoverCache.ContainsKey([string]$_.appid)){$s+=8}; if($_.name -like 'Juego *'){$s+=4}; if(-not $instIds.ContainsKey([string]$_.appid)){$s+=2}; $s }}, @{Expression={$_.name}}) } catch {}
+            $topRank=@{}; try{ $topRank=$script:bibTopRank }catch{}
+            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $r=999999; try{ if($topRank.ContainsKey([string]$_.appid)){ $r=[int]$topRank[[string]$_.appid] } }catch{}; $r }}, @{Expression={ $s=0; if(-not $script:bibCoverCache.ContainsKey([string]$_.appid)){$s+=8}; if($_.name -like 'Juego *'){$s+=4}; if(-not $instIds.ContainsKey([string]$_.appid)){$s+=2}; $s }}, @{Expression={$_.name}}) } catch {}
             $script:bibSortedCacheKey=$sortKey
             $script:bibSortedGamesCache=@($script:bibGames)
         }
         $script:bibFilterKey = $null
         $script:bibPage = 0
+        $script:bibView='compact'; $script:bibPageSize=72
+        try{ $script:bibViewBtn.Tag.Text='Vista grande'; $script:bibViewBtn.Invalidate() }catch{}
         $script:bibSuppressSearch=$true
         $script:bibSearch.Text = ''
         $script:bibSuppressSearch=$false
@@ -7257,8 +7257,9 @@ $script:bibDownloadedBtn=New-BibNavButton 'Solo descargados' {Set-BiblioMode $tr
 $script:bibp.Controls.Add($script:bibAllBtn);$script:bibp.Controls.Add($script:bibDownloadedBtn)
 $script:bibView='compact'
 $script:bibViewBtn=New-BibNavButton 'Vista grande' {Switch-BiblioView}
+$script:bibTopRank=@{'271590'=1;'1091500'=2;'1174180'=3;'1245620'=4;'1086940'=5;'1593500'=6;'292030'=7;'489830'=8;'377160'=9;'1716740'=10;'990080'=11;'1817070'=12;'2651280'=13;'2215430'=14;'1016730'=15;'2420110'=16;'553850'=17;'730'=18;'570'=19;'578080'=20;'1172470'=21;'252490'=22;'381210'=23;'739630'=24;'1966720'=25;'3241660'=26;'413150'=27;'105600'=28;'367520'=29;'1030300'=30;'1145360'=31;'588650'=32;'646570'=33;'2379780'=34;'1794680'=35;'374320'=36;'814380'=37;'2519060'=38;'1938090'=39;'2933620'=40;'311210'=41;'1517290'=42;'1238860'=43;'1237970'=44;'2665430'=45;'2195250'=46;'1551360'=47;'1293830'=48;'244210'=49;'805550'=50;'284160'=51;'227300'=52;'270880'=53;'289070'=54;'8930'=55;'1295660'=56;'813780'=57;'1466860'=58;'1142710'=59;'281990'=60;'1158310'=61;'255710'=62;'949230'=63;'294100'=64;'427520'=65;'526870'=66;'457140'=67;'323190'=68;'1609400'=69;'916440'=70;'268500'=71;'435150'=72;'632470'=73;'620'=74;'400'=75;'220'=76;'546560'=77;'550'=78;'440'=79;'4000'=80;'2357570'=81;'1085660'=82;'230410'=83;'238960'=84;'2694490'=85;'2344520'=86;'1599340'=87;'1063730'=88;'582010'=89;'2246340'=90;'1446780'=91;'1627720'=92;'2358720'=93;'883710'=94;'952060'=95;'2050650'=96;'418370'=97;'1196590'=98;'2124490'=99;'1693980'=100;'870780'=101;'208650'=102;'209000'=103;'976310'=104;'1971550'=105;'1364780'=106;'1778820'=107;'1687950'=108;'2161700'=109;'1235140'=110;'2072450'=111;'638970'=112;'2058180'=113;'1426210'=114;'1222700'=115;'264710'=116;'848450'=117;'242760'=118;'1326470'=119;'648800'=120;'892970'=121;'1604030'=122;'1623730'=123;'1203620'=124;'962130'=125;'1172620'=126;'275850'=127;'945360'=128;'1097150'=129;'252950'=130;'268910'=131;'1057090'=132;'261570'=133;'504230'=134;'39210'=135;'1462040'=136;'2909400'=137;'524220'=138;'20920'=139;'12200'=140;'12210'=141}
 $script:bibp.Controls.Add($script:bibViewBtn)
-$script:bibPageSize=48
+$script:bibPageSize=72
 $script:bibPage=0
 $script:bibPageGames=@()
 $script:bibFilteredGames=@()
