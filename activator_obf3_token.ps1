@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.97"
+$script:version = "V1.98"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6849,13 +6849,19 @@ function Get-BiblioInstalledIds {
 function Get-BiblioGridMetrics {
     $width=[Math]::Max(180,[int]$script:bibViewport.ClientSize.Width)
     $inner=[Math]::Max(160,$width-24)
-    $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
-    $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
-    $tileWidth=[Math]::Max(128,$cellWidth-12)
-    $coverWidth=[Math]::Max(110,$tileWidth-10)
-    $coverHeight=[Math]::Max(156,[int][Math]::Round($coverWidth*1.42))
-    $tileHeight=$coverHeight+64
-    $rowHeight=$tileHeight+12
+    if($script:bibView -eq 'compact'){
+        $cellWidth=112
+        $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
+        $tileWidth=104;$coverWidth=94;$coverHeight=94;$tileHeight=148;$rowHeight=156
+    } else {
+        $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
+        $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
+        $tileWidth=[Math]::Max(128,$cellWidth-12)
+        $coverWidth=[Math]::Max(110,$tileWidth-10)
+        $coverHeight=[Math]::Max(156,[int][Math]::Round($coverWidth*1.42))
+        $tileHeight=$coverHeight+64
+        $rowHeight=$tileHeight+12
+    }
     return @{Width=$width;Inner=$inner;Columns=$columns;CellWidth=$cellWidth;TileWidth=$tileWidth;CoverWidth=$coverWidth;CoverHeight=$coverHeight;TileHeight=$tileHeight;RowHeight=$rowHeight}
 }
 function Set-BiblioGridScroll {
@@ -6899,7 +6905,7 @@ function Set-BiblioLayout {
     $script:bibViewport.Size=New-Object System.Drawing.Size($viewW,$viewH)
     $script:bibScroll.Location=New-Object System.Drawing.Point(($PAD+$viewW+4),$top)
     $script:bibScroll.Size=New-Object System.Drawing.Size(14,$viewH)
-    $searchW=[Math]::Max(180,$clientW-(2*$PAD)-256)
+    $searchW=[Math]::Max(180,$clientW-(2*$PAD)-384)
     $script:bibSearch.Location=New-Object System.Drawing.Point($PAD,50)
     $script:bibSearch.Size=New-Object System.Drawing.Size($searchW,28)
     $filterX=$PAD+$searchW+8
@@ -6907,6 +6913,8 @@ function Set-BiblioLayout {
     $script:bibAllBtn.Size=New-Object System.Drawing.Size(86,32)
     $script:bibDownloadedBtn.Location=New-Object System.Drawing.Point(($filterX+94),47)
     $script:bibDownloadedBtn.Size=New-Object System.Drawing.Size(154,32)
+    $script:bibViewBtn.Location=New-Object System.Drawing.Point(($filterX+256),47)
+    $script:bibViewBtn.Size=New-Object System.Drawing.Size(110,32)
     $script:bibLoadingCard.Location=New-Object System.Drawing.Point([int](($viewW-$script:bibLoadingCard.Width)/2),[int](($viewH-$script:bibLoadingCard.Height)/2))
     $script:bibEmptyState.Location=New-Object System.Drawing.Point(12,[int](($viewH-44)/2))
     $script:bibEmptyState.Size=New-Object System.Drawing.Size([Math]::Max(120,$viewW-24),44)
@@ -6932,6 +6940,13 @@ function Set-BiblioMode([bool]$downloadedOnly) {
     $script:bibFilterKey=$null
     if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
 }
+function Switch-BiblioView{
+    if($script:bibView -eq 'compact'){ $script:bibView='grande'; $script:bibViewBtn.Tag.Text='Vista compacta' }
+    else { $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande' }
+    $script:bibViewBtn.Invalidate()
+    $script:bibPage=0;$script:bibFilterKey=$null
+    if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
+}
 function Show-BiblioLoading([string]$title,[string]$subtitle) {
     if(-not $script:bibLoadingCard){return}
     $script:bibLoadingCard.Tag.Title=$title
@@ -6947,7 +6962,7 @@ function New-BiblioTile($game) {
     $tile=New-BufferedPanel
     $tile.BackColor=$script:CardBG
     $tile.Tag=@{Hover=$false;Game=$game}
-    $tile.Add_Paint({param($s,$e);$e.Graphics.SmoothingMode='AntiAlias';$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR;$br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}));$pen=New-Object System.Drawing.Pen($script:CardBorder,1);$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p);$br.Dispose();$pen.Dispose();$p.Dispose()})
+    $tile.Add_Paint({param($s,$e);$e.Graphics.SmoothingMode='AntiAlias';$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR;$br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}));$pen=New-Object System.Drawing.Pen($(if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}),$(if($s.Tag.Hover){1.6}else{1}));$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p);$br.Dispose();$pen.Dispose();$p.Dispose()})
     $tile.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
     $tile.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
     $pic=New-Object System.Windows.Forms.PictureBox
@@ -6963,7 +6978,8 @@ function New-BiblioTile($game) {
     $tile.Controls.Add($pic)
     $label=New-Object System.Windows.Forms.Label
     $label.Location=New-Object System.Drawing.Point(6,224);$label.Size=New-Object System.Drawing.Size(140,44)
-    $label.ForeColor=$script:White;$label.BackColor=$script:CardBG;$label.Font=$script:FntSub
+    $label.ForeColor=$script:White;$label.BackColor=$script:CardBG
+    if($script:bibView -eq 'compact'){ if(-not $script:bibCompactFont){ $script:bibCompactFont=New-Object System.Drawing.Font('Bahnschrift',8) }; $label.Font=$script:bibCompactFont } else { $label.Font=$script:FntSub }
     $label.TextAlign=[System.Drawing.ContentAlignment]::MiddleCenter;$label.AutoEllipsis=$true
     $label.Text=[string]$game.name;$label.Cursor=[System.Windows.Forms.Cursors]::Hand;$label.Tag=$game
     $label.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
@@ -7190,10 +7206,11 @@ function Show-Biblio {
         try{[System.Windows.Forms.Application]::DoEvents()}catch{}
         $script:bibGames = Get-BiblioGames
         Update-BiblioCoverCache
-        $sortKey = [string]$script:bibGamesCacheKey+'|'+[string]$script:bibCoverCacheKey
+        $sortKey = [string]$script:bibGamesCacheKey+'|'+[string]$script:bibCoverCacheKey+'|'+[string]$script:bibInstalledCacheKey
         if ($script:bibSortedCacheKey -eq $sortKey -and $script:bibSortedGamesCache) { $script:bibGames=@($script:bibSortedGamesCache) }
         else {
-            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ if($script:bibCoverCache.ContainsKey([string]$_.appid)){0}else{1} }}, @{Expression={ if($_.name -like 'Juego *'){1}else{0} }}, @{Expression={$_.name}}) } catch {}
+            $instIds=@{}; try{ $instIds=Get-BiblioInstalledIds }catch{}
+            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $s=0; if(-not $script:bibCoverCache.ContainsKey([string]$_.appid)){$s+=8}; if($_.name -like 'Juego *'){$s+=4}; if(-not $instIds.ContainsKey([string]$_.appid)){$s+=2}; $s }}, @{Expression={$_.name}}) } catch {}
             $script:bibSortedCacheKey=$sortKey
             $script:bibSortedGamesCache=@($script:bibGames)
         }
@@ -7238,6 +7255,9 @@ $script:bibAllBtn=New-BibNavButton 'Todos' {Set-BiblioMode $false}
 $script:bibAllBtn.Tag.Selected=$true
 $script:bibDownloadedBtn=New-BibNavButton 'Solo descargados' {Set-BiblioMode $true}
 $script:bibp.Controls.Add($script:bibAllBtn);$script:bibp.Controls.Add($script:bibDownloadedBtn)
+$script:bibView='compact'
+$script:bibViewBtn=New-BibNavButton 'Vista grande' {Switch-BiblioView}
+$script:bibp.Controls.Add($script:bibViewBtn)
 $script:bibPageSize=48
 $script:bibPage=0
 $script:bibPageGames=@()
