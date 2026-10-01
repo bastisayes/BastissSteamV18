@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.95"
+$script:version = "V1.96"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -7403,6 +7403,43 @@ $script:bibTimer.Add_Tick({
 $script:bibJobs = @()
 $form.Controls.Add($script:bibp)
 Set-BiblioLayout
+$script:updateNotified=$false
+$script:updTimer=New-Object System.Windows.Forms.Timer
+$script:updTimer.Interval=120000
+$script:updTimer.Add_Tick({
+    try{ Check-AppUpdate }catch{}
+    try{ $script:updTimer.Interval=1800000 }catch{}
+})
+$script:updTimer.Start()
+function Check-AppUpdate {
+    if($script:updateNotified){return}
+    try{
+        $rv=([string](Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/version.txt' -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop)).Trim()
+        $m1=[regex]::Match($script:version,'V(\d+)\.(\d+)'); $m2=[regex]::Match($rv,'V(\d+)\.(\d+)')
+        if(-not $m1.Success -or -not $m2.Success){return}
+        $cur=[int]$m1.Groups[1].Value*1000+[int]$m1.Groups[2].Value
+        $new=[int]$m2.Groups[1].Value*1000+[int]$m2.Groups[2].Value
+        if($new -le $cur){return}
+        $script:updateNotified=$true
+        Start-SelfUpdate $rv
+    }catch{}
+}
+function Start-SelfUpdate([string]$newVer) {
+    try{
+        $self=[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        $newFile=$self + ".new"
+        try{ Remove-Item -LiteralPath $newFile -Force -ErrorAction SilentlyContinue }catch{}
+        (New-Object System.Net.WebClient).DownloadFile("https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator4.exe",$newFile)
+        if(-not ((Test-Path -LiteralPath $newFile) -and ((Get-Item -LiteralPath $newFile).Length -gt 100000))){return}
+        $r=[System.Windows.Forms.MessageBox]::Show(("Hay una nueva version disponible ("+$newVer+"). Reiniciar ahora para actualizar?"),"Actualizacion","YesNo","Information")
+        if($r -ne "Yes"){return}
+        $helper=Join-Path $env:TEMP ("bsmap_upd_"+[System.IO.Path]::GetRandomFileName()+".ps1")
+        Set-Content -LiteralPath $helper ("param(`$p,`$s,`$n)`nwhile(Get-Process -Id `$p -ErrorAction SilentlyContinue){Start-Sleep -Milliseconds 500}`nMove-Item -LiteralPath `$n -Destination `$s -Force`nStart-Process -FilePath `$s") -Encoding ASCII
+        $script:reallyClose=$true
+        Start-Process -FilePath "powershell" -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",$helper,[string]$PID,$self,$newFile) -WindowStyle Hidden
+        $form.Close()
+    }catch{}
+}
 function Test-BiblioInstalled([string]$appid) {
     try { $libs=@();if($script:steamLibs){$libs=@($script:steamLibs)}else{$libs=@(Ss3Jd)};foreach ($lib in $libs) { $mf = Join-Path $lib "steamapps\appmanifest_$appid.acf"; if (Test-Path -LiteralPath $mf) { return $true } } } catch {}
     return $false
@@ -7482,25 +7519,30 @@ function Repair-BiblioGame([string]$appid) {
                 else { foreach($lib in @(Ss3Jd)){ $cand=Join-Path (Join-Path $lib "steamapps\common") $gfolder; if(Test-Path -LiteralPath $cand){$gpath=$cand;break} } }
             }
         } catch {}
-        if($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath)){
-            try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
-            $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
-            if($fixes -and $fixes.Count -gt 0){
-                $fn,$fu = Ff2Xa $gfolder $fixes
-                if($fu){ try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparacion disponible, reparando..."}; [System.Windows.Forms.Application]::DoEvents() }catch{} }
-                $fx=Apply-FixAutomatically $gfolder $gpath $fixes
-                if($fx[0]){ $out.ok=$true;$out.msg="Juego reparado";$out.method='github'; return $out }
-            }
-        }
+        if(-not ($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath))){ $out.msg="Este juego no requiere reparacion."; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
+        $fn,$fu = $null,$null
+        if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
+        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; return $out }
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Aplicando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        $fx=Apply-FixAutomatically $gfolder $gpath $fixes
+        if($fx[0]){ $out.ok=$true;$out.msg="Reparacion terminada.";$out.method='github'; return $out }
+        $out.msg="Este juego no requiere reparacion."
+    } catch { $out.msg="Este juego no requiere reparacion." }
+    return $out
+}
+function Activate-BiblioGame([string]$appid) {
+    $out=@{ok=$false;msg=''}
+    try {
+        $g=Repair-BiblioGame $appid
+        if($g.ok){ $out.ok=$true;$out.msg="Juego activado"; return $out }
         $r=Repair-UnoApp $appid
-        if($r.ok){ $out.ok=$true;$out.msg="Juego reparado";$out.method='sb'; return $out }
-        $m2msg=$r.msg
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Probando otra reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        if($r.ok){ $out.ok=$true;$out.msg="Juego activado"; return $out }
         $ok1=$false; try{ $ok1=Xz9Qk -Silent }catch{}
-        if($ok1){ $out.ok=$true;$out.msg="Juego reparado";$out.method='patch'; return $out }
-        $out.msg=$m2msg
-    } catch { $out.msg=$_.Exception.Message }
+        if($ok1){ $out.ok=$true;$out.msg="Juego activado"; return $out }
+        $out.msg="No se pudo activar el juego."
+    } catch { $out.msg="No se pudo activar el juego." }
     return $out
 }
 function New-BiblioRepairPool {
@@ -7883,7 +7925,7 @@ $script:bdtInst.Add_Click({ try {
     if(Test-BiblioLua $a){ try{ Start-Process "steam://install/$a" }catch{}; $script:bdtStatus.Text="Instalacion iniciada en Steam..."; Start-BiblioDlWatch $a; return }
     $script:bdtInstBusy=$true
     $script:bdtStatus.Text="Activando el juego antes de instalar..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-    $rr=Repair-BiblioGame $a
+    $rr=Activate-BiblioGame $a
     $script:bdtInstBusy=$false
     if($rr.ok){ $script:bdtStatus.Text="Activado, abriendo instalacion..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); try{ Start-Process "steam://install/$a" }catch{}; Start-BiblioDlWatch $a }
     else { $script:bdtStatus.Text="No se pudo activar el juego."; [System.Windows.Forms.MessageBox]::Show("No se pudo activar el juego.","Instalar","OK","Warning") }
@@ -8782,7 +8824,7 @@ try { [System.Windows.Forms.Application]::Run($form) } catch {
     }
 }
 try { $script:trayIcon.Visible = $false; $script:trayIcon.Dispose() } catch {}
-foreach ($timer in @($script:cdT,$script:rfT,$script:clpTicker,$script:urlChecker,$script:steamWatchTimer,$script:watcherLogTimer,$script:luatoolsLogTimer,$script:bibTimer,$script:bibRenderTimer,$script:bibLoadingTimer,$script:bibNameTimer,$script:bdtDlTimer,$script:bibDetailTimer,$script:bibRepairTimer)) {
+foreach ($timer in @($script:cdT,$script:rfT,$script:clpTicker,$script:urlChecker,$script:steamWatchTimer,$script:watcherLogTimer,$script:luatoolsLogTimer,$script:bibTimer,$script:bibRenderTimer,$script:bibLoadingTimer,$script:bibNameTimer,$script:bdtDlTimer,$script:bibDetailTimer,$script:bibRepairTimer,$script:updTimer)) {
     try { if ($timer) { $timer.Stop(); $timer.Dispose() } } catch {}
 }
 $pendingStops = @()
