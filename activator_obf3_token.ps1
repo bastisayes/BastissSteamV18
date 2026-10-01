@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.00"
+$script:version = "V2.01"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6850,9 +6850,9 @@ function Get-BiblioGridMetrics {
     $width=[Math]::Max(180,[int]$script:bibViewport.ClientSize.Width)
     $inner=[Math]::Max(160,$width-24)
     if($script:bibView -eq 'compact'){
-        $cellWidth=112
+        $cellWidth=106
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/[double]$cellWidth))
-        $tileWidth=104;$coverWidth=94;$coverHeight=94;$tileHeight=148;$rowHeight=156
+        $tileWidth=100;$coverWidth=92;$coverHeight=92;$tileHeight=142;$rowHeight=150
     } else {
         $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
         $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
@@ -7365,8 +7365,8 @@ $script:bibScroll.Location=New-Object System.Drawing.Point(($FW-$PAD-14),84)
 $script:bibScroll.Size=New-Object System.Drawing.Size(14,500)
 $script:bibScroll.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bibp.Controls.Add($script:bibScroll)
-$script:bibPrev=New-BibNavButton 'Anterior' { if($script:bibPage -gt 0){$script:bibPage--;Refresh-BiblioGrid $script:bibFilterKey} }
-$script:bibNext=New-BibNavButton 'Siguiente' { $script:bibPage++;Refresh-BiblioGrid $script:bibFilterKey }
+$script:bibPrev=New-BibNavButton 'Anterior' { if($script:bibPage -gt 0){$script:bibPage--;Refresh-BiblioGrid $script:bibSearch.Text} }
+$script:bibNext=New-BibNavButton 'Siguiente' { $script:bibPage++;Refresh-BiblioGrid $script:bibSearch.Text }
 $script:bibPageInfo=New-Object System.Windows.Forms.Label
 $script:bibPageInfo.ForeColor=$script:Gray;$script:bibPageInfo.BackColor=$BG;$script:bibPageInfo.Font=$script:FntSub
 $script:bibPageInfo.TextAlign=[System.Drawing.ContentAlignment]::MiddleLeft
