@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.80"
+$script:version = "V1.81"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6494,8 +6494,9 @@ function Show-BiblioDetail($g) {
     $inst=Test-BiblioInstalled $aid; $lua=Test-BiblioLua $aid
     $est="No instalado"; if($inst){$est="Instalado"}; if($lua){$est+=" | Activado"}else{$est+=" | Sin activar"}
     $script:bdtEst=$est
-    if($inst){$script:bdtPlay.Tag.Text="JUGAR";$script:bdtPlayUrl="steam://rungameid/$aid"}else{$script:bdtPlay.Tag.Text="INSTALAR";$script:bdtPlayUrl="steam://install/$aid"}
+    $script:bdtPlay.Tag.Text="JUGAR";$script:bdtPlayUrl="steam://rungameid/$aid"
     $script:bdtPlay.Invalidate()
+    $script:bdtInstUrl="steam://install/$aid"
     $script:bdtStoreUrl="https://store.steampowered.com/app/$aid"
     $cd=Join-Path $env:TEMP 'bsmap_covers'; $cfp=Join-Path $cd ($aid+"_head.jpg")
     if(Test-Path -LiteralPath $cfp){ try{$script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp)}catch{} }
@@ -6535,7 +6536,7 @@ function Show-BiblioDetail($g) {
         $script:bdtTagV.Size=New-Object System.Drawing.Size($colW,80)
         $stripY=372; $stripW=[int](($cw-2*$PAD)/4)
         for($i=0;$i -lt 4;$i++){ $script:bdtCatT[$i].Location=New-Object System.Drawing.Point(($PAD+$i*$stripW+12),$stripY); $script:bdtCatT[$i].Size=New-Object System.Drawing.Size(($stripW-24),52) }
-        $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+320),452);$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+570),452)
+        $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452);$script:bdtInst.Location=New-Object System.Drawing.Point(($PAD+260),452);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+520),452);$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+770),452)
         $script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,508);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-2*$PAD),24)
     } catch {}
     $script:bdtp.Visible=$true
@@ -6658,12 +6659,17 @@ function New-BdtBtn($x,$y,$w,$h,$bg,$hbg,$fg,$bd,$fnt){
     })
     return $b
 }
-$script:bdtPlay=New-BdtBtn $PAD 452 300 50 ([System.Drawing.Color]::FromArgb(27,127,198)) ([System.Drawing.Color]::FromArgb(35,150,225)) ([System.Drawing.Color]::White) $null (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
+$script:bdtPlay=New-BdtBtn $PAD 452 240 50 ([System.Drawing.Color]::FromArgb(27,127,198)) ([System.Drawing.Color]::FromArgb(35,150,225)) ([System.Drawing.Color]::White) $null (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
 $script:bdtPlay.Tag.Text="JUGAR"
 $script:bdtPlayUrl=""
 $script:bdtPlay.Add_Click({ try { if($script:bdtPlayUrl){ Start-Process $script:bdtPlayUrl } } catch {} })
 $script:bdtp.Controls.Add($script:bdtPlay)
-$script:bdtRep=New-BdtBtn ($PAD+320) 452 230 50 $script:CardBG $script:CardHover $script:White $script:Cyan $script:FntCard
+$script:bdtInst=New-BdtBtn ($PAD+260) 452 240 50 $script:CardBG $script:CardHover $script:White $script:Cyan (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
+$script:bdtInst.Tag.Text="INSTALAR"
+$script:bdtInstUrl=""
+$script:bdtInst.Add_Click({ try { if($script:bdtInstUrl){ Start-Process $script:bdtInstUrl } } catch {} })
+$script:bdtp.Controls.Add($script:bdtInst)
+$script:bdtRep=New-BdtBtn ($PAD+520) 452 230 50 $script:CardBG $script:CardHover $script:White $script:Cyan $script:FntCard
 $script:bdtRep.Tag.Text="REPARAR JUEGO"
 $script:bdtRepBusy=$false
 $script:bdtRep.Add_Click({ try {
@@ -6676,7 +6682,7 @@ $script:bdtRep.Add_Click({ try {
     else { $script:bdtStatus.Text="No se pudo reparar: "+$rr.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$rr.msg),"Reparar","OK","Warning") }
 } catch { try{$script:bdtRepBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtRep)
-$script:bdtStore=New-BdtBtn ($PAD+570) 452 280 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(60,70,90)) $script:FntCard
+$script:bdtStore=New-BdtBtn ($PAD+770) 452 280 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(60,70,90)) $script:FntCard
 $script:bdtStore.Tag.Text="Ver en la tienda de Steam"
 $script:bdtStoreUrl=""
 $script:bdtStore.Add_Click({ try { if($script:bdtStoreUrl){ Start-Process $script:bdtStoreUrl } } catch {} })
