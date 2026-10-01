@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.78"
+$script:version = "V1.79"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6016,6 +6016,7 @@ function Repair-UnoApp([string]$appid) {
         } catch {}
         $roots=$roots | Sort-Object -Unique | Where-Object { $_ -and (Test-Path $_) }
         if($roots.Count -eq 0){ $res.msg="No se encontraron rutas de Steam"; return $res }
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: descargando parche..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $zipUrl="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip"
         $tmpZip=Join-Path $env:TEMP "parche2_$(Get-Random).zip"
         try { (New-Object System.Net.WebClient).DownloadFile($zipUrl,$tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60             } catch { $res.msg="No se pudo descargar el componente"; return $res } }
@@ -6027,6 +6028,7 @@ function Repair-UnoApp([string]$appid) {
             } catch { Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue; $res.msg="No se pudo extraer a $sr"; return $res }
         }
         Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: descargando datos del juego..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $sr0=$roots[0]
         $manDir=Join-Path $sr0 "config\depotcache"; $luaDir=Join-Path $sr0 "config\stplug-in"; $luaDir2=Join-Path $sr0 "config\lua"
         foreach($d in @($manDir,$luaDir,$luaDir2)){ if(-not (Test-Path -LiteralPath $d)){ New-Item -ItemType Directory -Path $d -Force | Out-Null } }
@@ -6047,6 +6049,7 @@ function Repair-UnoApp([string]$appid) {
                 Copy-Item -LiteralPath (Join-Path $tmp "$appid.lua") -Destination (Join-Path $luaDir2 "$appid.lua") -Force -ErrorAction SilentlyContinue
                 $luaOk=$true
                 $ids=@([regex]::Matches($txtLua,'setManifestid\((\d+),\s*"(\d+)"') | ForEach-Object { "$($_.Groups[1].Value)_$($_.Groups[2].Value).manifest" }) | Select-Object -Unique
+                try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: descargando manifests..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
                 foreach($mm in $ids){
                     $destMan=Join-Path $manDir $mm
                     if((Test-Path -LiteralPath $destMan) -and ((Get-Item -LiteralPath $destMan).Length -gt 500)){ $manCount++; continue }
@@ -6459,8 +6462,9 @@ function Show-BiblioDetail($g) {
     $inst=Test-BiblioInstalled $aid; $lua=Test-BiblioLua $aid
     $est="No instalado"; if($inst){$est="Instalado"}; if($lua){$est+=" | Activado"}else{$est+=" | Sin activar"}
     $script:bdtEst=$est
-    if($inst){$script:bdtPlay.Text="JUGAR";$script:bdtPlay.Tag="steam://rungameid/$aid"}else{$script:bdtPlay.Text="INSTALAR";$script:bdtPlay.Tag="steam://install/$aid"}
-    $script:bdtStore.Tag="https://store.steampowered.com/app/$aid"
+    if($inst){$script:bdtPlay.Tag.Text="JUGAR";$script:bdtPlayUrl="steam://rungameid/$aid"}else{$script:bdtPlay.Tag.Text="INSTALAR";$script:bdtPlayUrl="steam://install/$aid"}
+    $script:bdtPlay.Invalidate()
+    $script:bdtStoreUrl="https://store.steampowered.com/app/$aid"
     $cd=Join-Path $env:TEMP 'bsmap_covers'; $cfp=Join-Path $cd ($aid+"_head.jpg")
     if(Test-Path -LiteralPath $cfp){ try{$script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp)}catch{} }
     else { try { (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudflare.steamstatic.com/steam/apps/$aid/header.jpg",$cfp); $script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp) } catch { try{Remove-Item $cfp -Force -ErrorAction SilentlyContinue}catch{} } }
@@ -6603,30 +6607,52 @@ for($i=0;$i -lt 4;$i++){
     $script:bdtp.Controls.Add($ct)
     $script:bdtCatT+=$ct
 }
-$script:bdtPlay=New-Object System.Windows.Forms.Button
-$script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452)
-$script:bdtPlay.Size=New-Object System.Drawing.Size(300,50)
-$script:bdtPlay.BackColor=[System.Drawing.Color]::FromArgb(27,127,198);$script:bdtPlay.ForeColor=[System.Drawing.Color]::White
-$script:bdtPlay.FlatStyle="Flat";$script:bdtPlay.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold);$script:bdtPlay.Cursor=[System.Windows.Forms.Cursors]::Hand
-$script:bdtPlay.Add_Click({ param($s) try { Start-Process $s.Tag } catch {} })
+function New-BdtBtn($x,$y,$w,$h,$bg,$hbg,$fg,$bd,$fnt){
+    $b=New-BufferedPanel
+    $b.Location=New-Object System.Drawing.Point($x,$y)
+    $b.Size=New-Object System.Drawing.Size($w,$h)
+    $b.BackColor=$BG;$b.Cursor=[System.Windows.Forms.Cursors]::Hand
+    $b.Tag=@{Hover=$false;Text="";Bg=$bg;Hbg=$hbg;Fg=$fg;Bd=$bd;Fnt=$fnt}
+    $b.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
+    $b.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
+    $b.Add_Paint({param($s,$e)
+        $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+        $n=$s.Tag;$bc=if($n.Hover){$n.Hbg}else{$n.Bg}
+        $p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR
+        $b1=New-Object System.Drawing.SolidBrush($bc)
+        $g.FillPath($b1,$p);$b1.Dispose();$p.Dispose()
+        if($n.Bd){$b2=New-Object System.Drawing.Pen($n.Bd,1.5);$p2=New-RR 1 1 ($s.Width-3) ($s.Height-3) $CR;$g.DrawPath($b2,$p2);$b2.Dispose();$p2.Dispose()}
+        if($n.Text){$tb=New-Object System.Drawing.SolidBrush($n.Fg);$sf=New-Object System.Drawing.StringFormat;$sf.Alignment="Center";$sf.LineAlignment="Center";$g.DrawString($n.Text,$n.Fnt,$tb,(New-Object System.Drawing.RectangleF(0,0,$s.Width,$s.Height)),$sf);$tb.Dispose();$sf.Dispose()}
+    })
+    return $b
+}
+$script:bdtPlay=New-BdtBtn $PAD 452 300 50 ([System.Drawing.Color]::FromArgb(27,127,198)) ([System.Drawing.Color]::FromArgb(35,150,225)) ([System.Drawing.Color]::White) $null (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
+$script:bdtPlay.Tag.Text="JUGAR"
+$script:bdtPlayUrl=""
+$script:bdtPlay.Add_Click({ try { if($script:bdtPlayUrl){ Start-Process $script:bdtPlayUrl } } catch {} })
 $script:bdtp.Controls.Add($script:bdtPlay)
-$script:bdtRep=New-Object System.Windows.Forms.Button
-$script:bdtRep.Text="REPARAR JUEGO"
-$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+320),452)
-$script:bdtRep.Size=New-Object System.Drawing.Size(230,50)
-$script:bdtRep.BackColor=$script:CardBG;$script:bdtRep.ForeColor=$script:White
-$script:bdtRep.FlatStyle="Flat";$script:bdtRep.FlatAppearance.BorderColor=$script:Cyan
-$script:bdtRep.Font=$script:FntCard;$script:bdtRep.Cursor=[System.Windows.Forms.Cursors]::Hand
-$script:bdtRep.Add_Click({ try { $a=$script:bdtAid; if(-not $a){return}; $script:bdtRep.Enabled=$false; $script:bdtStatus.Text="Reparando..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); $r=Repair-UnoApp $a; $script:bdtRep.Enabled=$true; if($r.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show("Juego reparado correctamente.","Reparar","OK","Information") } else { $script:bdtStatus.Text="Reparacion: "+$r.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$r.msg),"Reparar","OK","Warning") } } catch { try{$script:bdtRep.Enabled=$true}catch{} } })
+$script:bdtRep=New-BdtBtn ($PAD+320) 452 230 50 $script:CardBG $script:CardHover $script:White $script:Cyan $script:FntCard
+$script:bdtRep.Tag.Text="REPARAR JUEGO"
+$script:bdtRepBusy=$false
+$script:bdtRep.Add_Click({ try {
+    if($script:bdtRepBusy){return}; $a=$script:bdtAid; if(-not $a){return}
+    $script:bdtRepBusy=$true
+    $script:bdtStatus.Text="Reparando (metodo 2)..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+    $r=Repair-UnoApp $a
+    if($r.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show("Juego reparado correctamente. Reinicia Steam.","Reparar","OK","Information") }
+    else {
+        $script:bdtStatus.Text="Metodo 2 fallo, probando metodo 1..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+        $ok1=$false; try{ $ok1=Xz9Qk -Silent }catch{}
+        if($ok1){ $script:bdtStatus.Text="Reparado OK (metodo 1)"; [System.Windows.Forms.MessageBox]::Show("Juego reparado con el metodo 1. Reinicia Steam.","Reparar","OK","Information") }
+        else { $script:bdtStatus.Text="No se pudo reparar: "+$r.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$r.msg),"Reparar","OK","Warning") }
+    }
+    $script:bdtRepBusy=$false
+} catch { try{$script:bdtRepBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtRep)
-$script:bdtStore=New-Object System.Windows.Forms.Button
-$script:bdtStore.Text="Ver en la tienda de Steam"
-$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+570),452)
-$script:bdtStore.Size=New-Object System.Drawing.Size(280,50)
-$script:bdtStore.BackColor=$script:CardBG;$script:bdtStore.ForeColor=$script:White
-$script:bdtStore.FlatStyle="Flat";$script:bdtStore.FlatAppearance.BorderColor=[System.Drawing.Color]::FromArgb(60,70,90)
-$script:bdtStore.Font=$script:FntCard;$script:bdtStore.Cursor=[System.Windows.Forms.Cursors]::Hand
-$script:bdtStore.Add_Click({ param($s) try { Start-Process $s.Tag } catch {} })
+$script:bdtStore=New-BdtBtn ($PAD+570) 452 280 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(60,70,90)) $script:FntCard
+$script:bdtStore.Tag.Text="Ver en la tienda de Steam"
+$script:bdtStoreUrl=""
+$script:bdtStore.Add_Click({ try { if($script:bdtStoreUrl){ Start-Process $script:bdtStoreUrl } } catch {} })
 $script:bdtp.Controls.Add($script:bdtStore)
 $script:bdtStatus=New-Object System.Windows.Forms.Label
 $script:bdtStatus.ForeColor=[System.Drawing.Color]::FromArgb(140,150,165);$script:bdtStatus.BackColor=$BG
