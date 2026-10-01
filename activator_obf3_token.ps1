@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.88"
+$script:version = "V1.89"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6848,12 +6848,24 @@ function Refresh-BiblioGrid([string]$filter) {
 function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};if($script:bdtp){$script:bdtp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
 function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};try{Stop-BiblioDlWatch}catch{};if($script:bdtp){$script:bdtp.Visible=$false};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
 $script:bibNameJob=$null
+$script:bibBulkJob=$null
 $script:bibNameCacheFrom=0
 $script:bibNameTimer=New-Object System.Windows.Forms.Timer
 $script:bibNameTimer.Interval=3000
 $script:bibNameTimer.Add_Tick({
     try {
         Update-BiblioNamesFromCache
+        $bj=$script:bibBulkJob
+        if($bj){
+            if($bj.h.IsCompleted){
+                try{ $bj.ps.EndInvoke($bj.h) }catch{}
+                try{ $bj.ps.Dispose() }catch{}
+                $script:bibBulkJob=$null
+                Update-BiblioNamesFromCache
+                Start-BiblioNameBackfill
+            }
+            return
+        }
         $nj=$script:bibNameJob
         if(-not $nj){ try{$script:bibNameTimer.Stop()}catch{}; return }
         if($nj.h.IsCompleted){
@@ -6900,6 +6912,52 @@ function Update-BiblioNamesFromCache {
                 }
             }
         }
+    } catch {}
+}
+function Start-BiblioBulkNames {
+    try {
+        try{ if($script:bibBulkJob){ return } }catch{}
+        $missing=@()
+        foreach ($g in @($script:bibGames)) { if ($g.name -like 'Juego *') { $missing += [string]$g.appid } }
+        if ($missing.Count -eq 0) { return }
+        $cache=Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt'
+        $blist=Join-Path $env:TEMP 'bsmap_appdb_game.json'
+        $needDl=$true
+        try{ if((Test-Path -LiteralPath $blist) -and (((Get-Date)-(Get-Item -LiteralPath $blist).LastWriteTime).TotalDays -lt 30)){ $needDl=$false } }catch{}
+        $ps=[PowerShell]::Create()
+        [void]$ps.AddScript({
+            param($ids,$cacheFile,$listFile,$needDl)
+            try {
+                if($needDl){
+                    $ok=$false
+                    foreach($u in @('https://raw.githubusercontent.com/Austrum-lab/steam-appdb/master/data/game.json','https://cdn.jsdelivr.net/gh/Austrum-lab/steam-appdb@master/data/game.json')){
+                        try{ (New-Object System.Net.WebClient).DownloadFile($u,$listFile); $ok=$true; break }catch{}
+                    }
+                    if(-not $ok){ return }
+                }
+                if(-not (Test-Path -LiteralPath $listFile)){ return }
+                $want=@{}
+                foreach($i in $ids){ $want[$i]=$true }
+                try{
+                    $txt=[IO.File]::ReadAllText($listFile)
+                    $rx=[regex]'"appid":(\d+),"name":"((?:[^"\\]|\\.)*)"'
+                    foreach($m in $rx.Matches($txt)){
+                        $id=$m.Groups[1].Value
+                        if($want.ContainsKey($id)){
+                            $nm=$m.Groups[2].Value -replace '\\"','"' -replace '\\\\','\'
+                            if($nm -and ($nm -notmatch '\(no data\)')){
+                                try{ Add-Content -LiteralPath $cacheFile -Value ($nm + " (" + $id + ")") -Encoding UTF8 -ErrorAction SilentlyContinue }catch{}
+                                $want.Remove($id)
+                                if($want.Count -eq 0){ break }
+                            }
+                        }
+                    }
+                }catch{}
+            } catch {}
+        }).AddArgument($missing).AddArgument($cache).AddArgument($blist).AddArgument($needDl)
+        $h=$ps.BeginInvoke()
+        $script:bibBulkJob=@{ps=$ps;h=$h}
+        $script:bibNameTimer.Start()
     } catch {}
 }
 function Start-BiblioNameBackfill {
@@ -6959,7 +7017,7 @@ function Show-Biblio {
         Start-BiblioCovers $script:bibGames
         $script:bibTimer.Start()
         try{ Update-BiblioNamesFromCache }catch{}
-        Start-BiblioNameBackfill
+        Start-BiblioBulkNames
     } catch {
         try{$script:bibSuppressSearch=$false;$script:bibOpenWatch=$null;$script:bibLoadingTimer.Stop();$script:bibLoadingCard.Visible=$false}catch{}
     }
