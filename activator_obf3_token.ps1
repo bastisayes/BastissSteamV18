@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.08"
+$script:version = "V2.09"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -7104,6 +7104,7 @@ function Refresh-BiblioGrid([string]$filter) {
         $script:bibRenderQueue=@($pageGames)
         $script:bibRenderIndex=0
         Set-BiblioGridScroll
+        try{ Set-DarkScrollValue $script:bibScroll 0 }catch{}
         $script:bibPageInfo.Text=('{0} / {1}    {2} juegos' -f ($script:bibPage+1),$pageCount,$total)
         $script:bibPrev.Enabled=($script:bibPage -gt 0)
         $script:bibNext.Enabled=($script:bibPage -lt ($pageCount-1))
