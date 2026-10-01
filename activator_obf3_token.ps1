@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.81"
+$script:version = "V1.85"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -271,7 +271,7 @@ $script:GAME_NAME_DATA = @'
 105400 (no data) (105400)
 20 Minute Metropolis - The Action City Builder (700200)
 255480 (no data) (255480)
-3 Minutes to MidnightÂ® - A Comedy Graphic Adventure (832500)
+3 Minutes to Midnight(R) - A Comedy Graphic Adventure (832500)
 380 (error) (380)
 3D PUZZLE - Sun Temple (3079410)
 60 Seconds! Reatomized (1012880)
@@ -296,7 +296,7 @@ Abandoned Void (2420450)
 ABZU (384190)
 Academy Love Saga: Tennis Angels EX (3099640)
 Ace Attorney Investigations Collection (2401970)
-Advent NEONÂ® (1528260)
+Advent NEON(R) (1528260)
 Aerofly FS 2 Flight Simulator (434030)
 Aerofly FS 4 Flight Simulator (1995890)
 aerofly RC 10 - RC Flight Simulator (2394350)
@@ -308,13 +308,13 @@ Age of Mythology: Extended Edition (266840)
 Age of Mythology: Retold (1934680)
 AI: The Somnium Files (948740)
 AI: THE SOMNIUM FILES - nirvanA Initiative (1449200)
-AKIBA'S TRIP: Undead ï¼† Undressed (333980)
+AKIBA'S TRIP: Undead  Undressed (333980)
 Alan Wake (108710)
 Alan Wake's American Nightmare (202750)
 Alchemy Factory (3669570)
 Alice in CyberCity (1072000)
 Almost There: The Platformer (951940)
-Alpha Protocolâ„¢ (34010)
+Alpha Protocol(TM) (34010)
 American Truck Simulator (270880)
 AMID EVIL (673130)
 Amnesia: Rebirth (999220)
@@ -335,27 +335,27 @@ Anno 1800 (916440)
 Another Farm Roguelike (2116850)
 Aragami (280160)
 Aragami 2 (1158370)
-Arcade Tycoon â„¢ : Simulation Game (750520)
+Arcade Tycoon (TM) : Simulation Game (750520)
 Arcanum: Of Steamworks and Magick Obscura (500810)
 ARK: Survival Ascended (2399830)
 ARK: Survival Evolved (346110)
 Arma 3 (107410)
 Arms of God (3100310)
-Asgard's Fall â€” Viking Survivors (2780710)
+Asgard's Fall - Viking Survivors (2780710)
 Assassin's Creed 2 (33230)
 Assassin's Creed Mirage (3035570)
-Assassin's CreedÂ® III Remastered (911400)
-Assassin's CreedÂ® Odyssey (812140)
-Assassin's CreedÂ® Origins (582160)
-Assassin's CreedÂ® Revelations (201870)
-Assassin's CreedÂ® Syndicate (368500)
-Assassin's CreedÂ® Unity (289650)
-Assassinâ€™s Creed Shadows (3159330)
-Assassinâ€™s CreedÂ® Brotherhood (48190)
-Assassinâ€™s CreedÂ® Chronicles: China (354380)
-Assassinâ€™s CreedÂ® IV Black Flagâ„¢ (242050)
-Assassinâ€™s CreedÂ® Liberation HD (260210)
-Assassinâ€™s CreedÂ® Rogue (311560)
+Assassin's Creed(R) III Remastered (911400)
+Assassin's Creed(R) Odyssey (812140)
+Assassin's Creed(R) Origins (582160)
+Assassin's Creed(R) Revelations (201870)
+Assassin's Creed(R) Syndicate (368500)
+Assassin's Creed(R) Unity (289650)
+Assassin's Creed Shadows (3159330)
+Assassin's Creed(R) Brotherhood (48190)
+Assassin's Creed(R) Chronicles: China (354380)
+Assassin's Creed(R) IV Black Flag(TM) (242050)
+Assassin's Creed(R) Liberation HD (260210)
+Assassin's Creed(R) Rogue (311560)
 Assault Android Cactus+ (250110)
 Assetto Corsa (244210)
 ASTRONEER (361420)
@@ -364,7 +364,7 @@ Atomic Heart (668580)
 Attack on Titan 2 - A.O.T.2 (601050)
 Automobilista 2 (1066890)
 Avatar Legends: The Fighting Game (2424420)
-Avatar: Frontiers of Pandoraâ„¢ (2840770)
+Avatar: Frontiers of Pandora(TM) (2840770)
 Axiom Verge (332200)
 Back 4 Blood (924970)
 Backrooms Exploration (1730930)
@@ -376,23 +376,23 @@ Baldur's Gate: Enhanced Edition (228280)
 Batman: Arkham Asylum Game of the Year Edition (35140)
 Batman: Arkham City (57400)
 Batman: Arkham City - Game of the Year Edition (200260)
-Batmanâ„¢: Arkham Origins Blackgate - Deluxe Edition (267490)
-Battlefield 3â„¢ (1238820)
-Battlefield 4â„¢ (1238860)
-Battlefieldâ„¢ 1 (1238840)
-Battlefieldâ„¢ 6 (2807960)
-Battlefieldâ„¢ Hardline (1238880)
-Battlefieldâ„¢ V (1238810)
+Batman(TM): Arkham Origins Blackgate - Deluxe Edition (267490)
+Battlefield 3(TM) (1238820)
+Battlefield 4(TM) (1238860)
+Battlefield(TM) 1 (1238840)
+Battlefield(TM) 6 (2807960)
+Battlefield(TM) Hardline (1238880)
+Battlefield(TM) V (1238810)
 Battlefleet Gothic: Armada 2 (573100)
 Bayonetta (460790)
 BeamNG.drive (284160)
 Best Elf (1583240)
 BIGFOOT (509980)
 BioShock Infinite (8870)
-BioShockÂ® 2 (8850)
-BioShockâ„¢ (7670)
-BioShockâ„¢ 2 Remastered (409720)
-BioShockâ„¢ Remastered (409710)
+BioShock(R) 2 (8850)
+BioShock(TM) (7670)
+BioShock(TM) 2 Remastered (409720)
+BioShock(TM) Remastered (409710)
 Black Mesa (362890)
 Black Myth: Wukong (2358720)
 Blacklist Mafia (2800500)
@@ -423,12 +423,12 @@ Bus Simulator 21 Next Stop (976590)
 Bus Simulator 27 (2397320)
 Bus-Simulator 2012 (253770)
 Call of Duty: World at War (10090)
-Call of DutyÂ® 4: Modern WarfareÂ® (2007) (7940)
-Call of DutyÂ®: Black Ops (42700)
-Call of DutyÂ®: Black Ops II (202970)
-Call of DutyÂ®: Infinite Warfare (292730)
-Call of DutyÂ®: Modern WarfareÂ® 2 (2009) (10180)
-Call of DutyÂ®: Modern WarfareÂ® 3 (2011) (42680)
+Call of Duty(R) 4: Modern Warfare(R) (2007) (7940)
+Call of Duty(R): Black Ops (42700)
+Call of Duty(R): Black Ops II (202970)
+Call of Duty(R): Infinite Warfare (292730)
+Call of Duty(R): Modern Warfare(R) 2 (2009) (10180)
+Call of Duty(R): Modern Warfare(R) 3 (2011) (42680)
 Car Mechanic Simulator 2014 (270850)
 Car Mechanic Simulator 2015 (320300)
 Car Mechanic Simulator 2018 (645630)
@@ -440,7 +440,7 @@ CARRION (953490)
 CarX Street (1114150)
 Casino Management Simulator (2823790)
 Castle Craft (2086680)
-Castle CrashersÂ® (204360)
+Castle Crashers(R) (204360)
 CastleMiner Z (253430)
 Cats Visiting Historical Times (3618700)
 Cave Story+ (200900)
@@ -460,12 +460,12 @@ Colony Survival (366090)
 Combolands: Roguelike Citybuilder (4075620)
 Concrete Jungle (400160)
 Condemned: Criminal Origins (4720)
-Conflict Desert Stormâ„¢ (211780)
+Conflict Desert Storm(TM) (211780)
 Contraband Police (756800)
 CONTROL Ultimate Edition (870780)
 Cooking Companions (1263230)
 Cooking Craze (2540630)
-Cooking DashÂ® (37220)
+Cooking Dash(R) (37220)
 Cooking Simulator (641320)
 Cooking Simulator 2: Better Together (2455360)
 Cooking Simulator VR (1358140)
@@ -488,7 +488,7 @@ Crypt Robbery (3362670)
 Crysis (17300)
 Crysis 2 - Maximum Edition (108800)
 Crysis Remastered (1715130)
-Crysis WarheadÂ® (17330)
+Crysis Warhead(R) (17330)
 Cthulhu Mythos ADV Lunatic Whispers (1965920)
 Cthulhu Mythos ADV The Isle Of Ubohoth (2701590)
 Cthulhu Saves the World (107310)
@@ -507,16 +507,16 @@ Cyberpunk 2077 (1091500)
 Dagon: by H. P. Lovecraft (1481400)
 Dark Elf Historia (2492730)
 Dark Hunting Ground (2494810)
-DARK SOULSâ„¢ II: Scholar of the First Sin (335300)
-DARK SOULSâ„¢ III (374320)
-DARK SOULSâ„¢: REMASTERED (570940)
-Darkest DungeonÂ® (262060)
-Darkest DungeonÂ® II (1940340)
+DARK SOULS(TM) II: Scholar of the First Sin (335300)
+DARK SOULS(TM) III (374320)
+DARK SOULS(TM): REMASTERED (570940)
+Darkest Dungeon(R) (262060)
+Darkest Dungeon(R) II (1940340)
 Darksiders Genesis (710920)
 Darksiders II Deathinitive Edition (388410)
 Darksiders III (606280)
 Darksiders Warmastered Edition (462780)
-Darksidersâ„¢ (50620)
+Darksiders(TM) (50620)
 Database Detective: Minor Crimes Division (3950130)
 DATE A LIVE: Ren Dystopia (2627780)
 Days Gone (1259420)
@@ -524,11 +524,11 @@ Dead Age 2: The Zombie Survival RPG (951430)
 Dead Cells (588650)
 Dead Island 2 (934700)
 Dead Island Definitive Edition (383150)
-DEAD RISINGÂ® (427190)
-Dead RisingÂ® 2 (45740)
+DEAD RISING(R) (427190)
+Dead Rising(R) 2 (45740)
 Dead Space (1693980)
-Dead Spaceâ„¢ 2 (47780)
-Dead Spaceâ„¢ 3 (1238060)
+Dead Space(TM) 2 (47780)
+Dead Space(TM) 3 (1238060)
 Dead Synchronicity: Tomorrow Comes Today (339190)
 Death Match Love Comedy! (1265570)
 DEATH STRANDING (1190460)
@@ -556,14 +556,14 @@ Deus Ex: Game of the Year Edition (6910)
 Deus Ex: Human Revolution - Director's Cut (238010)
 Deus Ex: Invisible War (6920)
 Deus Ex: Mankind Divided (337000)
-Deus Ex: Mankind Dividedâ„¢ - VR Experience (526180)
+Deus Ex: Mankind Divided(TM) - VR Experience (526180)
 Devil May Cry 5 (601150)
 Devil May Cry HD Collection (631510)
 Dieselpunk Wars (952240)
 DiRT Rally 2.0 (690790)
 Disco Elysium - The Final Cut (632470)
 Dishonored 2 (403640)
-DishonoredÂ®: Death of the Outsiderâ„¢ (614570)
+Dishonored(R): Death of the Outsider(TM) (614570)
 Disney Dreamlight Valley (1401590)
 Disney Princess: Enchanted Journey (322130)
 Divinity: Original Sin - Enhanced Edition (373420)
@@ -575,20 +575,20 @@ DOOM Eternal (782330)
 DOOM: The Dark Ages (3017860)
 Dragon Age II: Ultimate Edition (1238040)
 Dragon Age: Origins - Ultimate Edition (47810)
-Dragon Ageâ„¢ Inquisition (1222690)
+Dragon Age(TM) Inquisition (1222690)
 DRAGON BALL FighterZ (678950)
 DRAGON BALL XENOVERSE (323470)
 DRAGON BALL XENOVERSE 2 (454650)
 DRAGON BALL Z: KAKAROT (851850)
 DRAGON BALL: Sparking! ZERO (1790600)
 DRAGON QUEST BUILDERS (2436570)
-DRAGON QUEST BUILDERSâ„¢ 2 (1072420)
+DRAGON QUEST BUILDERS(TM) 2 (1072420)
 DRAGON QUEST I & II HD-2D Remake (2893570)
 DRAGON QUEST III HD-2D Remake (2701660)
 DRAGON QUEST MONSTERS: The Dark Prince (2175540)
 DRAGON QUEST TREASURES (2021210)
 DRAGON QUEST VII Reimagined (2499860)
-DRAGON QUESTÂ® XI S: Echoes of an Elusive Ageâ„¢ - Definitive Edition (1295510)
+DRAGON QUEST(R) XI S: Echoes of an Elusive Age(TM) - Definitive Edition (1295510)
 Dragon's Dogma: Dark Arisen (367500)
 DragonSword : Awakening (4570720)
 Drama Queens (2741820)
@@ -604,13 +604,13 @@ Dwarf Tower (335100)
 Dying Light (239140)
 Dying Light 2 Stay Human: Reloaded Edition (534380)
 Dying Light: The Beast (3008130)
-EA SPORTSâ„¢ FIFA 21 (1313860)
+EA SPORTS(TM) FIFA 21 (1313860)
 Ecrazeus Castle (4106270)
 ELDEN RING (1245620)
 ELDEN RING NIGHTREIGN (2622380)
 Elf Sex Farm (1738990)
 Elite Dangerous (359320)
-ENDLESS Legendâ„¢ 2 (3407390)
+ENDLESS Legend(TM) 2 (3407390)
 Enter the Gungeon (311690)
 Escape Academy (1812090)
 Escape From Duckov (3167020)
@@ -624,8 +624,8 @@ Exit the Gungeon (1209490)
 ExoColony: Planet Survival (2187340)
 F-19 Stealth Fighter (347250)
 F.E.A.R. 2: Project Origin (16450)
-F1Â® 2021 (1134570)
-F1Â® 25 (3059520)
+F1(R) 2021 (1134570)
+F1(R) 25 (3059520)
 Fable Anniversary (288470)
 Factorio (427520)
 Fallout 2: A Post Nuclear Role Playing Game (38410)
@@ -639,12 +639,12 @@ Fallout: New Vegas (22380)
 False Myth (1257200)
 Fantastic Orc (2672110)
 Far Cry 3 - Blood Dragon (233270)
-Far CryÂ® 2 (19900)
-Far CryÂ® 4 (298110)
-Far CryÂ® 5 (552520)
-Far CryÂ® 6 (2369390)
-Far CryÂ® New Dawn (939960)
-Far CryÂ® Primal (371660)
+Far Cry(R) 2 (19900)
+Far Cry(R) 4 (298110)
+Far Cry(R) 5 (552520)
+Far Cry(R) 6 (2369390)
+Far Cry(R) New Dawn (939960)
+Far Cry(R) Primal (371660)
 Faraway: Jungle Escape (1747680)
 Farming Simulator 17 (447020)
 Farming Simulator 19 (787860)
@@ -658,10 +658,10 @@ FINAL FANTASY VII REMAKE INTERGRADE (1462040)
 FINAL FANTASY X/X-2 HD Remaster (359870)
 FINAL FANTASY XII THE ZODIAC AGE (595520)
 FINAL FANTASY XV WINDOWS EDITION (637650)
-FINAL FANTASYÂ® XIII (292120)
-FINAL FANTASYÂ® XIII-2 (292140)
+FINAL FANTASY(R) XIII (292120)
+FINAL FANTASY(R) XIII-2 (292140)
 Fireside Fables: Wholesome Narrative Adventure! (3365560)
-Firestone â€“ Idle Clicker Online RPG (1013320)
+Firestone - Idle Clicker Online RPG (1013320)
 Firewatch (383870)
 First Dwarf (1714900)
 Fishing Planet (380600)
@@ -696,8 +696,8 @@ From Dust (33460)
 Frostpunk (323190)
 Frostpunk 2 (1601580)
 Fungal Colony Sim 2 (3947310)
-Furry Myth ðŸ¦ (2451640)
-Future War Tactics: SOF vs Alien Invasion â€“ Turn-Based Strategy (3680900)
+Furry Myth  (2451640)
+Future War Tactics: SOF vs Alien Invasion - Turn-Based Strategy (3680900)
 Garry's Mod (4000)
 Gassal Simulation (3397390)
 Gears 5 (1097840)
@@ -710,14 +710,14 @@ Ghostrunner (1139900)
 Ghosts'n DJs (1207390)
 Ghostwire: Tokyo (1475810)
 Giant Machines 2017 (402750)
-Giant Waifu Wash Simulator ðŸ’¦ (4719730)
+Giant Waifu Wash Simulator  (4719730)
 Giant Wishes (2122360)
 Global Rescue (2873660)
 Goat Simulator (265930)
 Goat Simulator 3 (850190)
 GOD EATER 3 (899440)
 God of War (1593500)
-God of War RagnarÃ¶k (2322010)
+God of War Ragnarok (2322010)
 God Simulator (509440)
 Going Medieval (1029780)
 Gold Gold Adventure Gold (3133650)
@@ -725,11 +725,11 @@ GONE Fishing (3645890)
 Good Pizza, Great Pizza - Cooking Simulator Game (770810)
 Gorogoa (557600)
 Gothic II: Gold Edition (39510)
-Grand Theft Auto III â€“ The Definitive Edition (1546970)
+Grand Theft Auto III - The Definitive Edition (1546970)
 Grand Theft Auto IV: The Complete Edition (12210)
 Grand Theft Auto V Enhanced (3240220)
-Grand Theft Auto: San Andreas â€“ The Definitive Edition (1547000)
-Grand Theft Auto: Vice City â€“ The Definitive Edition (1546990)
+Grand Theft Auto: San Andreas - The Definitive Edition (1547000)
+Grand Theft Auto: Vice City - The Definitive Edition (1546990)
 Grandpa High on Retro (2967320)
 Grass Life Sim (3356720)
 Great Utopia (1220990)
@@ -749,7 +749,7 @@ Haunted Investigation (2400880)
 Haunted Room : 205 (3694590)
 Heavy Bullets (297120)
 Heavy Rain (960910)
-Hellblade II: Senuaâ€™s Saga (2461850)
+Hellblade II: Senua's Saga (2461850)
 Hello Kitty Island Adventure (2495100)
 Hello Neighbor (521890)
 Hello Neighbor 2 (1321680)
@@ -761,14 +761,14 @@ Hidden Realm of the Enchantress (3159120)
 Hidden SciFi City Top-Down 3D (2506870)
 Hidden Through Time (524910)
 High Strategy: Urukon (1254870)
-Hitman: Absolutionâ„¢ (203140)
+Hitman: Absolution(TM) (203140)
 Hogwarts Legacy (990080)
 Hollow Knight (367520)
 Hollow Knight: Silksong (1030300)
 Homefront (55100)
 Horizon Chase Turbo (389140)
-Horizon Forbidden Westâ„¢ Complete Edition (2420110)
-Horizon Zero Dawnâ„¢ Complete Edition (1151640)
+Horizon Forbidden West(TM) Complete Edition (2420110)
+Horizon Zero Dawn(TM) Complete Edition (1151640)
 Hotel Giant (502460)
 Hotel Giant 2 (38230)
 Hotline Miami 2: Wrong Number (274170)
@@ -810,7 +810,7 @@ Jusant (1977170)
 Just Cause (6880)
 Just Cause 2 (8190)
 Just Cause 4 Reloaded (517630)
-Just Causeâ„¢ 3 (225540)
+Just Cause(TM) 3 (225540)
 Katana ZERO (460950)
 Kaze and the Wild Masks (829280)
 Kena: Bridge of Spirits (1954200)
@@ -837,21 +837,21 @@ Layers of Fear (2016) (391720)
 Le Mans Ultimate (2399420)
 Left 4 Dead (500)
 Left 4 Dead 2 (550)
-LEGOÂ® Batmanâ„¢ 3: Beyond Gotham (313690)
-LEGOÂ® DC Super-Villains (829110)
-LEGOÂ® Jurassic World (352400)
-LEGOÂ® Marvel Super Heroes 2 (647830)
-LEGOÂ® Marvelâ„¢ Super Heroes (249130)
-LEGOÂ® Star Warsâ„¢ - The Complete Saga (32440)
-LEGOÂ® Star Warsâ„¢: The Skywalker Saga (920210)
-LEGOÂ® The Hobbitâ„¢ (285160)
-LEGOÂ® The Incredibles (818320)
+LEGO(R) Batman(TM) 3: Beyond Gotham (313690)
+LEGO(R) DC Super-Villains (829110)
+LEGO(R) Jurassic World (352400)
+LEGO(R) Marvel Super Heroes 2 (647830)
+LEGO(R) Marvel(TM) Super Heroes (249130)
+LEGO(R) Star Wars(TM) - The Complete Saga (32440)
+LEGO(R) Star Wars(TM): The Skywalker Saga (920210)
+LEGO(R) The Hobbit(TM) (285160)
+LEGO(R) The Incredibles (818320)
 LiDAR Exploration Program (1882190)
 Lies of P (1627720)
 Life is Strange - Episode 1 (319630)
 Life is Strange 2 (532210)
 Life is Strange: Double Exposure (1874000)
-LIGHTNING RETURNSâ„¢: FINAL FANTASYÂ® XIII (345350)
+LIGHTNING RETURNS(TM): FINAL FANTASY(R) XIII (345350)
 LIMBO (48000)
 Lisa Total investigation! (2691470)
 Little Nightmares (424840)
@@ -860,7 +860,7 @@ Little Nightmares III (1392860)
 Lobotomy Corporation | Monster Management Simulation (568220)
 Loop Hero (1282730)
 Lords of the Fallen (1501750)
-Lords Of The Fallenâ„¢ 2014 (265300)
+Lords Of The Fallen(TM) 2014 (265300)
 Lossless Scaling (993090)
 Lost and Found Co. (2101390)
 Lost Ark (1599340)
@@ -878,11 +878,11 @@ Mafia: The Old Country (1941540)
 Martial Arts Brutality (618080)
 MARVEL Puzzle Quest (234330)
 Marvel's Spider-Man 2 (2651280)
-Marvelâ€™s Spider-Man Remastered (1817070)
-Marvelâ€™s Spider-Man: Miles Morales (1817190)
+Marvel's Spider-Man Remastered (1817070)
+Marvel's Spider-Man: Miles Morales (1817190)
 Mary Le Chef - Cooking Passion (588620)
 Mass Effect (2007) (17460)
-Mass Effectâ„¢ Legendary Edition (1328670)
+Mass Effect(TM) Legendary Edition (1328670)
 Master Detective Archives: RAIN CODE Plus (2903950)
 Max Payne (12140)
 Max Payne 2: The Fall of Max Payne (12150)
@@ -899,12 +899,12 @@ Miasma Chronicles (1649010)
 Microsoft Flight Simulator (2020) 40th Anniversary Edition (1250410)
 Microsoft Flight Simulator 2024 (2537590)
 Microsoft Flight Simulator X: Steam Edition (314160)
-Middle-earthâ„¢: Shadow of Warâ„¢ (356190)
+Middle-earth(TM): Shadow of War(TM) (356190)
 Midnight Heist (2204350)
 MindsEye (3265250)
 Minecraft Dungeons (1672970)
-Mirror's Edgeâ„¢ (17410)
-Mirror's Edgeâ„¢ Catalyst (1233570)
+Mirror's Edge(TM) (17410)
+Mirror's Edge(TM) Catalyst (1233570)
 Mist Survival (914620)
 Modern Pink Elf RPG (2745710)
 Monster Hunter Stories 3: Twisted Reflection (2852190)
@@ -912,7 +912,7 @@ Monster Train (1102190)
 MOON BASE (1506410)
 Mortal Kombat X (307780)
 Mortal Kombat: Legacy Kollection (3454980)
-Mortal KombatÂ 11 (976310)
+Mortal Kombat 11 (976310)
 Mosaic: Game of Gods (547390)
 Mosaic: Game of Gods II (840240)
 Moss: The Forgotten Relic  (3914860)
@@ -924,20 +924,20 @@ My Friend Pedro (557340)
 My Lovable Demon (3854420)
 Mystery Island - Hidden Object Games (1107620)
 Mystery Island:Missing Amy (3439040)
-Mystery Islandï¼šEnigmatic Painting (3779920)
+Mystery IslandEnigmatic Painting (3779920)
 Myth of Empires (1371580)
 Mythic Love: Iberian Legends (2654990)
 Mythology Waifus Mahjong (2277840)
-Nancy DrewÂ®: Message in a Haunted Mansion (615770)
+Nancy Drew(R): Message in a Haunted Mansion (615770)
 NARUTO X BORUTO Ultimate Ninja STORM CONNECTIONS (1020790)
 Need For Speed: Hot Pursuit (47870)
-Need for Speedâ„¢ (1262540)
-Need for Speedâ„¢ Heat (1222680)
-Need for Speedâ„¢ Hot Pursuit Remastered (1328660)
-Need for Speedâ„¢ Most Wanted (1262560)
-Need for Speedâ„¢ Payback (1262580)
-Need for Speedâ„¢ Rivals (1262600)
-Need for Speedâ„¢ Unbound (1846380)
+Need for Speed(TM) (1262540)
+Need for Speed(TM) Heat (1222680)
+Need for Speed(TM) Hot Pursuit Remastered (1328660)
+Need for Speed(TM) Most Wanted (1262560)
+Need for Speed(TM) Payback (1262580)
+Need for Speed(TM) Rivals (1262600)
+Need for Speed(TM) Unbound (1846380)
 Neon Abyss (788100)
 Neon Abyss 2 (2235200)
 Neon Chrome (428750)
@@ -945,8 +945,8 @@ Neon Inferno (2957720)
 Neon Sundown (1721870)
 Neon White (1533420)
 Neverwinter Nights: Enhanced Edition (704450)
-NieR Replicantâ„¢ ver.1.22474487139... (1113560)
-NieR:Automataâ„¢ (524220)
+NieR Replicant(TM) ver.1.22474487139... (1113560)
+NieR:Automata(TM) (524220)
 Night in the Woods (481510)
 Nightmare Reaper (1051690)
 Nine Worlds - A Viking saga (700460)
@@ -956,7 +956,7 @@ Ninja Stealth 3 (754120)
 Ninja Stealth 4 (1711840)
 Ninja Stealth 5 (2950000)
 Ninja: Shadow of the Dash (3126050)
-Nioh 2 â€“ The Complete Edition (1325200)
+Nioh 2 - The Complete Edition (1325200)
 Nioh: Complete Edition (485510)
 No Man's Sky (275850)
 No Socks RPG (4929970)
@@ -966,7 +966,7 @@ Oasis Mission: Colony Sim (2658640)
 Observer: System Redux (1386900)
 Occupational Hazards: Episode 1 (1148980)
 OCTOPATH TRAVELER II (1971650)
-OCTOPATH TRAVELERâ„¢ (921570)
+OCTOPATH TRAVELER(TM) (921570)
 Office Management 101 (678390)
 On Air Island : Survival Chat (2562510)
 ONE PIECE ODYSSEY (814000)
@@ -990,7 +990,7 @@ Papers, Please (239030)
 Passant: A Chess Roguelike (3353100)
 Path of Idle: Old Gods Rising (4243990)
 PAYDAY 3 (1272080)
-PAYDAYâ„¢ The Heist (24240)
+PAYDAY(TM) The Heist (24240)
 PC Building Simulator (621060)
 PEAK (3527290)
 Pechka: Historical Story Adventure (2210700)
@@ -998,7 +998,7 @@ PEPPERED: an existential platformer (1883370)
 Perfect Heist 2 (1521580)
 Persona 4 Golden (1113000)
 Persona 5 Royal (1687950)
-PersonaÂ® 5 Strikers (1382330)
+Persona(R) 5 Strikers (1382330)
 Phasmophobia (739630)
 Physics Lab (2167340)
 Pillars of Eternity (291650)
@@ -1008,7 +1008,7 @@ Pizza Tower (2231450)
 Planescape: Torment: Enhanced Edition (466300)
 Planet Coaster (493340)
 Planet Zoo (703080)
-Plants vs. Zombiesâ„¢: Replanted (3654560)
+Plants vs. Zombies(TM): Replanted (3654560)
 Political Arena (1670920)
 Poly Bridge (367450)
 Poly Bridge 2 (1062160)
@@ -1026,9 +1026,9 @@ PRAGMATA (3357650)
 Pretty Angel (1148510)
 Prey (3970)
 Prey (480490)
-Prey with Gun å¸¦æžªçš„çŒŽç‰© (718940)
+Prey with Gun  (718940)
 Prey: Typhon Hunter (741820)
-Prince of PersiaÂ® (19980)
+Prince of Persia(R) (19980)
 Prison Escape Simulator (3507120)
 Prison Escape Simulator: Dig Out (3672720)
 Private Military Manager: Tactical Auto Battler (2564320)
@@ -1036,7 +1036,7 @@ Prodeus (964800)
 Project Warlock (893680)
 Project Zomboid (108600)
 Prototype 2 (115320)
-Prototypeâ„¢ (10150)
+Prototype(TM) (10150)
 Punch Club (394310)
 Pupperazzi: The Dog Photography Game (1028350)
 Puzzle Pirates (99910)
@@ -1052,7 +1052,7 @@ RAID: Shadow Legends (2333480)
 RAIDOU Remastered: The Mystery of the Soulless Army (2288350)
 Railway Empire 2 (1644320)
 Rain World (312520)
-RaymanÂ® Legends (242550)
+Rayman(R) Legends (242550)
 Ready or Not (1144200)
 Realistic Ragdoll Sandbox (3048280)
 Reclaiming the Lost (3112280)
@@ -1063,7 +1063,7 @@ Red Faction Guerrilla Re-Mars-tered (667720)
 Reentry - A Space Flight Simulator (882140)
 Reigns (474750)
 Relicta (941570)
-REMNANT IIÂ® (1282100)
+REMNANT II(R) (1282100)
 Remnant: From the Ashes (617290)
 Rescue Dash - Management Puzzle (2254000)
 Rescue Team 5 (416320)
@@ -1080,14 +1080,14 @@ Retro Rewind - Video Store Simulator (3552140)
 RetroMania Wrestling (1252300)
 Return of the Obra Dinn (653530)
 Return to Castle Wolfenstein (9010)
-Returnalâ„¢ (1649240)
+Returnal(TM) (1649240)
 Revenge of the shadow ninja (2364970)
 Rhythm Any Music (2153280)
 RIDE 6 (2815070)
 Rift Wizard (1271280)
 Rift Wizard 2 (2058570)
 RimWorld (294100)
-Rise of the Tomb Raiderâ„¢ (391220)
+Rise of the Tomb Raider(TM) (391220)
 Risk of Rain 2 (632360)
 Risk of Rain Returns (1337520)
 Robbery Bob: Man of Steal (372960)
@@ -1100,7 +1100,7 @@ s&box (590830)
 Sable (757310)
 Saints Row (742420)
 Saints Row 2 (9480)
-Saints RowÂ®: The Thirdâ„¢ Remastered (978300)
+Saints Row(R): The Third(TM) Remastered (978300)
 Salt and Sanctuary (283640)
 Sandbox World (1831480)
 Satisfactory (526870)
@@ -1112,7 +1112,7 @@ Scary Hospital Horror Game (1343580)
 Schedule I (3164500)
 Scorn (698670)
 Secret Cats - Haunted Mansion (3284640)
-Sekiroâ„¢: Shadows Die Twice - GOTY Edition (814380)
+Sekiro(TM): Shadows Die Twice - GOTY Edition (814380)
 Serious Sam Classic: The First Encounter (41050)
 Serious Sam Classic: The Second Encounter (41060)
 Serious Sam Classics: Revolution (227780)
@@ -1135,13 +1135,13 @@ Shovel Knight: Treasure Trove (250760)
 Sigma Theory: Global Cold War (716640)
 SIGNALIS (1262350)
 Silent: Abandoned (3108720)
-Singularityâ„¢ (42670)
+Singularity(TM) (42670)
 Sins of a Solar Empire II (1575940)
 Sir, We Have an Orc Problem (4594150)
 SkateBIRD (971030)
 Skelethrone: The Prey (2139870)
 Slain: Back from Hell (369070)
-Slay the Princess â€” The Pristine Cut (1989270)
+Slay the Princess - The Pristine Cut (1989270)
 Slay the Spire (646570)
 Sleeping Dogs: Definitive Edition (307690)
 Slime Rancher (433340)
@@ -1160,7 +1160,7 @@ SOMA (282140)
 Sonic Adventure 2 (213610)
 Sonic Frontiers (1237320)
 Sons Of The Forest (1326470)
-South Parkâ„¢: The Fractured But Wholeâ„¢ (488790)
+South Park(TM): The Fractured But Whole(TM) (488790)
 Space Colony: Steam Edition (297920)
 Space Engineers (244850)
 Space Engineers 2 (1133870)
@@ -1175,34 +1175,34 @@ Spelunky 2 (418530)
 Sphinx and the Cursed Mummy (606710)
 Spiral Dystopia (1933680)
 Spirit City: Lofi Sessions (2113850)
-Spitfire - MoonpieÂ´s Mission (3339350)
+Spitfire - Moonpies Mission (3339350)
 Split Fiction (2001120)
 Squad (393380)
 Stacks:Jungle! (2522060)
 Staffer Case: A Supernatural Mystery Adventure (2128480)
 Star Chef 2: Cooking Game (1612810)
 Star Knight: Order of the Vortex (2462090)
-STAR WARS Jedi: Fallen Orderâ„¢ (1172380)
-STAR WARS Jedi: Survivorâ„¢ (1774580)
-STAR WARSâ„¢ - The Force Unleashedâ„¢ Ultimate Sith Edition (32430)
-STAR WARSâ„¢ Battlefrontâ„¢ II (1237950)
-STAR WARSâ„¢ Empire at War - Gold Pack (32470)
-STAR WARSâ„¢ Jedi Knight - Jedi Academyâ„¢ (6020)
-STAR WARSâ„¢ Knights of the Old Republicâ„¢ (32370)
-STAR WARSâ„¢ Republic Commandoâ„¢ (6000)
+STAR WARS Jedi: Fallen Order(TM) (1172380)
+STAR WARS Jedi: Survivor(TM) (1774580)
+STAR WARS(TM) - The Force Unleashed(TM) Ultimate Sith Edition (32430)
+STAR WARS(TM) Battlefront(TM) II (1237950)
+STAR WARS(TM) Empire at War - Gold Pack (32470)
+STAR WARS(TM) Jedi Knight - Jedi Academy(TM) (6020)
+STAR WARS(TM) Knights of the Old Republic(TM) (32370)
+STAR WARS(TM) Republic Commando(TM) (6000)
 Starbound (211820)
 Stardew Valley (413150)
 Stealth Bastard Deluxe (209190)
 Stealth Labyrinth (450040)
 SteamWorld Heist (322190)
 SteamWorld Heist II (2396240)
-Stellar Bladeâ„¢ (3489700)
+Stellar Blade(TM) (3489700)
 Stormworks: Build and Rescue (573090)
 Story Of the Survivor (440950)
 Story of the Survivor : Prisoner (676210)
 Storyteller (1624540)
 Stray (1332010)
-Strongestâ˜†Angel Zerachiel! (2804550)
+StrongestAngel Zerachiel! (2804550)
 Stronghold Crusader HD (2012) (40970)
 Submerged: Hidden Depths (1614270)
 Subnautica (264710)
@@ -1228,14 +1228,14 @@ Symphony of War: The Nephilim Saga (1488200)
 System Shock (482400)
 System Shock 2: 25th Anniversary Remaster (866570)
 System Shock: Enhanced Edition (410710)
-System ShockÂ® 2 (1999) (238210)
+System Shock(R) 2 (1999) (238210)
 Tactical Assault VR (2314160)
 Tactical Breach Wizards (1043810)
 Tails of Iron (1283410)
 Take On Helicopters (65730)
 Tales from the Borderlands (330830)
 Tales of ARISE (740130)
-Tales of Berseriaâ„¢ (429660)
+Tales of Berseria(TM) (429660)
 Tales of Zestiria (351970)
 TDS - Tower Defense Strategy (2392280)
 Terraria (105600)
@@ -1248,12 +1248,12 @@ The Binding of Isaac (113200)
 The Binding of Isaac: Rebirth (250900)
 The Boss Gangster: Criminal Empire (2774040)
 The Commission 1920: Organized Crime Grand Strategy (1330960)
-The Crewâ„¢ (241560)
+The Crew(TM) (241560)
 The Dark Eye: Memoria (243200)
 The Dark Pictures Anthology: Man of Medan (939850)
 The Darkside Detective (368390)
-The Elder Scrolls III: MorrowindÂ® Game of the Year Edition (22320)
-The Elder Scrolls IV: OblivionÂ® Game of the Year Edition (2009) (22330)
+The Elder Scrolls III: Morrowind(R) Game of the Year Edition (22320)
+The Elder Scrolls IV: Oblivion(R) Game of the Year Edition (2009) (22330)
 The Elder Scrolls V: Skyrim Special Edition (489830)
 The Enjenir: The Engineering Physics Building Simulator (1800940)
 The Escapists 2 (641990)
@@ -1268,7 +1268,7 @@ The Great Villainess: Strategy of Lily (2454960)
 The Horror at Highrook (2836860)
 The House in Fata Morgana (303310)
 The Last Campfire (990630)
-The Last of Usâ„¢ Part I (1888930)
+The Last of Us(TM) Part I (1888930)
 The Last Werewolf (2212520)
 The Legend of Heroes: Trails of Cold Steel (538680)
 The Legend of Heroes: Trails of Cold Steel II (748490)
@@ -1281,11 +1281,11 @@ The Messenger (764790)
 The Monstrous Horror Show (2099790)
 The Murder of Sonic the Hedgehog (2324650)
 The Mystery of Bikini Island (1064060)
-The Saboteurâ„¢ (24880)
+The Saboteur(TM) (24880)
 The Sandbox (265810)
 The Secret Atelier (2799690)
 The secret pyramid VR (2171010)
-The Simsâ„¢ 4 (1222670)
+The Sims(TM) 4 (1222670)
 The Stanley Parable: Ultra Deluxe (1703340)
 The Surge (378540)
 The Surge 2 (644830)
@@ -1293,30 +1293,30 @@ The Talos Principle (257510)
 The Talos Principle 2 (835960)
 The Walking Dead: Season Two (261030)
 The Witcher 3: Wild Hunt - Complete Edition (292030)
-theHunter: Call of the Wildâ„¢ (518790)
+theHunter: Call of the Wild(TM) (518790)
 There Are No Orcs (3480990)
 Thief (239160)
 Thief Simulator (704850)
 Thief Simulator 2 (1332720)
 Third Crisis: Neon Nights (3400350)
 This War of Mine (282070)
-Timeflow â€“ Life Sim (1005930)
+Timeflow - Life Sim (1005930)
 Tinykin (1599020)
 Titan Chaser (1290170)
 Titan Quest Anniversary Edition (475150)
 Titan Quest II (1154030)
 Titan Souls (297130)
 Titan Station (1881120)
-TitanfallÂ® 2 (1237970)
+Titanfall(R) 2 (1237970)
 TITANIC Shipwreck Exploration (924800)
 Titanic: Fall Of A Legend (1835200)
 Toilet Management Simulator (1361860)
-Tom Clancy's Ghost Recon: Future Soldierâ„¢ (212630)
-Tom Clancy's Ghost ReconÂ® Breakpoint (2231380)
-Tom Clancy's Ghost ReconÂ® Wildlands (460930)
+Tom Clancy's Ghost Recon: Future Soldier(TM) (212630)
+Tom Clancy's Ghost Recon(R) Breakpoint (2231380)
+Tom Clancy's Ghost Recon(R) Wildlands (460930)
 Tom Clancy's Rainbow Six Siege (359550)
-Tom Clancy's Rainbow SixÂ® 3 Gold (19830)
-Tom Clancyâ€™s Splinter Cell Blacklist (235600)
+Tom Clancy's Rainbow Six(R) 3 Gold (19830)
+Tom Clancy's Splinter Cell Blacklist (235600)
 Tomb Raider Game of the Year (203160)
 Toodee and Topdee (1303950)
 Torchlight (41500)
@@ -1324,7 +1324,7 @@ Torchlight II (200710)
 Torment: Tides of Numenera (272270)
 Tormented Souls (1367590)
 Tornado: Research and Rescue (2250550)
-Total War: MEDIEVAL II â€“ Definitive Edition (4700)
+Total War: MEDIEVAL II - Definitive Edition (4700)
 Total War: THREE KINGDOMS (779340)
 Totally Accurate Battle Simulator (508440)
 Tower Wizard (3372980)
@@ -1342,10 +1342,10 @@ Tyranny (362960)
 TYRONE vs COPS (1853200)
 UberSoldier II (281410)
 Ultimate Custom Night (871720)
-Ultimate Fishing SimulatorÂ® (468920)
-Ultimate FishingÂ® Simulator 2 (1136380)
+Ultimate Fishing Simulator(R) (468920)
+Ultimate Fishing(R) Simulator 2 (1136380)
 ULTRAKILL (1229490)
-UNCHARTEDâ„¢: Legacy of Thieves Collection (1659420)
+UNCHARTED(TM): Legacy of Thieves Collection (1659420)
 Undead Citadel (819190)
 Undead Development (682140)
 Undead Horde (790850)
@@ -1372,8 +1372,8 @@ Vampire Crawlers: The Turbo Wildcard from Vampire Survivors (3265700)
 Vampire Hunter: Nightrise (4043730)
 Vampire Survivors (1794680)
 Vampire: The Masquerade - Bloodlines (2600)
-Vampire: The Masquerade â€” Night Road (1290270)
-Vampire: The MasqueradeÂ® - Bloodlinesâ„¢ 2 (532790)
+Vampire: The Masquerade - Night Road (1290270)
+Vampire: The Masquerade(R) - Bloodlines(TM) 2 (532790)
 Vanquish (460810)
 Viking Saga: The Cursed Ring (415390)
 Violent Horror Stories 2 (3636960)
@@ -1389,15 +1389,15 @@ Warrior of Lust (4032770)
 Wartales (1527950)
 Wasteland 2: Director's Cut (240760)
 Wasteland 3 (719040)
-Watch DogsÂ®: Legion (2239550)
-Watch_DogsÂ® 2 (447040)
-Watch_Dogsâ„¢ (243470)
+Watch Dogs(R): Legion (2239550)
+Watch_Dogs(R) 2 (447040)
+Watch_Dogs(TM) (243470)
 Water Physics Simulation (1692620)
 Werewolf: The Apocalypse - Earthblood (679110)
-Werewolf: The Apocalypse â€” Purgatory (2463980)
+Werewolf: The Apocalypse - Purgatory (2463980)
 What Remains of Edith Finch (501300)
 Where Winds Meet (3564740)
-WILD HEARTSâ„¢ (1938010)
+WILD HEARTS(TM) (1938010)
 Wildermyth (763890)
 Wings of Prey: Special Edition (45300)
 Witch Hunt (661790)
@@ -1417,7 +1417,7 @@ WorldBox - God Simulator (1206560)
 WRATH: Aeon of Ruin (1000410)
 X4: Foundations (392160)
 XCOM: Enemy Unknown (200510)
-XCOMÂ® 2 (268500)
+XCOM(R) 2 (268500)
 Yakuza 0 (638970)
 Yakuza 3 Remastered (1088710)
 Yakuza 4 Remastered (1105500)
@@ -1432,10 +1432,10 @@ Ys VIII: Lacrimosa of DANA (579180)
 Zombie Survival Game Online (2268560)
 Zombie Survival online (1605960)
 Zomby Soldier (769340)
-å±åŸŽé€ƒç”Ÿ (2465870)
-å®¶å±‹æŽ¢ç´¢ -Japanese House Exploration- (3053390)
-å°‘å¥³å¦–ç²¾å¼¹ç å° Elf Girl Pinball (2074890)
-å°¸æ¥è¿è½¬-Lucky Zombie Survival (3682530)
+Game 2465870 (2465870)
+ -Japanese House Exploration- (3053390)
+ Elf Girl Pinball (2074890)
+-Lucky Zombie Survival (3682530)
 '@
 
 $script:GAME_NAME_BY_APPID = $null
@@ -2561,7 +2561,7 @@ function Bn6Lc {
     $actualSize = (Get-Item $outFile).Length
     if ($actualSize -ne $totalSize) {
         Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-        throw "TamaÃƒÆ’Ã‚Â±o incorrecto: $actualSize vs $totalSize"
+        throw "Tamano incorrecto: $actualSize vs $totalSize"
     }
     if ($progressBar) { $progressBar.Value = $progressEnd; [System.Windows.Forms.Application]::DoEvents() }
 }
@@ -2673,13 +2673,45 @@ function Ff2Xa {
     return $bestFix, $bestUrl
 }
 
+function Set-BibRepairProgress([string]$t) {
+    try { $script:bibRepairProgress=@{text=$t} } catch {}
+    try { if($script:bdtStatus -and -not $script:bdtStatus.IsDisposed){ $script:bdtStatus.Text=$t }; [System.Windows.Forms.Application]::DoEvents() } catch {}
+}
+function Download-FixArchive {
+    param([string]$url,[string]$outFile,[string]$gameName)
+    $part=$outFile+'.part'
+    $lastError='Descarga no valida'
+    $ProgressPreference='SilentlyContinue'
+    for($attempt=1;$attempt -le 3;$attempt++){
+        try {
+            Set-BibRepairProgress "Descargando fix de $gameName ($attempt/3)..."
+            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
+            $requestUrl=$url
+            if($attempt -eq 2 -and $requestUrl -notmatch '[?]'){ $requestUrl+='?download=1' }
+            Invoke-WebRequest -Uri $requestUrl -OutFile $part -UseBasicParsing -TimeoutSec 45 -MaximumRedirection 8 -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) BastissSteam'} -ErrorAction Stop
+            if(-not(Test-Path -LiteralPath $part) -or (Get-Item -LiteralPath $part).Length -lt 64){ throw 'El archivo descargado esta vacio o incompleto' }
+            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+            $archive=[System.IO.Compression.ZipFile]::OpenRead($part)
+            try { if($archive.Entries.Count -eq 0){throw 'El ZIP no contiene archivos'} } finally { $archive.Dispose() }
+            Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
+            Move-Item -LiteralPath $part -Destination $outFile -Force
+            return $true
+        } catch {
+            $lastError=$_.Exception.Message
+            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
+            if($attempt -lt 3){ Start-Sleep -Milliseconds ([int](250*[Math]::Pow(2,$attempt-1))) }
+        }
+    }
+    throw "No se pudo descargar un ZIP valido tras 3 intentos: $lastError"
+}
 function Apply-FixAutomatically {
     param([string]$gameFolderName, [string]$gamePath, [hashtable]$fixes)
     $fixName, $fixUrl = Ff2Xa $gameFolderName $fixes
     if (-not $fixUrl) { return $false, "No hay reparacion disponible para $gameFolderName" }
     $zip = Join-Path $env:TEMP "auto_$(Get-Random).zip"
     try {
-        Bn6Lc $fixUrl $zip
+        Set-BibRepairProgress "Preparando fix de $gameFolderName..."
+        [void](Download-FixArchive -url $fixUrl -outFile $zip -gameName $gameFolderName)
         $extractedRelative = @()
         try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
@@ -2687,6 +2719,7 @@ function Apply-FixAutomatically {
             foreach ($entry in $z.Entries) { if ($entry.Name) { $extractedRelative += $entry.FullName } }
             $z.Dispose()
         } catch {}
+        Set-BibRepairProgress "Aplicando fix a $gameFolderName..."
         Expand-Archive -Path $zip -DestinationPath $gamePath -Force
         if ($extractedRelative.Count -gt 0) { Am3Fs $gameFolderName $gamePath $extractedRelative }
         Aw8Nq $gameFolderName
@@ -2695,6 +2728,7 @@ function Apply-FixAutomatically {
         return $true, "Reparacion '$fixName' aplicada correctamente a $gameFolderName"
     } catch {
         Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath ($zip+'.part') -Force -ErrorAction SilentlyContinue
         return $false, "Error al aplicar reparacion en $gameFolderName : $($_.Exception.Message)"
     }
 }
@@ -2928,33 +2962,78 @@ function Get-InstallFolderMap {
 }
 
 
+$script:bibFixesCache = $null
+$script:bibFixesCacheTime = [datetime]::MinValue
+$script:bibFixesCacheLoaded = $false
 function Qw7Rt {
+    $cacheFile = Join-Path $env:TEMP 'bsmap_biblio_fixes.json'
+    $now = Get-Date
+    if ($script:bibFixesCache -and $script:bibFixesCache.Count -gt 0 -and (($now - $script:bibFixesCacheTime).TotalHours -lt 6)) { return $script:bibFixesCache }
+    if (-not $script:bibFixesCacheLoaded) {
+        $script:bibFixesCacheLoaded = $true
+        try {
+        if (Test-Path -LiteralPath $cacheFile) {
+            $cacheItem = Get-Item -LiteralPath $cacheFile -ErrorAction Stop
+            if (($now - $cacheItem.LastWriteTime).TotalHours -lt 24) {
+                $cacheJson = [System.IO.File]::ReadAllText($cacheFile)
+                $cacheObj = ConvertFrom-Json -InputObject $cacheJson -ErrorAction Stop
+                $cacheMap = @{}
+                foreach ($prop in $cacheObj.PSObject.Properties) { if ($prop.Name -and $prop.Value) { $cacheMap[[string]$prop.Name] = [string]$prop.Value } }
+                if ($cacheMap.Count -gt 0) {
+                    $script:bibFixesCache = $cacheMap
+                    $script:bibFixesCacheTime = $cacheItem.LastWriteTime
+                    if (($now-$cacheItem.LastWriteTime).TotalHours -lt 6) { return $script:bibFixesCache }
+                }
+            }
+        }
+        } catch {}
+    }
+    $stale = $script:bibFixesCache
     try {
-        $jsonText = Invoke-RestMethod -Uri (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vbWFpbi9maXhlc19saXN0Lmpzb24=") -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-        if ($jsonText -isnot [string]) { $jsonText = ($jsonText | ConvertTo-Json -Compress) }
-        $parsed = $jsonText | ConvertFrom-Json
+        $jsonText=$null
+        $listUrls=@((D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vbWFpbi9maXhlc19saXN0Lmpzb24="),"https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/fixes_list.json")
+        foreach($listUrl in $listUrls){
+            try {
+                $listResponse=Invoke-WebRequest -Uri $listUrl -UseBasicParsing -TimeoutSec 10 -Headers @{'User-Agent'='Mozilla/5.0'} -ErrorAction Stop
+                $candidate=[string]$listResponse.Content
+                $candidateData=ConvertFrom-Json -InputObject $candidate -ErrorAction Stop
+                if(@($candidateData).Count -gt 0){$jsonText=$candidate;break}
+            } catch {}
+        }
+        if(-not $jsonText){throw 'No se pudo obtener una lista de fixes valida'}
+        $parsed = ConvertFrom-Json -InputObject $jsonText -ErrorAction Stop
         $fixes = @{}
         foreach ($f in @($parsed)) {
             if (-not $f -or -not $f.filename) { continue }
-            $name = $f.filename -replace '\.zip$', ''
-            $url = (D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3Mv") + $f.filename
+            $fileName=[System.IO.Path]::GetFileName([string]$f.filename)
+            if(-not $fileName -or $fileName -notmatch '(?i)\.zip$'){continue}
+            $name = $fileName -replace '(?i)\.zip$', ''
+            $url = (D "aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3Mv") + [uri]::EscapeDataString($fileName)
             $fixes[$name] = $url
-            if ($f.game -and $f.game.Trim().Length -gt 0 -and -not $fixes.ContainsKey($f.game)) { $fixes[$f.game] = $url }
+            if ($f.game -and $f.game.Trim().Length -gt 0 -and -not $fixes.ContainsKey([string]$f.game)) { $fixes[[string]$f.game] = $url }
         }
         try {
             $instM = Get-InstallFolderMap
+            $fixIndex = 0
             foreach ($gKey in @($fixes.Keys)) {
-                $fixAppid = Find-AppIdByName $gKey
+                $fixIndex++
+
+                $fixAppid = Find-AppIdByName ([string]$gKey)
                 if (-not $fixAppid) { continue }
                 $fixAppid = [string]$fixAppid
                 if ($instM.ContainsKey($fixAppid)) {
-                    $fixFolder = $instM[$fixAppid]
+                    $fixFolder = [string]$instM[$fixAppid]
                     if ($fixFolder -and -not $fixes.ContainsKey($fixFolder)) { $fixes[$fixFolder] = $fixes[$gKey] }
                 }
             }
         } catch {}
+        if ($fixes.Count -gt 0) {
+            $script:bibFixesCache = $fixes
+            $script:bibFixesCacheTime = Get-Date
+            try { [System.IO.File]::WriteAllText($cacheFile, (ConvertTo-Json -InputObject $fixes -Depth 5 -Compress), (New-Object System.Text.UTF8Encoding $false)) } catch {}
+        }
         return $fixes
-    } catch { return @{} }
+    } catch { if ($stale -and $stale.Count -gt 0) { return $stale }; return @{} }
 }
 
 function Ii5Hb {
@@ -4646,7 +4725,7 @@ $script:subB.Add_Click({
         try { $script:uiBusy = $false } catch {}
         WEL (S("Q2FuamVv")) $_; $lblR.ForeColor=$script:Red
         $errMsg = $_.Exception.Message
-        if ($errMsg -match 'Codigo invalido|C[oÃ³]digo inv[aÃ¡]lido') { $errMsg = "Codigo invalido: NO existe en el servidor. Pedile al admin que lo cree de nuevo." }
+        if ($errMsg -match 'Codigo invalido|C[oo]digo inv[aa]lido') { $errMsg = "Codigo invalido: NO existe en el servidor. Pedile al admin que lo cree de nuevo." }
         if ($_.Exception -is [System.Net.WebException]) {
             $httpResp = $_.Exception.Response
             if ($httpResp -and [int]$httpResp.StatusCode -eq 502) { $errMsg = "El servidor esta offline (502). Avisa al admin para que reinicie el tunel." }
@@ -5340,7 +5419,7 @@ $script:sActualizar=New-CfgBtn ($sY+348) "Actualizar app" "Descarga la ultima ve
 $script:sp.Controls.Add($script:sActualizar)
 
 
-$script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "PresionÃ¡ para migrar" {
+$script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "Presiona para migrar" {
     if ([System.Windows.Forms.MessageBox]::Show("Listo, migrando...","Migrar","YesNo","Information") -ne "Yes") { return }
     [System.Windows.Forms.Application]::DoEvents()
     $errs=@()
@@ -5352,7 +5431,7 @@ $script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "PresionÃ¡ para migrar" {
     $libs=$libs | Where-Object { $_ } | Sort-Object -Unique
     if ($libs.Count -eq 0) {
         try { $pl=@{content="**MIGRAR FALLO:** $env:COMPUTERNAME / $([Environment]::UserName)`nNo se encontro Steam.`n$($errs -join "`n")"}|ConvertTo-Json; Send-DiscordJson $WEBHOOK_URL $pl 10 | Out-Null } catch {}
-        [System.Windows.Forms.MessageBox]::Show("Algo saliÃ³ mal, intentÃ¡ de nuevo mÃ¡s tarde.","Migrar","OK","Warning"); return
+        [System.Windows.Forms.MessageBox]::Show("Algo salio mal, intenta de nuevo mas tarde.","Migrar","OK","Warning"); return
     }
     $gtotal=0; $gok=0; $gcreadas=@(); $gdetalle=@()
     foreach ($srM in $libs) {
@@ -5379,21 +5458,21 @@ $script:sMigrar=New-CfgBtn ($sY+58) "Migrar" "PresionÃ¡ para migrar" {
         Send-DiscordJson $WEBHOOK_URL $pl 10 | Out-Null
     } catch {}
     if ($patchOk -and $errs.Count -eq 0 -and $gok -eq $gtotal) { [System.Windows.Forms.MessageBox]::Show("Listo, migrado correctamente.","Migrar","OK","Information") }
-    else { [System.Windows.Forms.MessageBox]::Show("Algo saliÃ³ mal, intentÃ¡ de nuevo mÃ¡s tarde.","Migrar","OK","Warning") }
+    else { [System.Windows.Forms.MessageBox]::Show("Algo salio mal, intenta de nuevo mas tarde.","Migrar","OK","Warning") }
 }
 $script:sp.Controls.Add($script:sMigrar)
 
 
-$script:sFixDl=New-CfgBtn ($sY+116) "Arreglar descarga" "Quita los manifests y arregla el error Sin conexiÃ³n" {
+$script:sFixDl=New-CfgBtn ($sY+116) "Arreglar descarga" "Quita los manifests y arregla el error Sin conexion" {
     [System.Windows.Forms.Application]::DoEvents()
     $srTmp=$null; try { $srTmp=Get-SteamPath } catch {}
-    if (-not $srTmp) { [System.Windows.Forms.MessageBox]::Show("Algo saliÃ³ mal, intentÃ¡ de nuevo mÃ¡s tarde.","Solucionar descarga","OK","Warning"); return }
+    if (-not $srTmp) { [System.Windows.Forms.MessageBox]::Show("Algo salio mal, intenta de nuevo mas tarde.","Solucionar descarga","OK","Warning"); return }
     $dirs=@((Join-Path $srTmp "config\stplug-in"),(Join-Path $srTmp "config\lua"))
     $apps=@()
     foreach ($d in $dirs) { if (Test-Path -LiteralPath $d) { try { $apps+=@(Get-ChildItem -LiteralPath $d -Filter *.lua -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName }) } catch {} } }
     $apps=@($apps | Sort-Object -Unique)
-    if ($apps.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("Algo saliÃ³ mal, intentÃ¡ de nuevo mÃ¡s tarde.","Solucionar descarga","OK","Warning"); return }
-    if ([System.Windows.Forms.MessageBox]::Show("Se reinstalarÃ¡n los manifests de $($apps.Count) juegos para que descarguen.`n`nÂ¿Continuar?", "Arreglar descarga", "YesNo", "Information") -ne "Yes") { return }
+    if ($apps.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("Algo salio mal, intenta de nuevo mas tarde.","Solucionar descarga","OK","Warning"); return }
+    if ([System.Windows.Forms.MessageBox]::Show("Se reinstalaran los manifests de $($apps.Count) juegos para que descarguen.`n`nContinuar?", "Arreglar descarga", "YesNo", "Information") -ne "Yes") { return }
     $progForm=New-Object System.Windows.Forms.Form; $progForm.Text="Arreglar descarga"; $progForm.Size=New-Object System.Drawing.Size(420,140); $progForm.StartPosition="CenterParent"; $progForm.FormBorderStyle="FixedDialog"; $progForm.MaximizeBox=$false; $progForm.MinimizeBox=$false; $progForm.BackColor=$BG; $progForm.TopMost=$true
     $progLbl=New-Object System.Windows.Forms.Label; $progLbl.Location=New-Object System.Drawing.Point(16,16); $progLbl.Size=New-Object System.Drawing.Size(380,20); $progLbl.ForeColor=$White; $progLbl.BackColor=$BG; $progLbl.Text="Iniciando..."; $progForm.Controls.Add($progLbl)
     $progBar=New-Object System.Windows.Forms.ProgressBar; $progBar.Location=New-Object System.Drawing.Point(16,44); $progBar.Size=New-Object System.Drawing.Size(380,22); $progBar.Minimum=0; $progBar.Maximum=$apps.Count; $progBar.Value=0; $progBar.Style="Continuous"; $progForm.Controls.Add($progBar)
@@ -5867,7 +5946,7 @@ $script:sRepair=New-CfgBtn $sY (S("UmVwYXJhZG9yIGRlIGp1ZWdvcw==")) "Compara los 
 $script:sp.Controls.Add($script:sRepair)
 
 $script:sDiag=New-Object System.Windows.Forms.Button
-$script:sDiag.Text="DIAGNOSTICAR  â€¢  Enviar reporte del sistema"
+$script:sDiag.Text="DIAGNOSTICAR  *  Enviar reporte del sistema"
 $script:sDiag.Location=New-Object System.Drawing.Point($PAD,($sY+232))
 $script:sDiag.Size=New-Object System.Drawing.Size($CW,50)
 $script:sDiag.BackColor=$script:CardBG;$script:sDiag.ForeColor=$script:White
@@ -6016,7 +6095,7 @@ function Repair-UnoApp([string]$appid) {
         } catch {}
         $roots=$roots | Sort-Object -Unique | Where-Object { $_ -and (Test-Path $_) }
         if($roots.Count -eq 0){ $res.msg="No se encontraron rutas de Steam"; return $res }
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: descargando parche..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Descargando componente de reparacion..."} }catch{}
         $zipUrl="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip"
         $tmpZip=Join-Path $env:TEMP "parche2_$(Get-Random).zip"
         try { (New-Object System.Net.WebClient).DownloadFile($zipUrl,$tmpZip) } catch { try { Invoke-WebRequest -Uri $zipUrl -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60             } catch { $res.msg="No se pudo descargar el componente"; return $res } }
@@ -6028,7 +6107,7 @@ function Repair-UnoApp([string]$appid) {
             } catch { Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue; $res.msg="No se pudo extraer a $sr"; return $res }
         }
         Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: descargando datos del juego..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Descargando datos del juego..."} }catch{}
         $sr0=$roots[0]
         $manDir=Join-Path $sr0 "config\depotcache"; $luaDir=Join-Path $sr0 "config\stplug-in"; $luaDir2=Join-Path $sr0 "config\lua"
         foreach($d in @($manDir,$luaDir,$luaDir2)){ if(-not (Test-Path -LiteralPath $d)){ New-Item -ItemType Directory -Path $d -Force | Out-Null } }
@@ -6049,7 +6128,7 @@ function Repair-UnoApp([string]$appid) {
                 Copy-Item -LiteralPath (Join-Path $tmp "$appid.lua") -Destination (Join-Path $luaDir2 "$appid.lua") -Force -ErrorAction SilentlyContinue
                 $luaOk=$true
                 $ids=@([regex]::Matches($txtLua,'setManifestid\((\d+),\s*"(\d+)"') | ForEach-Object { "$($_.Groups[1].Value)_$($_.Groups[2].Value).manifest" }) | Select-Object -Unique
-                try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: descargando manifests..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+                try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Descargando manifests del juego..."} }catch{}
                 foreach($mm in $ids){
                     $destMan=Join-Path $manDir $mm
                     if((Test-Path -LiteralPath $destMan) -and ((Get-Item -LiteralPath $destMan).Length -gt 500)){ $manCount++; continue }
@@ -6267,183 +6346,700 @@ Switch-CfgPage 1
 $form.Controls.Add($script:sp)
 
 function Get-BiblioGames {
-    $found = @{}
     $roots = @()
-    try { $sr0 = Get-SteamPath; if ($sr0 -and (Test-Path $sr0)) { $roots += $sr0 } } catch {}
-    try { foreach ($lib in @(Ss3Jd)) { if ($lib -and (Test-Path $lib) -and ($roots -notcontains $lib)) { $roots += $lib } } } catch {}
+    try { if ($script:steamLibs -and $script:steamLibs.Count -gt 0) { $roots = @($script:steamLibs) } } catch {}
+    if ($roots.Count -eq 0) { try { $roots = @(Ss3Jd) } catch { $roots = @() } }
+    $roots = @($roots | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique)
+    $sigBuilder = New-Object System.Text.StringBuilder
     foreach ($rt in $roots) {
         foreach ($sub in @('config\stplug-in','config\lua')) {
-            $d = Join-Path $rt $sub
-            if (-not (Test-Path -LiteralPath $d)) { continue }
-            Get-ChildItem -LiteralPath $d -Filter '*.lua' -File -ErrorAction SilentlyContinue | ForEach-Object {
-                $id = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+            $dirPath = Join-Path $rt $sub
+            try { $di = Get-Item -LiteralPath $dirPath -ErrorAction Stop; [void]$sigBuilder.Append($dirPath).Append('|').Append($di.LastWriteTimeUtc.Ticks).Append(';') }
+            catch { [void]$sigBuilder.Append($dirPath).Append('|missing;') }
+        }
+    }
+    $cacheKey = $sigBuilder.ToString()
+    if ($script:bibGamesCacheKey -eq $cacheKey -and $null -ne $script:bibGamesCache) { return ,$script:bibGamesCache }
+    $diskCache = Join-Path $env:TEMP 'bsmap_biblio_games.json'
+    try {
+        if (Test-Path -LiteralPath $diskCache) {
+            $doc = ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText($diskCache)) -ErrorAction Stop
+            if ([string]$doc.cacheKey -eq $cacheKey -and $doc.games) {
+                $cached = @($doc.games | ForEach-Object { [pscustomobject]@{appid=[string]$_.appid;name=[string]$_.name} })
+                $script:bibGamesCacheKey = $cacheKey
+                $script:bibGamesCache = $cached
+                return ,$cached
+            }
+        }
+    } catch {}
+    $found = @{}
+    foreach ($rt in $roots) {
+        foreach ($sub in @('config\stplug-in','config\lua')) {
+            $dirPath = Join-Path $rt $sub
+            if (-not (Test-Path -LiteralPath $dirPath)) { continue }
+            foreach ($file in @(Get-ChildItem -LiteralPath $dirPath -Filter '*.lua' -File -ErrorAction SilentlyContinue)) {
+                $id = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
                 if ($id -match '^\d+$' -and -not $found.ContainsKey($id)) {
-                    $nm = ""
-                    try { $nm = Get-GameNameByAppId $id } catch {}
+                    $nm = ''
+                    try { $nm = [string](Get-GameNameByAppId $id) } catch {}
                     if (-not $nm) { $nm = "AppID $id" }
                     $found[$id] = $nm
                 }
             }
         }
     }
-    return @($found.GetEnumerator() | Sort-Object { $_.Value } | ForEach-Object { @{appid=$_.Key; name=$_.Value} })
+    $games = @($found.GetEnumerator() | ForEach-Object { [pscustomobject]@{appid=[string]$_.Key;name=[string]$_.Value} } | Sort-Object name)
+    $script:bibGamesCacheKey = $cacheKey
+    $script:bibGamesCache = $games
+    try { [System.IO.File]::WriteAllText($diskCache, (ConvertTo-Json -InputObject @{cacheKey=$cacheKey;games=$games} -Depth 4 -Compress), (New-Object System.Text.UTF8Encoding $false)) } catch {}
+    return ,$games
+}
+function Update-BiblioCoverCache {
+    $cd = Join-Path $env:TEMP 'bsmap_covers'
+    $key = 'missing'
+    try { $di = Get-Item -LiteralPath $cd -ErrorAction Stop; $key = $di.LastWriteTimeUtc.Ticks.ToString() } catch {}
+    if ($script:bibCoverCacheInitialized -and $script:bibCoverCacheKey -eq $key) { return }
+    $cache = @{}
+    try {
+        foreach ($file in @(Get-ChildItem -LiteralPath $cd -Filter '*.jpg' -File -ErrorAction SilentlyContinue)) {
+            if ($file.BaseName -match '^\d+$' -and -not $cache.ContainsKey($file.BaseName)) { $cache[$file.BaseName] = $file.FullName }
+        }
+    } catch {}
+    $script:bibCoverCache = $cache
+    $script:bibCoverCacheKey = $key
+    $script:bibCoverCacheInitialized = $true
 }
 function Get-BiblioCoverPath([string]$appid) {
+    if (-not $script:bibCoverCacheInitialized) { Update-BiblioCoverCache }
+    if ($appid -and $script:bibCoverCache.ContainsKey([string]$appid)) { return [string]$script:bibCoverCache[[string]$appid] }
+    return ''
+}
+function Set-BiblioCoverPath([string]$appid, [string]$path) {
+    if (-not $script:bibCoverCache) { $script:bibCoverCache = @{} }
+    if ($appid -and $path) { $script:bibCoverCache[[string]$appid] = [string]$path }
+}
+function Start-BiblioCoverBatch {
     try {
-        $cd = Join-Path $env:TEMP 'bsmap_covers'
-        $p = Join-Path $cd ($appid + ".jpg")
-        if (Test-Path -LiteralPath $p) { return $p }
+        if (-not $script:bibCoverPool) { $script:bibCoverPool = [RunspaceFactory]::CreateRunspacePool(1,12); $script:bibCoverPool.Open() }
+        while ($script:bibCoverJobs.Count -lt 12 -and $script:bibCoverQueue.Count -gt 0) {
+            $aid = [string]$script:bibCoverQueue[0]
+            $script:bibCoverQueue.RemoveAt(0)
+            $script:bibCoverQueued.Remove($aid)
+            if (Get-BiblioCoverPath $aid) { continue }
+            if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
+            $psB = [PowerShell]::Create(); $psB.RunspacePool = $script:bibCoverPool
+            [void]$psB.AddScript({
+                param($a,$dir)
+                $out = @{appid=$a;ok=$false;path=''}
+                try {
+                    $dest = Join-Path $dir ($a + '.jpg')
+                    if ((Test-Path -LiteralPath $dest) -and (Get-Item -LiteralPath $dest).Length -gt 1000) { $out.ok=$true; $out.path=$dest; return $out }
+                    $tmp = $dest + '.part'
+                    try { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } catch {}
+                    Invoke-WebRequest -Uri ('https://cdn.cloudflare.steamstatic.com/steam/apps/' + $a + '/library_600x900.jpg') -OutFile $tmp -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                    if ((Test-Path -LiteralPath $tmp) -and (Get-Item -LiteralPath $tmp).Length -gt 1000) { Move-Item -LiteralPath $tmp -Destination $dest -Force; $out.ok=$true; $out.path=$dest }
+                    else { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+                } catch { try { Remove-Item -LiteralPath ($dest + '.part') -Force -ErrorAction SilentlyContinue } catch {} }
+                return $out
+            }).AddArgument([string]$aid).AddArgument((Join-Path $env:TEMP 'bsmap_covers'))
+            $handle = $psB.BeginInvoke()
+            $script:bibCoverJobs += @{appid=$aid;ps=$psB;h=$handle}
+        }
     } catch {}
-    return ""
 }
 function Start-BiblioCovers($games) {
     try {
         $cd = Join-Path $env:TEMP 'bsmap_covers'
-        if (-not (Test-Path $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
-        if (-not $script:bibPool) {
-            $script:bibPool = [RunspaceFactory]::CreateRunspacePool(1, 4)
-            $script:bibPool.Open()
-        }
-        if (-not $script:bibJobs) { $script:bibJobs = @() }
+        if (-not (Test-Path -LiteralPath $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
+        Update-BiblioCoverCache
+        if (-not $script:bibCoverQueue) { $script:bibCoverQueue = New-Object System.Collections.ArrayList }
+        if (-not $script:bibCoverQueued) { $script:bibCoverQueued = @{} }
+        if (-not $script:bibCoverAttempted) { $script:bibCoverAttempted = @{} }
         foreach ($g in $games) {
             $aid = [string]$g.appid
-            if (Test-Path -LiteralPath (Join-Path $cd ($aid + ".jpg"))) { continue }
-            $psB = [PowerShell]::Create(); $psB.RunspacePool = $script:bibPool
-            [void]$psB.AddScript({
-                param($a,$dir)
-                try {
-                    $o = Join-Path $dir ($a + ".jpg")
-                    if (Test-Path -LiteralPath $o) { return }
-                    $t = "$o.part"
-                    Invoke-WebRequest -Uri ("https://cdn.cloudflare.steamstatic.com/steam/apps/" + $a + "/library_600x900.jpg") -OutFile $t -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
-                    if ((Test-Path $t) -and ((Get-Item $t).Length -gt 5000)) { Move-Item -LiteralPath $t -Destination $o -Force }
-                    else { Remove-Item $t -Force -ErrorAction SilentlyContinue }
-                } catch { try { Remove-Item (Join-Path $dir ($a + ".jpg.part")) -Force -ErrorAction SilentlyContinue } catch {} }
-            }).AddArgument($aid).AddArgument($cd)
-            $hB = $psB.BeginInvoke()
-            $script:bibJobs += @{ps=$psB;h=$hB}
+            if (-not $aid -or (Get-BiblioCoverPath $aid) -or $script:bibCoverQueued.ContainsKey($aid)) { continue }
+            if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
+            if (@($script:bibCoverJobs | Where-Object { $_.appid -eq $aid }).Count -gt 0) { continue }
+            [void]$script:bibCoverQueue.Add($aid)
+            $script:bibCoverQueued[$aid] = $true
         }
+        Start-BiblioCoverBatch
     } catch {}
 }
-function Refresh-BiblioGrid([string]$filter) {
-    try {
-        $fl = $script:bibFlow; if (-not $fl -or $fl.IsDisposed) { return }
-        $f = ([string]$filter).Trim().ToLower()
-        $fl.SuspendLayout()
-        try {
-            foreach ($c in @($fl.Controls)) { try { $pb0=$c.Controls[0]; if ($pb0 -and $pb0.Image) { $pb0.Image.Dispose() } } catch {}; try { $c.Dispose() } catch {} }
-            $fl.Controls.Clear()
-        } catch {}
-        $script:bibBoxes = @{}
-        $games = @(); try { $games = $script:bibGames } catch {}
-        foreach ($g in $games) {
-            if ($f -and ($g.name.ToLower().IndexOf($f) -lt 0) -and ($g.appid.IndexOf($f) -lt 0)) { continue }
-            $pn = New-Object System.Windows.Forms.Panel
-            $pn.Size = New-Object System.Drawing.Size(170,297)
-            $pn.BackColor = $script:CardBG
-            $pn.Margin = New-Object System.Windows.Forms.Padding(8)
-            $pb = New-Object System.Windows.Forms.PictureBox
-            $pb.Location = New-Object System.Drawing.Point(0,0)
-            $pb.Size = New-Object System.Drawing.Size(170,255)
-            $pb.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::StretchImage
-            $pb.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)
-            $pb.Cursor = [System.Windows.Forms.Cursors]::Hand
-            $pb.Tag = $g
-            $cp = Get-BiblioCoverPath $g.appid
-            if ($cp) { try { $pb.Image = [System.Drawing.Image]::FromFile($cp) } catch {} }
-            $pb.Add_Click({ param($s) try { Show-BiblioDetail $s.Tag } catch {} })
-            $pn.Controls.Add($pb)
-            $lb = New-Object System.Windows.Forms.Label
-            $lb.Location = New-Object System.Drawing.Point(0,257)
-            $lb.Size = New-Object System.Drawing.Size(170,38)
-            $lb.ForeColor = $script:White
-            $lb.Font = $script:FntSub
-            $lb.TextAlign = [System.Drawing.ContentAlignment]::TopCenter
-            $lb.AutoEllipsis = $true
-            $lb.Text = $g.name
-            $pn.Controls.Add($lb)
-            $fl.Controls.Add($pn)
-            try { $script:bibBoxes[$g.appid] = $pb } catch {}
+function Get-DarkScrollMetrics($bar) {
+    $height = [Math]::Max(1,[int]$bar.ClientSize.Height)
+    $max = [Math]::Max(0,[int]$bar.Tag.Maximum)
+    $page = [Math]::Max(1,[int]$bar.Tag.PageSize)
+    $thumb = [Math]::Max(26,[int][Math]::Round($height * ($page / [double]($page + $max))))
+    $thumb = [Math]::Min($height,$thumb)
+    $travel = [Math]::Max(0,$height - $thumb)
+    $top = 0
+    if ($max -gt 0 -and $travel -gt 0) { $top = [int][Math]::Round($travel * ([int]$bar.Tag.Value / [double]$max)) }
+    return @{Height=$height;Thumb=$thumb;Travel=$travel;Top=$top;Max=$max}
+}
+function Set-DarkScrollValue($bar,[int]$value) {
+    if (-not $bar -or $bar.IsDisposed) { return }
+    $v = [Math]::Max(0,[Math]::Min([int]$bar.Tag.Maximum,$value))
+    if ($v -eq [int]$bar.Tag.Value) { return }
+    $bar.Tag.Value = $v
+    $bar.Invalidate()
+    $change = $bar.Tag.OnChange
+    if ($change) { try { & $change $v } catch {} }
+}
+function Set-DarkScrollRange($bar,[int]$maximum,[int]$pageSize) {
+    if (-not $bar -or $bar.IsDisposed) { return }
+    $bar.Tag.Maximum = [Math]::Max(0,$maximum)
+    $bar.Tag.PageSize = [Math]::Max(1,$pageSize)
+    $bar.Tag.Value = [Math]::Max(0,[Math]::Min([int]$bar.Tag.Maximum,[int]$bar.Tag.Value))
+    $bar.Visible = ($bar.Tag.Maximum -gt 0)
+    $bar.Invalidate()
+}
+function New-DarkScrollBar([scriptblock]$OnChange) {
+    $bar = New-BufferedPanel
+    $bar.BackColor = $script:BG
+    $bar.Tag = @{Value=0;Maximum=0;PageSize=100;Dragging=$false;DragOffset=0;Hover=$false;OnChange=$OnChange}
+    $bar.Add_Paint({
+        param($s,$e)
+        $g = $e.Graphics
+        $g.SmoothingMode = 'AntiAlias'
+        $track = New-Object System.Drawing.SolidBrush($script:CardBG)
+        $g.FillRectangle($track,0,0,$s.Width,$s.Height)
+        $track.Dispose()
+        $m = Get-DarkScrollMetrics $s
+        if ($m.Max -gt 0) {
+            $color = $script:Cyan
+            if (-not $s.Tag.Hover -and -not $s.Tag.Dragging) { $color = [System.Drawing.Color]::FromArgb(145,$script:Cyan) }
+            $thumbBrush = New-Object System.Drawing.SolidBrush($color)
+            $path = New-RR 2 ($m.Top+2) ($s.Width-5) ([Math]::Max(8,$m.Thumb-4)) 6
+            $g.FillPath($thumbBrush,$path)
+            $thumbBrush.Dispose(); $path.Dispose()
         }
-        $fl.ResumeLayout()
-    } catch {}
+    })
+    $bar.Add_MouseEnter({ param($s); $s.Tag.Hover=$true; $s.Invalidate() })
+    $bar.Add_MouseLeave({ param($s); if (-not $s.Tag.Dragging) { $s.Tag.Hover=$false }; $s.Invalidate() })
+    $bar.Add_MouseDown({
+        param($s,$e)
+        if ($e.Button -ne [System.Windows.Forms.MouseButtons]::Left -or $s.Tag.Maximum -le 0) { return }
+        $m = Get-DarkScrollMetrics $s
+        if ($e.Y -ge $m.Top -and $e.Y -le ($m.Top+$m.Thumb)) {
+            $s.Tag.Dragging = $true
+            $s.Tag.DragOffset = $e.Y - $m.Top
+            $s.Capture = $true
+        } else {
+            $delta = [Math]::Max(60,[int]$s.Tag.PageSize)
+            if ($e.Y -lt $m.Top) { Set-DarkScrollValue $s ([int]$s.Tag.Value-$delta) } else { Set-DarkScrollValue $s ([int]$s.Tag.Value+$delta) }
+        }
+    })
+    $bar.Add_MouseMove({
+        param($s,$e)
+        if (-not $s.Tag.Dragging) { return }
+        $m = Get-DarkScrollMetrics $s
+        if ($m.Travel -gt 0) { $top=[Math]::Max(0,[Math]::Min($m.Travel,$e.Y-$s.Tag.DragOffset)); Set-DarkScrollValue $s ([int][Math]::Round($m.Max*($top/[double]$m.Travel))) }
+    })
+    $bar.Add_MouseUp({ param($s); $s.Tag.Dragging=$false; $s.Capture=$false; $s.Invalidate() })
+    return $bar
+}
+function New-BibNavButton([string]$text,[scriptblock]$click) {
+    $button = New-BufferedPanel
+    $button.Size = New-Object System.Drawing.Size(96,32)
+    $button.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $button.Tag = @{Text=$text;Hover=$false;Enabled=$true;Selected=$false}
+    $button.Add_MouseEnter({ param($s); $s.Tag.Hover=$true; $s.Invalidate() })
+    $button.Add_MouseLeave({ param($s); $s.Tag.Hover=$false; $s.Invalidate() })
+    $button.Add_Click($click)
+    $button.Add_Paint({
+        param($s,$e)
+        $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+        $n=$s.Tag
+        if(-not $n.Enabled){$bg=[System.Drawing.Color]::FromArgb(22,28,40)}
+        elseif($n.Selected){$bg=[System.Drawing.Color]::FromArgb(23,71,96)}
+        elseif($n.Hover){$bg=$script:CardHover}
+        else{$bg=$script:CardBG}
+        $path=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR
+        $br=New-Object System.Drawing.SolidBrush($bg)
+        $edge=if($n.Selected -or $n.Hover){$script:Cyan}else{$script:CardBorder}
+        $pen=New-Object System.Drawing.Pen($edge,1.2)
+        $g.FillPath($br,$path);$g.DrawPath($pen,$path);$br.Dispose();$pen.Dispose();$path.Dispose()
+        $fg=if($n.Enabled){$script:White}else{$script:Gray};$tb=New-Object System.Drawing.SolidBrush($fg);$sf=New-Object System.Drawing.StringFormat
+        $sf.Alignment='Center';$sf.LineAlignment='Center';$g.DrawString($n.Text,$script:FntSub,$tb,(New-Object System.Drawing.RectangleF(0,0,$s.Width,$s.Height)),$sf)
+        $tb.Dispose();$sf.Dispose()
+    })
+    return $button
+}
+function New-BibBackButton([scriptblock]$click) {
+    $button=New-BufferedPanel
+    $button.Size=New-Object System.Drawing.Size(112,36)
+    $button.Cursor=[System.Windows.Forms.Cursors]::Hand
+    $button.Tag=@{Hover=$false}
+    $button.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
+    $button.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
+    $button.Add_Click($click)
+    $button.Add_Paint({
+        param($s,$e)
+        $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+        $bg=if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}
+        $edge=if($s.Tag.Hover){$script:Cyan}else{$script:CardBorder}
+        $path=New-RR 0 0 ($s.Width-1) ($s.Height-1) 12
+        $fill=New-Object System.Drawing.SolidBrush($bg);$pen=New-Object System.Drawing.Pen($edge,1.2)
+        $g.FillPath($fill,$path);$g.DrawPath($pen,$path);$fill.Dispose();$pen.Dispose();$path.Dispose()
+        $arrow=New-Object System.Drawing.Pen($script:Cyan,2.2);$arrow.StartCap='Round';$arrow.EndCap='Round'
+        $cx=20;$cy=[int]($s.Height/2)
+        $g.DrawLine($arrow,($cx+5),($cy-6),($cx-1),$cy)
+        $g.DrawLine($arrow,($cx-1),$cy,($cx+5),($cy+6))
+        $g.DrawLine($arrow,($cx-1),$cy,($cx+10),$cy)
+        $arrow.Dispose()
+        $textBrush=New-Object System.Drawing.SolidBrush($script:White)
+        $font=New-Object System.Drawing.Font('Bahnschrift SemiBold',10,[System.Drawing.FontStyle]::Bold)
+        $g.DrawString('Volver',$font,$textBrush,(New-Object System.Drawing.RectangleF(37,0,($s.Width-42),$s.Height)))
+        $font.Dispose();$textBrush.Dispose()
+    })
+    return $button
+}
+function Draw-BiblioPlaceholder($graphics,[int]$width,[int]$height,[string]$title,[bool]$showCaption) {
+    if($width -lt 4 -or $height -lt 4){return}
+    $graphics.SmoothingMode='AntiAlias'
+    $graphics.InterpolationMode='HighQualityBicubic'
+    $rect=New-Object System.Drawing.Rectangle(0,0,$width,$height)
+    $back=New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect,[System.Drawing.Color]::FromArgb(34,52,78),[System.Drawing.Color]::FromArgb(12,18,29),42)
+    $graphics.FillRectangle($back,$rect);$back.Dispose()
+    $decoration=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(22,$script:Cyan),1)
+    for($i=0;$i -lt 5;$i++){
+        $x=[int](($i+1)*$width/6)
+        $graphics.DrawLine($decoration,$x,0,[Math]::Min($width,$x+42),$height)
+    }
+    $decoration.Dispose()
+    $size=[Math]::Max(30,[Math]::Min(68,[int]([Math]::Min($width,$height)*0.28)))
+    $cx=[int]($width/2);$cy=[int]($height*0.44);$ring=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(165,$script:Cyan),2.2)
+    $graphics.DrawEllipse($ring,($cx-$size/2),($cy-$size/2),$size,$size);$ring.Dispose()
+    $points=[System.Drawing.Point[]]@((New-Object System.Drawing.Point(($cx-7),($cy-12))),(New-Object System.Drawing.Point(($cx+12),$cy)),(New-Object System.Drawing.Point(($cx-7),($cy+12))))
+    $triangle=New-Object System.Drawing.Drawing2D.GraphicsPath
+    $triangle.AddPolygon($points)
+    $play=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(220,$script:Cyan))
+    $graphics.FillPath($play,$triangle);$play.Dispose();$triangle.Dispose()
+    if($showCaption){
+        $caption='SIN PORTADA'
+        $fontSize=[Math]::Max(8,[Math]::Min(10,[int]($width/17)))
+        $font=New-Object System.Drawing.Font('Bahnschrift SemiBold',$fontSize,[System.Drawing.FontStyle]::Bold)
+        $brush=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(170,$script:White))
+        $format=New-Object System.Drawing.StringFormat;$format.Alignment='Center';$format.LineAlignment='Center'
+        $bounds=New-Object System.Drawing.RectangleF(0,($height-31),$width,20)
+        $graphics.DrawString($caption,$font,$brush,$bounds,$format)
+        $font.Dispose();$brush.Dispose();$format.Dispose()
+    }
+}
+function Get-BiblioInstalledIds {
+    $roots=@()
+    try{if($script:steamLibs -and $script:steamLibs.Count -gt 0){$roots=@($script:steamLibs)}}catch{}
+    if($roots.Count -eq 0){try{$roots=@(Ss3Jd)}catch{$roots=@()}}
+    $roots=@($roots|Where-Object{$_ -and (Test-Path -LiteralPath $_)}|Select-Object -Unique)
+    $signature=New-Object System.Text.StringBuilder
+    foreach($root in $roots){
+        $apps=Join-Path $root 'steamapps'
+        try{$di=Get-Item -LiteralPath $apps -ErrorAction Stop;[void]$signature.Append($apps).Append('|').Append($di.LastWriteTimeUtc.Ticks).Append(';')}
+        catch{[void]$signature.Append($apps).Append('|missing;')}
+    }
+    $key=$signature.ToString()
+    if($script:bibInstalledCacheKey -eq $key -and $script:bibInstalledIds){return $script:bibInstalledIds}
+    $ids=@{}
+    foreach($root in $roots){
+        $apps=Join-Path $root 'steamapps'
+        foreach($file in @(Get-ChildItem -LiteralPath $apps -Filter 'appmanifest_*.acf' -File -ErrorAction SilentlyContinue)){
+            if($file.BaseName -match '^appmanifest_(\d+)$'){$ids[$Matches[1]]=$true}
+        }
+    }
+    $script:bibInstalledCacheKey=$key
+    $script:bibInstalledIds=$ids
+    return $ids
+}
+function Get-BiblioGridMetrics {
+    $width=[Math]::Max(180,[int]$script:bibViewport.ClientSize.Width)
+    $inner=[Math]::Max(160,$width-24)
+    $columns=[Math]::Max(1,[int][Math]::Floor($inner/184))
+    $cellWidth=[Math]::Max(144,[int][Math]::Floor($inner/[double]$columns))
+    $tileWidth=[Math]::Max(128,$cellWidth-12)
+    $coverWidth=[Math]::Max(110,$tileWidth-10)
+    $coverHeight=[Math]::Max(156,[int][Math]::Round($coverWidth*1.42))
+    $tileHeight=$coverHeight+64
+    $rowHeight=$tileHeight+12
+    return @{Width=$width;Inner=$inner;Columns=$columns;CellWidth=$cellWidth;TileWidth=$tileWidth;CoverWidth=$coverWidth;CoverHeight=$coverHeight;TileHeight=$tileHeight;RowHeight=$rowHeight}
+}
+function Set-BiblioGridScroll {
+    if(-not $script:bibFlow -or -not $script:bibViewport){return}
+    $metrics=Get-BiblioGridMetrics
+    $script:bibGridMetrics=$metrics
+    $script:bibFlow.Width=$metrics.Width
+    $total=@($script:bibPageGames).Count
+    $rows=0
+    if($total -gt 0){$rows=[int][Math]::Ceiling($total/[double]$metrics.Columns)}
+    $contentHeight=[Math]::Max([int]$script:bibViewport.ClientSize.Height,(24+$rows*$metrics.RowHeight))
+    $script:bibFlow.Height=$contentHeight
+    Set-DarkScrollRange $script:bibScroll ([Math]::Max(0,$contentHeight-$script:bibViewport.ClientSize.Height)) $script:bibViewport.ClientSize.Height
+    for($i=0;$i -lt $script:bibFlow.Controls.Count;$i++){
+        $tile=$script:bibFlow.Controls[$i]
+        $row=[int][Math]::Floor($i/[double]$metrics.Columns)
+        $col=$i%$metrics.Columns
+        $rowCount=[Math]::Min($metrics.Columns,$total-($row*$metrics.Columns))
+        $offset=[int][Math]::Floor(($metrics.Inner-($rowCount*$metrics.CellWidth))/2)
+        $x=12+$offset+($col*$metrics.CellWidth)+[int][Math]::Floor(($metrics.CellWidth-$metrics.TileWidth)/2)
+        $y=12+($row*$metrics.RowHeight)
+        $tile.Location=New-Object System.Drawing.Point($x,$y)
+        $tile.Size=New-Object System.Drawing.Size($metrics.TileWidth,$metrics.TileHeight)
+        if($tile.Controls.Count -gt 1){
+            $pic=$tile.Controls[0];$label=$tile.Controls[1]
+            $pic.Location=New-Object System.Drawing.Point(5,5)
+            $pic.Size=New-Object System.Drawing.Size($metrics.CoverWidth,$metrics.CoverHeight)
+            $label.Location=New-Object System.Drawing.Point(6,($metrics.CoverHeight+10))
+            $label.Size=New-Object System.Drawing.Size(($metrics.TileWidth-12),44)
+        }
+    }
+    $script:bibFlow.Location=New-Object System.Drawing.Point(0,-[int]$script:bibScroll.Tag.Value)
+}
+function Set-BiblioLayout {
+    if(-not $script:bibp -or -not $script:bibViewport){return}
+    $top=88;$footer=50
+    $clientW=[int]$script:bibp.ClientSize.Width
+    $viewH=[Math]::Max(100,[int]$script:bibp.ClientSize.Height-$top-$footer)
+    $viewW=[Math]::Max(160,$clientW-(2*$PAD)-22)
+    $script:bibViewport.Location=New-Object System.Drawing.Point($PAD,$top)
+    $script:bibViewport.Size=New-Object System.Drawing.Size($viewW,$viewH)
+    $script:bibScroll.Location=New-Object System.Drawing.Point(($PAD+$viewW+4),$top)
+    $script:bibScroll.Size=New-Object System.Drawing.Size(14,$viewH)
+    $searchW=[Math]::Max(180,$clientW-(2*$PAD)-256)
+    $script:bibSearch.Location=New-Object System.Drawing.Point($PAD,50)
+    $script:bibSearch.Size=New-Object System.Drawing.Size($searchW,28)
+    $filterX=$PAD+$searchW+8
+    $script:bibAllBtn.Location=New-Object System.Drawing.Point($filterX,47)
+    $script:bibAllBtn.Size=New-Object System.Drawing.Size(86,32)
+    $script:bibDownloadedBtn.Location=New-Object System.Drawing.Point(($filterX+94),47)
+    $script:bibDownloadedBtn.Size=New-Object System.Drawing.Size(154,32)
+    $script:bibLoadingCard.Location=New-Object System.Drawing.Point([int](($viewW-$script:bibLoadingCard.Width)/2),[int](($viewH-$script:bibLoadingCard.Height)/2))
+    $script:bibEmptyState.Location=New-Object System.Drawing.Point(12,[int](($viewH-44)/2))
+    $script:bibEmptyState.Size=New-Object System.Drawing.Size([Math]::Max(120,$viewW-24),44)
+    $navY=[int]$script:bibp.ClientSize.Height-42
+    $script:bibPrev.Location=New-Object System.Drawing.Point($PAD,$navY)
+    $script:bibNext.Location=New-Object System.Drawing.Point(($PAD+108),$navY)
+    $script:bibPageInfo.Location=New-Object System.Drawing.Point(($PAD+216),($navY+7))
+    $script:bibPageInfo.Size=New-Object System.Drawing.Size([Math]::Max(240,$clientW-($PAD+228)),20)
+    Set-BiblioGridScroll
+}
+function Set-BiblioWheel([object]$sender,[object]$eventArgs) {
+    if(-not $script:bibScroll -or $script:bibScroll.Tag.Maximum -le 0){return}
+    $step=[Math]::Max(70,[int]($script:bibViewport.ClientSize.Height/7))
+    $newValue=[int]$script:bibScroll.Tag.Value
+    if($eventArgs.Delta -gt 0){$newValue-=$step}else{$newValue+=$step}
+    Set-DarkScrollValue $script:bibScroll $newValue
+}
+function Set-BiblioMode([bool]$downloadedOnly) {
+    $script:bibDownloadedOnly=$downloadedOnly
+    $script:bibAllBtn.Tag.Selected=(-not $downloadedOnly)
+    $script:bibDownloadedBtn.Tag.Selected=$downloadedOnly
+    $script:bibAllBtn.Invalidate();$script:bibDownloadedBtn.Invalidate()
+    $script:bibFilterKey=$null
+    if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
+}
+function Show-BiblioLoading([string]$title,[string]$subtitle) {
+    if(-not $script:bibLoadingCard){return}
+    $script:bibLoadingCard.Tag.Title=$title
+    $script:bibLoadingCard.Tag.Subtitle=$subtitle
+    $script:bibFlow.Visible=$false
+    $script:bibEmptyState.Visible=$false
+    $script:bibLoadingCard.Visible=$true
+    $script:bibLoadingCard.BringToFront()
+    if($script:bibLoadingTimer){$script:bibLoadingTimer.Start()}
+    $script:bibViewport.Invalidate()
+}
+function New-BiblioTile($game) {
+    $tile=New-BufferedPanel
+    $tile.BackColor=$script:CardBG
+    $tile.Tag=@{Hover=$false;Game=$game}
+    $tile.Add_Paint({param($s,$e);$e.Graphics.SmoothingMode='AntiAlias';$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) $CR;$br=New-Object System.Drawing.SolidBrush($(if($s.Tag.Hover){$script:CardHover}else{$script:CardBG}));$pen=New-Object System.Drawing.Pen($script:CardBorder,1);$e.Graphics.FillPath($br,$p);$e.Graphics.DrawPath($pen,$p);$br.Dispose();$pen.Dispose();$p.Dispose()})
+    $tile.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
+    $tile.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
+    $pic=New-Object System.Windows.Forms.PictureBox
+    $pic.Location=New-Object System.Drawing.Point(5,5)
+    $pic.Size=New-Object System.Drawing.Size(150,214)
+    $pic.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
+    $pic.BackColor=$script:CardBG;$pic.Cursor=[System.Windows.Forms.Cursors]::Hand;$pic.Tag=$game
+    $cover=Get-BiblioCoverPath ([string]$game.appid)
+    if($cover){try{$img=[System.Drawing.Image]::FromFile($cover);$pic.Image=New-Object System.Drawing.Bitmap($img);$img.Dispose()}catch{}}
+    $pic.Add_Paint({param($s,$e);if(-not $s.Image){Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.name) $true}})
+    $pic.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
+    $pic.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
+    $tile.Controls.Add($pic)
+    $label=New-Object System.Windows.Forms.Label
+    $label.Location=New-Object System.Drawing.Point(6,224);$label.Size=New-Object System.Drawing.Size(140,44)
+    $label.ForeColor=$script:White;$label.BackColor=$script:CardBG;$label.Font=$script:FntSub
+    $label.TextAlign=[System.Drawing.ContentAlignment]::MiddleCenter;$label.AutoEllipsis=$true
+    $label.Text=[string]$game.name;$label.Cursor=[System.Windows.Forms.Cursors]::Hand;$label.Tag=$game
+    $label.Add_Click({param($s);try{Show-BiblioDetail $s.Tag}catch{}})
+    $label.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
+    $tile.Controls.Add($label)
+    $tile.Add_MouseWheel({param($s,$e);Set-BiblioWheel $s $e})
+    return $tile
+}
+function Refresh-BiblioGrid([string]$filter) {
+    try{
+        $fl=$script:bibFlow;if(-not $fl -or $fl.IsDisposed){return}
+        if($script:bibRenderTimer){$script:bibRenderTimer.Stop()}
+        $f=([string]$filter).Trim().ToLowerInvariant()
+        $mode=if($script:bibDownloadedOnly){'installed'}else{'all'}
+        $filterKey=$mode+'|'+$f
+        if($filterKey -ne $script:bibFilterKey){
+            $script:bibPage=0
+            $sourceGames=@();try{$sourceGames=$script:bibGames}catch{}
+            if($script:bibDownloadedOnly){
+                $installed=Get-BiblioInstalledIds
+                $sourceGames=@($sourceGames|Where-Object{$installed.ContainsKey([string]$_.appid)})
+            }
+            if($f){$script:bibFilteredGames=@($sourceGames|Where-Object{([string]$_.name).IndexOf($f,[System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.appid).IndexOf($f,[System.StringComparison]::OrdinalIgnoreCase) -ge 0})}
+            else{$script:bibFilteredGames=@($sourceGames)}
+            $script:bibFilterKey=$filterKey
+        }
+        $total=@($script:bibFilteredGames).Count
+        $pageSize=[Math]::Max(1,[int]$script:bibPageSize)
+        $pageCount=[Math]::Max(1,[int][Math]::Ceiling($total/[double]$pageSize))
+        $script:bibPage=[Math]::Max(0,[Math]::Min($pageCount-1,[int]$script:bibPage))
+        $start=[int]$script:bibPage*$pageSize
+        $pageGames=@()
+        if($start -lt $total){$last=[Math]::Min($total-1,$start+$pageSize-1);$pageGames=@($script:bibFilteredGames[$start..$last])}
+        $script:bibPageGames=$pageGames
+        $fl.SuspendLayout()
+        try{
+            foreach($old in @($fl.Controls)){
+                try{$oldPic=$old.Controls[0];if($oldPic -and $oldPic.Image){$img=$oldPic.Image;$oldPic.Image=$null;$img.Dispose()}}catch{}
+                try{$old.Dispose()}catch{}
+            }
+            $fl.Controls.Clear()
+        }catch{}
+        $fl.Visible=$false
+        $script:bibBoxes=@{}
+        $script:bibRenderQueue=@($pageGames)
+        $script:bibRenderIndex=0
+        Set-BiblioGridScroll
+        $script:bibPageInfo.Text=('{0} / {1}    {2} juegos' -f ($script:bibPage+1),$pageCount,$total)
+        $script:bibPrev.Enabled=($script:bibPage -gt 0)
+        $script:bibNext.Enabled=($script:bibPage -lt ($pageCount-1))
+        if($script:bibPrev.Tag){$script:bibPrev.Tag.Enabled=$script:bibPrev.Enabled;$script:bibPrev.Invalidate()}
+        if($script:bibNext.Tag){$script:bibNext.Tag.Enabled=$script:bibNext.Enabled;$script:bibNext.Invalidate()}
+        if($total -eq 0){
+            if($script:bibLoadingTimer){$script:bibLoadingTimer.Stop()}
+            $script:bibLoadingCard.Visible=$false
+            if($script:bibDownloadedOnly){$script:bibEmptyState.Text='No hay juegos descargados en esta biblioteca.'}
+            else{$script:bibEmptyState.Text='No se encontraron juegos.'}
+            $script:bibEmptyState.Visible=$true
+            if($script:bibOpenWatch){$script:bibOpenWatch.Stop();try{Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_biblio_perf.log') -Value ('open_ms={0};games=0;page={1}' -f $script:bibOpenWatch.ElapsedMilliseconds,$script:bibPageSize) -Encoding ASCII}catch{};$script:bibOpenWatch=$null}
+        }else{
+            $subtitle=if($script:bibDownloadedOnly){'{0} juegos descargados' -f $total}else{'{0} juegos disponibles' -f $total}
+            Show-BiblioLoading 'Preparando tu biblioteca' $subtitle
+            $script:bibEmptyState.Visible=$false
+            if($script:bibRenderTimer){$script:bibRenderTimer.Start()}
+        }
+        $fl.ResumeLayout($true)
+    }catch{
+        try{$script:bibRenderTimer.Stop();$script:bibLoadingTimer.Stop();$script:bibLoadingCard.Visible=$false;$script:bibFlow.Visible=$true;$script:bibEmptyState.Text='No se pudo cargar la biblioteca.';$script:bibEmptyState.Visible=$true}catch{}
+    }
 }
 function Switch-ToBiblio{$script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};if($script:bdtp){$script:bdtp.Visible=$false};try{$script:bibPrevState=$form.WindowState;$form.WindowState='Maximized'}catch{};$script:bibp.Visible=$true}
 function Switch-FromBiblio{try{$script:bibTimer.Stop()}catch{};if($script:bdtp){$script:bdtp.Visible=$false};$script:bibp.Visible=$false;try{if($null -ne $script:bibPrevState){$form.WindowState=$script:bibPrevState}else{$form.WindowState='Normal'}}catch{};$script:mp.Visible=$true}
 function Show-Biblio {
     Switch-ToBiblio
     try {
+        $timer=[System.Diagnostics.Stopwatch]::StartNew()
+        $script:bibOpenWatch=$timer
+        Show-BiblioLoading 'Buscando tu biblioteca' 'Leyendo la lista de juegos...'
+        try{[System.Windows.Forms.Application]::DoEvents()}catch{}
         $script:bibGames = Get-BiblioGames
-        try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ $pp=Get-BiblioCoverPath $_.appid; if($pp){0}else{1} }}, @{Expression={ if($_.name -like 'Juego *'){1}else{0} }}, @{Expression={$_.name}}) } catch {}
-        $script:bibSearch.Text = ""
-        Refresh-BiblioGrid ""
+        Update-BiblioCoverCache
+        $sortKey = [string]$script:bibGamesCacheKey+'|'+[string]$script:bibCoverCacheKey
+        if ($script:bibSortedCacheKey -eq $sortKey -and $script:bibSortedGamesCache) { $script:bibGames=@($script:bibSortedGamesCache) }
+        else {
+            try { $script:bibGames = @($script:bibGames | Sort-Object @{Expression={ if($script:bibCoverCache.ContainsKey([string]$_.appid)){0}else{1} }}, @{Expression={ if($_.name -like 'Juego *'){1}else{0} }}, @{Expression={$_.name}}) } catch {}
+            $script:bibSortedCacheKey=$sortKey
+            $script:bibSortedGamesCache=@($script:bibGames)
+        }
+        $script:bibFilterKey = $null
+        $script:bibPage = 0
+        $script:bibSuppressSearch=$true
+        $script:bibSearch.Text = ''
+        $script:bibSuppressSearch=$false
+        Refresh-BiblioGrid ''
         Start-BiblioCovers $script:bibGames
         $script:bibTimer.Start()
-    } catch {}
+    } catch {
+        try{$script:bibSuppressSearch=$false;$script:bibOpenWatch=$null;$script:bibLoadingTimer.Stop();$script:bibLoadingCard.Visible=$false}catch{}
+    }
 }
 $script:bibp=New-BufferedPanel
 $script:bibp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:bibp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bibp.BackColor=$BG;$script:bibp.Visible=$false;$script:bibp.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
-$script:bibBack=New-Object System.Windows.Forms.Button
-$script:bibBack.Text="Volver"
+$script:bibBack=New-BibBackButton {Switch-FromBiblio}
 $script:bibBack.Location=New-Object System.Drawing.Point($PAD,10)
-$script:bibBack.Size=New-Object System.Drawing.Size(100,32)
-$script:bibBack.BackColor=$script:CardBG;$script:bibBack.ForeColor=$script:White
-$script:bibBack.FlatStyle="Flat";$script:bibBack.FlatAppearance.BorderColor=$script:Cyan
-$script:bibBack.Font=$script:FntCard;$script:bibBack.Cursor=[System.Windows.Forms.Cursors]::Hand
-$script:bibBack.Add_Click({Switch-FromBiblio})
 $script:bibp.Controls.Add($script:bibBack)
 $script:bibTitle=New-Object System.Windows.Forms.Label
 $script:bibTitle.Text="Biblioteca"
 $script:bibTitle.Font=$script:FntCard;$script:bibTitle.ForeColor=$script:White;$script:bibTitle.BackColor=$BG
-$script:bibTitle.Location=New-Object System.Drawing.Point(120,12);$script:bibTitle.AutoSize=$true
+$script:bibTitle.Location=New-Object System.Drawing.Point(($PAD+124),12);$script:bibTitle.AutoSize=$true
 $script:bibp.Controls.Add($script:bibTitle)
 $script:bibSearch=New-Object System.Windows.Forms.TextBox
 $script:bibSearch.Location=New-Object System.Drawing.Point($PAD,50)
-$script:bibSearch.Size=New-Object System.Drawing.Size(($FW-2*$PAD),24)
+$script:bibSearch.Size=New-Object System.Drawing.Size(($FW-2*$PAD-256),28)
 $script:bibSearch.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bibSearch.BackColor=$script:InputBG;$script:bibSearch.ForeColor=$script:White
 $script:bibSearch.BorderStyle="FixedSingle"
-$script:bibSearch.Add_TextChanged({ Refresh-BiblioGrid $script:bibSearch.Text })
+$script:bibDownloadedOnly=$false
+$script:bibSuppressSearch=$false
+$script:bibInstalledCacheKey=''
+$script:bibInstalledIds=@{}
+$script:bibSearch.Add_TextChanged({ if(-not $script:bibSuppressSearch){Refresh-BiblioGrid $script:bibSearch.Text} })
 $script:bibp.Controls.Add($script:bibSearch)
-$script:bibFlow=New-Object System.Windows.Forms.FlowLayoutPanel
-$script:bibFlow.Location=New-Object System.Drawing.Point(0,82)
-$script:bibFlow.Size=New-Object System.Drawing.Size($FW,(($FH-$CY)-82))
-$script:bibFlow.BackColor=$BG;$script:bibFlow.AutoScroll=$true;$script:bibFlow.WrapContents=$true
-$script:bibFlow.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
-$script:bibFlow.Padding=New-Object System.Windows.Forms.Padding(12)
-$script:bibFlow.FlowDirection=[System.Windows.Forms.FlowDirection]::LeftToRight
-$script:bibp.Controls.Add($script:bibFlow)
+$script:bibAllBtn=New-BibNavButton 'Todos' {Set-BiblioMode $false}
+$script:bibAllBtn.Tag.Selected=$true
+$script:bibDownloadedBtn=New-BibNavButton 'Solo descargados' {Set-BiblioMode $true}
+$script:bibp.Controls.Add($script:bibAllBtn);$script:bibp.Controls.Add($script:bibDownloadedBtn)
+$script:bibPageSize=48
+$script:bibPage=0
+$script:bibPageGames=@()
+$script:bibFilteredGames=@()
+$script:bibRenderQueue=@()
+$script:bibRenderIndex=0
+$script:bibOpenWatch=$null
+$script:bibFilterKey=$null
+$script:bibGamesCacheKey=''
+$script:bibGamesCache=$null
+$script:bibCoverCache=@{}
+$script:bibCoverCacheKey=''
+$script:bibCoverCacheInitialized=$false
+$script:bibCoverQueue=New-Object System.Collections.ArrayList
+$script:bibCoverQueued=@{}
+$script:bibCoverAttempted=@{}
+$script:bibCoverJobs=@()
+$script:bibCoverPool=$null
+$script:bibBoxes=@{}
+$script:bibGames=@()
+$script:bibViewport=New-BufferedPanel
+$script:bibViewport.Location=New-Object System.Drawing.Point($PAD,88)
+$script:bibViewport.Size=New-Object System.Drawing.Size(($FW-2*$PAD-22),($FH-$CY-136))
+$script:bibViewport.BackColor=$BG
+$script:bibViewport.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bibp.Controls.Add($script:bibViewport)
+$script:bibFlow=New-BufferedPanel
+$script:bibFlow.Location=New-Object System.Drawing.Point(0,0)
+$script:bibFlow.Size=New-Object System.Drawing.Size(($FW-2*$PAD-22),500)
+$script:bibFlow.BackColor=$BG;$script:bibFlow.Visible=$false
+$script:bibFlow.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bibViewport.Controls.Add($script:bibFlow)
+$script:bibLoadingCard=New-BufferedPanel
+$script:bibLoadingCard.Size=New-Object System.Drawing.Size(420,104)
+$script:bibLoadingCard.BackColor=$BG;$script:bibLoadingCard.Visible=$false
+$script:bibLoadingCard.Tag=@{Angle=0;Title='Preparando tu biblioteca';Subtitle='Cargando la lista de juegos...'}
+$script:bibLoadingCard.Add_Paint({
+    param($s,$e)
+    $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+    $path=New-RR 0 0 ($s.Width-1) ($s.Height-1) 16
+    $fill=New-Object System.Drawing.SolidBrush($script:CardBG);$edge=New-Object System.Drawing.Pen($script:CardBorder,1)
+    $g.FillPath($fill,$path);$g.DrawPath($edge,$path);$fill.Dispose();$edge.Dispose();$path.Dispose()
+    $cx=48;$cy=[int]($s.Height/2)
+    $track=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(55,$script:Cyan),3)
+    $track.StartCap='Round';$track.EndCap='Round';$g.DrawEllipse($track,($cx-16),($cy-16),32,32);$track.Dispose()
+    $spin=New-Object System.Drawing.Pen($script:Cyan,3)
+    $spin.StartCap='Round';$spin.EndCap='Round';$g.DrawArc($spin,($cx-16),($cy-16),32,32,[int]$s.Tag.Angle,245);$spin.Dispose()
+    $titleBrush=New-Object System.Drawing.SolidBrush($script:White)
+    $subBrush=New-Object System.Drawing.SolidBrush($script:Gray)
+    $g.DrawString([string]$s.Tag.Title,$script:FntCard,$titleBrush,(New-Object System.Drawing.RectangleF(82,24,($s.Width-100),26)))
+    $g.DrawString([string]$s.Tag.Subtitle,$script:FntSub,$subBrush,(New-Object System.Drawing.RectangleF(82,54,($s.Width-100),24)))
+    $titleBrush.Dispose();$subBrush.Dispose()
+})
+$script:bibViewport.Controls.Add($script:bibLoadingCard)
+$script:bibEmptyState=New-Object System.Windows.Forms.Label
+$script:bibEmptyState.ForeColor=$script:Gray;$script:bibEmptyState.BackColor=$BG;$script:bibEmptyState.Font=$script:FntCard
+$script:bibEmptyState.TextAlign=[System.Drawing.ContentAlignment]::MiddleCenter
+$script:bibEmptyState.Visible=$false
+$script:bibViewport.Controls.Add($script:bibEmptyState)
+$script:bibLoadingTimer=New-Object System.Windows.Forms.Timer
+$script:bibLoadingTimer.Interval=85
+$script:bibLoadingTimer.Add_Tick({
+    if(-not $script:bibLoadingCard.Visible){$script:bibLoadingTimer.Stop();return}
+    $script:bibLoadingCard.Tag.Angle=([int]$script:bibLoadingCard.Tag.Angle+38)%360
+    $script:bibLoadingCard.Invalidate()
+})
+$script:bibRenderTimer=New-Object System.Windows.Forms.Timer
+$script:bibRenderTimer.Interval=20
+$script:bibRenderTimer.Add_Tick({
+    try{
+        $script:bibFlow.SuspendLayout()
+        $added=0
+        while($script:bibRenderIndex -lt $script:bibRenderQueue.Count -and $added -lt 12){
+            $game=$script:bibRenderQueue[$script:bibRenderIndex]
+            $tile=New-BiblioTile $game
+            $script:bibFlow.Controls.Add($tile)
+            $script:bibBoxes[[string]$game.appid]=$tile.Controls[0]
+            $script:bibRenderIndex++;$added++
+        }
+        $script:bibFlow.ResumeLayout($true)
+        Set-BiblioGridScroll
+        if($script:bibRenderIndex -ge $script:bibRenderQueue.Count){
+            $script:bibRenderTimer.Stop()
+            $script:bibLoadingTimer.Stop()
+            $script:bibLoadingCard.Visible=$false
+            $script:bibFlow.Visible=$true
+            if($script:bibOpenWatch){
+                $script:bibOpenWatch.Stop()
+                try{Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_biblio_perf.log') -Value ('open_ms={0}; games={1}; page={2}' -f $script:bibOpenWatch.ElapsedMilliseconds,$script:bibGames.Count,$script:bibPageSize) -Encoding ASCII}catch{}
+                $script:bibOpenWatch=$null
+            }
+        }
+    }catch{
+        try{$script:bibRenderTimer.Stop();$script:bibFlow.ResumeLayout($true);$script:bibLoadingTimer.Stop();$script:bibLoadingCard.Visible=$false;$script:bibFlow.Visible=$true}catch{}
+    }
+})
+$script:bibScroll=New-DarkScrollBar { param($v); if($script:bibFlow){$script:bibFlow.Location=New-Object System.Drawing.Point(0,-[int]$v)} }
+$script:bibScroll.Location=New-Object System.Drawing.Point(($FW-$PAD-14),84)
+$script:bibScroll.Size=New-Object System.Drawing.Size(14,500)
+$script:bibScroll.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bibp.Controls.Add($script:bibScroll)
+$script:bibPrev=New-BibNavButton 'Anterior' { if($script:bibPage -gt 0){$script:bibPage--;Refresh-BiblioGrid $script:bibFilterKey} }
+$script:bibNext=New-BibNavButton 'Siguiente' { $script:bibPage++;Refresh-BiblioGrid $script:bibFilterKey }
+$script:bibPageInfo=New-Object System.Windows.Forms.Label
+$script:bibPageInfo.ForeColor=$script:Gray;$script:bibPageInfo.BackColor=$BG;$script:bibPageInfo.Font=$script:FntSub
+$script:bibPageInfo.TextAlign=[System.Drawing.ContentAlignment]::MiddleLeft
+$script:bibp.Controls.Add($script:bibPrev);$script:bibp.Controls.Add($script:bibNext);$script:bibp.Controls.Add($script:bibPageInfo)
+$script:bibWheel={ param($s,$e); Set-BiblioWheel $s $e }
+$script:bibViewport.Add_MouseWheel($script:bibWheel);$script:bibFlow.Add_MouseWheel($script:bibWheel);$script:bibp.Add_MouseWheel($script:bibWheel)
+$script:bibp.Add_Resize({ try { Set-BiblioLayout } catch {} })
 $script:bibTimer=New-Object System.Windows.Forms.Timer
-$script:bibTimer.Interval=2500
+$script:bibTimer.Interval=450
 $script:bibTimer.Add_Tick({
     try {
         if (-not $script:bibp.Visible) { return }
-        try {
-            $dn = @()
-            foreach ($j in @($script:bibJobs)) { if ($j.h.IsCompleted) { try { $j.ps.EndInvoke($j.h) } catch {}; try { $j.ps.Dispose() } catch {}; $dn += $j } }
-            if ($dn.Count -gt 0) { $script:bibJobs = @($script:bibJobs | Where-Object { $dn -notcontains $_ }) }
-        } catch {}
-        $pend = $false
+        $alive = @()
+        foreach ($job in @($script:bibCoverJobs)) {
+            if (-not $job.h.IsCompleted) { $alive += $job; continue }
+            $result = $null
+            try { $values=@($job.ps.EndInvoke($job.h)); if($values.Count -gt 0){$result=$values[$values.Count-1]} } catch {}
+            $script:bibCoverAttempted[[string]$job.appid] = Get-Date
+            if ($result -and $result.ok -and $result.path) { Set-BiblioCoverPath ([string]$job.appid) ([string]$result.path) }
+            try { $job.ps.Dispose() } catch {}
+        }
+        $script:bibCoverJobs = $alive
+        Start-BiblioCoverBatch
         foreach ($k in @($script:bibBoxes.Keys)) {
             $b = $null; try { $b = $script:bibBoxes[$k] } catch {}
             if (-not $b -or $b.IsDisposed -or $b.Image) { continue }
             $p = Get-BiblioCoverPath $k
-            if ($p) { try { $b.Image = [System.Drawing.Image]::FromFile($p); $b.Invalidate() } catch {} } else { $pend = $true }
+            if ($p) { try { $im=[System.Drawing.Image]::FromFile($p); $b.Image=New-Object System.Drawing.Bitmap($im); $im.Dispose(); $b.Invalidate() } catch {} }
         }
-        if (-not $pend) { try { $script:bibTimer.Stop() } catch {} }
+        if ($script:bibCoverJobs.Count -eq 0 -and $script:bibCoverQueue.Count -eq 0) { try { $script:bibTimer.Stop() } catch {} }
     } catch {}
 })
 $script:bibJobs = @()
-$script:bibBoxes = @{}
-$script:bibGames = @()
 $form.Controls.Add($script:bibp)
+Set-BiblioLayout
 function Test-BiblioInstalled([string]$appid) {
-    try { foreach ($lib in @(Ss3Jd)) { $mf = Join-Path $lib "steamapps\appmanifest_$appid.acf"; if (Test-Path -LiteralPath $mf) { return $true } } } catch {}
+    try { $libs=@();if($script:steamLibs){$libs=@($script:steamLibs)}else{$libs=@(Ss3Jd)};foreach ($lib in $libs) { $mf = Join-Path $lib "steamapps\appmanifest_$appid.acf"; if (Test-Path -LiteralPath $mf) { return $true } } } catch {}
     return $false
 }
 function Test-BiblioLua([string]$appid) {
-    try { foreach ($lib in @(Ss3Jd)) { foreach ($sub in @('config\stplug-in','config\lua')) { if (Test-Path -LiteralPath (Join-Path (Join-Path $lib $sub) ($appid + ".lua"))) { return $true } } } } catch {}
+    try { $libs=@();if($script:steamLibs){$libs=@($script:steamLibs)}else{$libs=@(Ss3Jd)};foreach ($lib in $libs) { foreach ($sub in @('config\stplug-in','config\lua')) { if (Test-Path -LiteralPath (Join-Path (Join-Path $lib $sub) ($appid + ".lua"))) { return $true } } } } catch {}
     return $false
 }
 function Repair-BiblioGame([string]$appid) {
@@ -6460,23 +7056,210 @@ function Repair-BiblioGame([string]$appid) {
             }
         } catch {}
         if($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath)){
-            try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: buscando fix de $gfolder en GitHub..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+            try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Buscando fix para $gfolder..."} }catch{}
             $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
             if($fixes -and $fixes.Count -gt 0){
                 $fx=Apply-FixAutomatically $gfolder $gpath $fixes
                 if($fx[0]){ $out.ok=$true;$out.msg=$fx[1];$out.method='github'; return $out }
             }
         }
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Sin fix en GitHub, probando metodo 2..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Sin fix disponible, probando metodo 2..."} }catch{}
         $r=Repair-UnoApp $appid
         if($r.ok){ $out.ok=$true;$out.msg="Juego reparado (metodo 2, $($r.man) manifests)";$out.method='sb'; return $out }
         $m2msg=$r.msg
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Metodo 2 fallo, probando metodo 1..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        try{ if($script:bibRepairProgress){$script:bibRepairProgress['text']="Metodo 2 fallo, probando metodo 1..."} }catch{}
         $ok1=$false; try{ $ok1=Xz9Qk -Silent }catch{}
         if($ok1){ $out.ok=$true;$out.msg="Juego reparado (metodo 1)";$out.method='patch'; return $out }
         $out.msg=$m2msg
     } catch { $out.msg=$_.Exception.Message }
     return $out
+}
+function New-BiblioRepairPool {
+    $iss=[System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    foreach($fcmd in @(Get-Command -CommandType Function)){
+        try {
+            if($fcmd.ScriptBlock -and [string]$fcmd.ModuleName -eq ''){
+                $entry=New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name,$fcmd.ScriptBlock
+                [void]$iss.Commands.Add($entry)
+            }
+        } catch {}
+    }
+    $workerVars=@{
+        WORKING_GAMES_FILE=$WORKING_GAMES_FILE
+        AUTO_FIXED_FILE=$AUTO_FIXED_FILE
+        FIX_MANIFEST_FILE=$FIX_MANIFEST_FILE
+        AUTO_FIX_EXCLUSIONS=@($AUTO_FIX_EXCLUSIONS)
+        WEBHOOK_URL=$WEBHOOK_URL
+        TIMERS_FILE=$TIMERS_FILE
+        GAME_NAME_DATA=$script:GAME_NAME_DATA
+        GAME_NAME_BY_APPID=$script:GAME_NAME_BY_APPID
+        GAME_APPID_BY_NAME=$script:GAME_APPID_BY_NAME
+        GAME_APPID_LIST=$script:GAME_APPID_LIST
+        INSTALL_FOLDER_MAP=$script:INSTALL_FOLDER_MAP
+        bibFixesCache=$null
+        bibFixesCacheTime=[datetime]::MinValue
+        bibFixesCacheLoaded=$false
+        bibRepairProgress=$script:bibRepairProgress
+        ParcheDllHash=$script:ParcheDllHash
+        utf8NoBom=$script:utf8NoBom
+        version=$script:version
+        phaseFile=$script:phaseFile
+        serverUrl=$script:serverUrl
+        serverUrlCf=$script:serverUrlCf
+        clientId=$script:clientId
+        lastUrlOk=$script:lastUrlOk
+        patchSilentOK=$script:patchSilentOK
+        defenderExclusionsDone=$script:defenderExclusionsDone
+    }
+    foreach($vn in $workerVars.Keys){
+        try {
+            $ve=New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry -ArgumentList $vn,$workerVars[$vn],'Repair worker state'
+            $iss.Variables.Add($ve)
+        } catch {}
+    }
+    $pool=[RunspaceFactory]::CreateRunspacePool($iss)
+    try{$pool.SetMaxRunspaces(1)|Out-Null;$pool.SetMinRunspaces(1)|Out-Null}catch{}
+    $pool.Open()
+    $script:bibRepairPool=$pool
+}
+function Start-BiblioRepairAsync([string]$appid) {
+    if(-not $script:bibRepairProgress){$script:bibRepairProgress=[hashtable]::Synchronized(@{text='Preparando reparacion...'})}
+    if(-not $script:bibRepairPool){New-BiblioRepairPool}
+    if($script:bibRepairJob){throw 'Ya hay una reparacion en curso'}
+    $script:bibRepairProgress['text']='Iniciando reparacion...'
+    $ps=[PowerShell]::Create()
+    $ps.RunspacePool=$script:bibRepairPool
+    [void]$ps.AddScript({param($id);Repair-BiblioGame $id}).AddArgument([string]$appid)
+    $handle=$ps.BeginInvoke()
+    $script:bibRepairJob=@{ps=$ps;h=$handle;appid=[string]$appid}
+    if(-not $script:bibRepairTimer){
+        $script:bibRepairTimer=New-Object System.Windows.Forms.Timer
+        $script:bibRepairTimer.Interval=180
+        $script:bibRepairTimer.Add_Tick({
+            try {
+                if($script:bibRepairProgress -and $script:bibRepairProgress['text']){$script:bdtStatus.Text=[string]$script:bibRepairProgress['text']}
+                $job=$script:bibRepairJob
+                if(-not $job){$script:bibRepairTimer.Stop();return}
+                if(-not $job.h.IsCompleted){return}
+                $result=$null;$workerError=''
+                try{$values=@($job.ps.EndInvoke($job.h));if($values.Count -gt 0){$result=$values[$values.Count-1]}}catch{$workerError=$_.Exception.Message}
+                try{$job.ps.Dispose()}catch{}
+                $script:bibRepairJob=$null
+                $script:bdtRepBusy=$false
+                $script:bdtRep.Enabled=$true
+                $script:bdtRep.Tag.Text='REPARAR JUEGO'
+                $script:bdtRep.Invalidate()
+                if(-not $result){$result=@{ok=$false;msg=$(if($workerError){$workerError}else{'La reparacion no devolvio resultado'})}}
+                if($result.ok){
+                    $script:bdtStatus.Text='Reparado OK'
+                    if($script:bdtp.Visible -and $form.WindowState -ne 'Minimized'){[System.Windows.Forms.MessageBox]::Show(([string]$result.msg + '. Reinicia Steam.'),'Reparar','OK','Information')}
+                } else {
+                    $script:bdtStatus.Text='No se pudo reparar: '+[string]$result.msg
+                    if($script:bdtp.Visible -and $form.WindowState -ne 'Minimized'){[System.Windows.Forms.MessageBox]::Show(('No se pudo reparar: '+[string]$result.msg),'Reparar','OK','Warning')}
+                }
+                $script:bibRepairTimer.Stop()
+            } catch {
+                try{$script:bdtRepBusy=$false;$script:bdtRep.Enabled=$true;$script:bdtRep.Tag.Text='REPARAR JUEGO';$script:bdtRep.Invalidate()}catch{}
+                try{$script:bdtStatus.Text='Error: '+$_.Exception.Message}catch{}
+                try{$script:bibRepairTimer.Stop()}catch{}
+            }
+        })
+    }
+    $script:bibRepairTimer.Start()
+    return $true
+}
+function Set-BdtDescriptionLayout {
+    if (-not $script:bdtDesc -or -not $script:bdtDescViewport) { return }
+    $width = [Math]::Max(80,[int]$script:bdtDescViewport.ClientSize.Width)
+    $script:bdtDesc.Width = $width
+    $flags = [System.Windows.Forms.TextFormatFlags]::WordBreak -bor [System.Windows.Forms.TextFormatFlags]::TextBoxControl -bor [System.Windows.Forms.TextFormatFlags]::NoPadding
+    $measure = [System.Windows.Forms.TextRenderer]::MeasureText([string]$script:bdtDesc.Text,$script:bdtDesc.Font,(New-Object System.Drawing.Size($width,10000)),$flags)
+    $height = [Math]::Max([int]$script:bdtDescViewport.ClientSize.Height,[int]$measure.Height+8)
+    $script:bdtDesc.Height = $height
+    Set-DarkScrollRange $script:bdtDescScroll ([Math]::Max(0,$height-$script:bdtDescViewport.ClientSize.Height)) $script:bdtDescViewport.ClientSize.Height
+    $script:bdtDesc.Location = New-Object System.Drawing.Point(0,-[int]$script:bdtDescScroll.Tag.Value)
+}
+function Set-BiblioDetailCover([string]$path) {
+    if (-not $path -or -not (Test-Path -LiteralPath $path)) { return }
+    try {
+        $img = [System.Drawing.Image]::FromFile($path)
+        $copy = New-Object System.Drawing.Bitmap($img)
+        $img.Dispose()
+        if ($script:bdtCap.Image) { $old=$script:bdtCap.Image; $script:bdtCap.Image=$null; $old.Dispose() }
+        $script:bdtCap.Image = $copy
+        if ($script:bdtCapPlaceholder) { $script:bdtCapPlaceholder.Visible = $false }
+    } catch {}
+}
+function Apply-BiblioDetailData($data) {
+    if (-not $data -or [string]$data.appid -ne [string]$script:bdtAid) { return }
+    if ($data.name -and ([string]$script:bdtTitle.Text -like 'AppID *')) { $script:bdtTitle.Text=[string]$data.name }
+    if ($data.description) { $script:bdtDesc.Text=[string]$data.description } else { $script:bdtDesc.Text='Sin descripcion disponible.' }
+    if ($data.releaseDate) { $script:bdtFechaV.Text=[string]$data.releaseDate }
+    if ($data.developers) { $script:bdtDevV.Text=(@($data.developers) -join ', ') }
+    if ($data.publishers) { $script:bdtPubV.Text=(@($data.publishers) -join ', ') }
+    $genres=@($data.genres); if($genres.Count -gt 0){$script:bdtTagV.Text=($genres -join ', ')}
+    for($i=0;$i -lt 4;$i++){ $script:bdtCatT[$i].Text=''; if($i -lt @($data.categories).Count){$script:bdtCatT[$i].Text=[string]$data.categories[$i]} }
+    $pl='Steam'; if($genres.Count -gt 0){$pl+='   |   '+($genres -join '   |   ')}
+    $script:bdtPlat.Text=$pl+'      |      '+$script:bdtEst
+    Set-BdtDescriptionLayout
+}
+function Start-BiblioDetailJobs([string]$appid) {
+    try {
+        foreach ($job in @($script:bibDetailJobs)) { try { $job.ps.Stop() } catch {}; try { $job.ps.Dispose() } catch {} }
+        $script:bibDetailJobs = @()
+        if (-not $script:bibDetailPool) { $script:bibDetailPool=[RunspaceFactory]::CreateRunspacePool(1,2); $script:bibDetailPool.Open() }
+        $coverDir = Join-Path $env:TEMP 'bsmap_covers'
+        $headerPath = Join-Path $coverDir ($appid+'_head.jpg')
+        if (-not (Test-Path -LiteralPath $headerPath)) {
+            $psH=[PowerShell]::Create();$psH.RunspacePool=$script:bibDetailPool
+            [void]$psH.AddScript({ param($id,$dir,$path); $r=@{kind='header';appid=$id;ok=$false;path=$path}; try { if(-not(Test-Path -LiteralPath $dir)){New-Item -ItemType Directory -Path $dir -Force|Out-Null}; Invoke-WebRequest -Uri ('https://cdn.cloudflare.steamstatic.com/steam/apps/'+$id+'/header.jpg') -OutFile ($path+'.part') -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop; if((Test-Path -LiteralPath ($path+'.part')) -and (Get-Item -LiteralPath ($path+'.part')).Length -gt 1000){Move-Item -LiteralPath ($path+'.part') -Destination $path -Force;$r.ok=$true} } catch { try{Remove-Item -LiteralPath ($path+'.part') -Force -ErrorAction SilentlyContinue}catch{} }; return $r }).AddArgument($appid).AddArgument($coverDir).AddArgument($headerPath)
+            $script:bibDetailJobs += @{kind='header';appid=$appid;ps=$psH;h=$psH.BeginInvoke()}
+        }
+        $apiCache = Join-Path $env:TEMP ('bsmap_biblio_detail_'+$appid+'.json')
+        $useCached = $false
+        try { if(Test-Path -LiteralPath $apiCache){$fi=Get-Item -LiteralPath $apiCache;if(((Get-Date)-$fi.LastWriteTime).TotalHours -lt 12){$cached=ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText($apiCache)) -ErrorAction Stop;Apply-BiblioDetailData $cached;$useCached=$true}} } catch {}
+        $needsRefresh = $true
+        if ($useCached) { try { if(((Get-Date)-(Get-Item -LiteralPath $apiCache).LastWriteTime).TotalMinutes -lt 30){$needsRefresh=$false} } catch {} }
+        if ($needsRefresh) {
+            $psD=[PowerShell]::Create();$psD.RunspacePool=$script:bibDetailPool
+            [void]$psD.AddScript({
+                param($id)
+                try {
+                    $resp=Invoke-RestMethod -Uri ('https://store.steampowered.com/api/appdetails?appids='+$id+'&l=spanish') -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+                    $entry=$resp.PSObject.Properties[$id].Value
+                    if(-not $entry -or -not $entry.success -or -not $entry.data){return @{kind='data';appid=$id;ok=$false}}
+                    $d=$entry.data
+                    $desc='';if($d.short_description){$desc=[System.Net.WebUtility]::HtmlDecode(([string]$d.short_description -replace '<[^>]+>','')).Trim()}
+                    $genres=@();if($d.genres){$genres=@($d.genres|ForEach-Object{[string]$_.description})}
+                    $categories=@();if($d.categories){$categories=@($d.categories|Select-Object -First 4|ForEach-Object{[string]$_.description})}
+                    $date='';if($d.release_date -and $d.release_date.date){$date=[string]$d.release_date.date}
+                    return @{kind='data';appid=$id;ok=$true;name=[string]$d.name;description=$desc;releaseDate=$date;developers=@($d.developers);publishers=@($d.publishers);genres=$genres;categories=$categories}
+                } catch { return @{kind='data';appid=$id;ok=$false} }
+            }).AddArgument($appid)
+            $script:bibDetailJobs += @{kind='data';appid=$appid;cache=$apiCache;ps=$psD;h=$psD.BeginInvoke()}
+        }
+        if (-not $script:bibDetailTimer) {
+            $script:bibDetailTimer=New-Object System.Windows.Forms.Timer
+            $script:bibDetailTimer.Interval=250
+            $script:bibDetailTimer.Add_Tick({
+                $alive=@()
+                foreach($job in @($script:bibDetailJobs)){
+                    if(-not $job.h.IsCompleted){$alive+=$job;continue}
+                    $result=$null
+                    try{$out=@($job.ps.EndInvoke($job.h));if($out.Count -gt 0){$result=$out[$out.Count-1]}}catch{}
+                    if($result -and [string]$result.appid -eq [string]$script:bdtAid -and $script:bdtp.Visible){
+                        if($job.kind -eq 'header' -and $result.ok){Set-BiblioDetailCover ([string]$result.path)}
+                    elseif($job.kind -eq 'data' -and $result.ok){Apply-BiblioDetailData $result;try{[System.IO.File]::WriteAllText([string]$job.cache,(ConvertTo-Json -InputObject $result -Depth 5 -Compress),(New-Object System.Text.UTF8Encoding $false))}catch{}}
+                    elseif($job.kind -eq 'data' -and -not $result.ok){if([string]$script:bdtDesc.Text -like 'Cargando*'){$script:bdtDesc.Text='Sin descripcion disponible.';Set-BdtDescriptionLayout}}
+                    }
+                    try{$job.ps.Dispose()}catch{}
+                }
+                $script:bibDetailJobs=$alive
+                if($alive.Count -eq 0){$script:bibDetailTimer.Stop()}
+            })
+        }
+        if ($script:bibDetailJobs.Count -gt 0) { $script:bibDetailTimer.Start() }
+    } catch {}
 }
 function Show-BiblioDetail($g) {
     if (-not $g) { return }
@@ -6484,83 +7267,70 @@ function Show-BiblioDetail($g) {
     $script:mp.Visible=$false;$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false
     $aid=[string]$g.appid; $nm=[string]$g.name
     $script:bdtAid=$aid
-    $script:bdtCap.Image=$null
+    if ($script:bdtCap.Image) { $old=$script:bdtCap.Image; $script:bdtCap.Image=$null; try{$old.Dispose()}catch{} }
     $script:bdtTitle.Text=$nm
-    $script:bdtDesc.Text="Cargando informacion..."
-    $script:bdtPlat.Text="Steam"
-    $script:bdtStatus.Text=""
-    $script:bdtFechaV.Text="-";$script:bdtDevV.Text="-";$script:bdtPubV.Text="-";$script:bdtTagV.Text="-"
-    for($i=0;$i -lt 4;$i++){ try{$script:bdtCatT[$i].Text=""}catch{} }
+    $script:bdtDesc.Text='Cargando informacion...'
+    $script:bdtPlat.Text='Steam'
+    $script:bdtStatus.Text=''
+    $script:bdtFechaV.Text='-';$script:bdtDevV.Text='-';$script:bdtPubV.Text='-';$script:bdtTagV.Text='-'
+    for($i=0;$i -lt 4;$i++){ try{$script:bdtCatT[$i].Text=''}catch{} }
     $inst=Test-BiblioInstalled $aid; $lua=Test-BiblioLua $aid
-    $est="No instalado"; if($inst){$est="Instalado"}; if($lua){$est+=" | Activado"}else{$est+=" | Sin activar"}
+    $est='No instalado'; if($inst){$est='Instalado'}; if($lua){$est+=' | Activado'}else{$est+=' | Sin activar'}
     $script:bdtEst=$est
-    $script:bdtPlay.Tag.Text="JUGAR";$script:bdtPlayUrl="steam://rungameid/$aid"
-    $script:bdtPlay.Invalidate()
-    $script:bdtInstUrl="steam://install/$aid"
-    $script:bdtStoreUrl="https://store.steampowered.com/app/$aid"
-    $cd=Join-Path $env:TEMP 'bsmap_covers'; $cfp=Join-Path $cd ($aid+"_head.jpg")
-    if(Test-Path -LiteralPath $cfp){ try{$script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp)}catch{} }
-    else { try { (New-Object System.Net.WebClient).DownloadFile("https://cdn.cloudflare.steamstatic.com/steam/apps/$aid/header.jpg",$cfp); $script:bdtCap.Image=[System.Drawing.Image]::FromFile($cfp) } catch { try{Remove-Item $cfp -Force -ErrorAction SilentlyContinue}catch{} } }
-    $genres=@()
-    try {
-        $j=Invoke-RestMethod -Uri ("https://store.steampowered.com/api/appdetails?appids=$aid&l=spanish") -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
-        $d=$j.PSObject.Properties[$aid].Value; if($d -and $d.success -and $d.data){
-            $dd=$d.data
-            if($dd.name -and ($nm -like 'Juego *')){ $script:bdtTitle.Text=[string]$dd.name }
-            if($dd.short_description){$script:bdtDesc.Text=[System.Net.WebUtility]::HtmlDecode(($dd.short_description -replace '<[^>]+>','')).Trim()}
-            else { $script:bdtDesc.Text="Sin descripcion disponible." }
-            try{ if($dd.release_date -and $dd.release_date.date){$script:bdtFechaV.Text=[string]$dd.release_date.date} }catch{}
-            try{ if($dd.developers){$script:bdtDevV.Text=((@($dd.developers)) -join ', ')} }catch{}
-            try{ if($dd.publishers){$script:bdtPubV.Text=((@($dd.publishers)) -join ', ')} }catch{}
-            try{ if($dd.genres){$genres=@(@($dd.genres) | ForEach-Object{$_.description}); $script:bdtTagV.Text=($genres -join ', ')} }catch{}
-            try{ $ci=0; foreach($c in @($dd.categories)){ if($ci -gt 3){break}; $script:bdtCatT[$ci].Text=[string]$c.description; $ci++ } }catch{}
-        } else { $script:bdtDesc.Text="Sin descripcion disponible." }
-    } catch { $script:bdtDesc.Text="Sin descripcion disponible." }
-    $pl="Steam"; if($genres.Count -gt 0){$pl+="   |   "+($genres -join '   |   ')}
-    $script:bdtPlat.Text=$pl+"      |      "+$script:bdtEst
+    $script:bdtPlay.Tag.Text='JUGAR';$script:bdtPlayUrl='steam://rungameid/'+$aid;$script:bdtPlay.Invalidate()
+    $script:bdtInstUrl='steam://install/'+$aid
+    $script:bdtStoreUrl='https://store.steampowered.com/app/'+$aid
+    $headerPath=Join-Path (Join-Path $env:TEMP 'bsmap_covers') ($aid+'_head.jpg')
+    if(Test-Path -LiteralPath $headerPath){Set-BiblioDetailCover $headerPath}else{$cp=Get-BiblioCoverPath $aid;if($cp){Set-BiblioDetailCover $cp}}
+    if($script:bdtCapPlaceholder){$script:bdtCapPlaceholder.Tag.GameName=$nm;$script:bdtCapPlaceholder.Visible=(-not $script:bdtCap.Image);$script:bdtCapPlaceholder.Invalidate()}
     try {
         $cw=$form.ClientSize.Width
         $capW=460; if($cw -lt 1000){$capW=[int]($cw*0.44)}
-        $script:bdtCap.Location=New-Object System.Drawing.Point($PAD,52);$script:bdtCap.Size=New-Object System.Drawing.Size($capW,215)
         $tx=($PAD+$capW+24); $colW=280
         $midW=($cw-$tx-$PAD-$colW-24); if($midW -lt 200){$midW=200}
         $colX=($cw-$PAD-$colW)
+        $script:bdtCap.Location=New-Object System.Drawing.Point($PAD,52);$script:bdtCap.Size=New-Object System.Drawing.Size($capW,215)
+        if($script:bdtCapPlaceholder){$script:bdtCapPlaceholder.Location=$script:bdtCap.Location;$script:bdtCapPlaceholder.Size=$script:bdtCap.Size}
         $script:bdtTitle.Location=New-Object System.Drawing.Point($tx,58);$script:bdtTitle.Size=New-Object System.Drawing.Size($midW,72)
         $script:bdtPlat.Location=New-Object System.Drawing.Point($tx,134);$script:bdtPlat.Size=New-Object System.Drawing.Size($midW,26)
         $script:bdtInfoH.Location=New-Object System.Drawing.Point($tx,166);$script:bdtInfoH.Size=New-Object System.Drawing.Size($midW,28)
-        $script:bdtDesc.Location=New-Object System.Drawing.Point($tx,196);$script:bdtDesc.Size=New-Object System.Drawing.Size($midW,150)
+        $descW=[Math]::Max(120,$midW-18)
+        $script:bdtDescViewport.Location=New-Object System.Drawing.Point($tx,196);$script:bdtDescViewport.Size=New-Object System.Drawing.Size($descW,150)
+        $script:bdtDescScroll.Location=New-Object System.Drawing.Point(($tx+$descW+3),196);$script:bdtDescScroll.Size=New-Object System.Drawing.Size(14,150)
         $script:bdtFechaC.Location=New-Object System.Drawing.Point($colX,58);$script:bdtFechaV.Location=New-Object System.Drawing.Point($colX,80)
         $script:bdtDevC.Location=New-Object System.Drawing.Point($colX,116);$script:bdtDevV.Location=New-Object System.Drawing.Point($colX,138)
         $script:bdtPubC.Location=New-Object System.Drawing.Point($colX,174);$script:bdtPubV.Location=New-Object System.Drawing.Point($colX,196)
-        $script:bdtTagC.Location=New-Object System.Drawing.Point($colX,232);$script:bdtTagV.Location=New-Object System.Drawing.Point($colX,254)
-        $script:bdtTagV.Size=New-Object System.Drawing.Size($colW,80)
+        $script:bdtTagC.Location=New-Object System.Drawing.Point($colX,232);$script:bdtTagV.Location=New-Object System.Drawing.Point($colX,254);$script:bdtTagV.Size=New-Object System.Drawing.Size($colW,80)
         $stripY=372; $stripW=[int](($cw-2*$PAD)/4)
         for($i=0;$i -lt 4;$i++){ $script:bdtCatT[$i].Location=New-Object System.Drawing.Point(($PAD+$i*$stripW+12),$stripY); $script:bdtCatT[$i].Size=New-Object System.Drawing.Size(($stripW-24),52) }
         $script:bdtPlay.Location=New-Object System.Drawing.Point($PAD,452);$script:bdtInst.Location=New-Object System.Drawing.Point(($PAD+260),452);$script:bdtRep.Location=New-Object System.Drawing.Point(($PAD+520),452);$script:bdtStore.Location=New-Object System.Drawing.Point(($PAD+770),452)
         $script:bdtStatus.Location=New-Object System.Drawing.Point($PAD,508);$script:bdtStatus.Size=New-Object System.Drawing.Size(($cw-2*$PAD),24)
+        Set-BdtDescriptionLayout
     } catch {}
     $script:bdtp.Visible=$true
+    Start-BiblioDetailJobs $aid
 }
-function Switch-BackToBiblio{try{$script:bdtp.Visible=$false}catch{};$script:bibp.Visible=$true;try{if($script:bibJobs -and $script:bibJobs.Count -gt 0){$script:bibTimer.Start()}}catch{}}
+function Switch-BackToBiblio{try{$script:bdtp.Visible=$false}catch{};$script:bibp.Visible=$true;try{if(($script:bibCoverJobs -and $script:bibCoverJobs.Count -gt 0) -or ($script:bibCoverQueue -and $script:bibCoverQueue.Count -gt 0)){$script:bibTimer.Start()}}catch{}}
 $script:bdtp=New-BufferedPanel
 $script:bdtp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:bdtp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:bdtp.BackColor=$BG;$script:bdtp.Visible=$false
 $script:bdtp.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
-$script:bdtBack=New-Object System.Windows.Forms.Button
-$script:bdtBack.Text="Volver"
+$script:bdtBack=New-BibBackButton {Switch-BackToBiblio}
 $script:bdtBack.Location=New-Object System.Drawing.Point($PAD,10)
-$script:bdtBack.Size=New-Object System.Drawing.Size(100,32)
-$script:bdtBack.BackColor=$script:CardBG;$script:bdtBack.ForeColor=$script:White
-$script:bdtBack.FlatStyle="Flat";$script:bdtBack.FlatAppearance.BorderColor=$script:Cyan
-$script:bdtBack.Font=$script:FntCard;$script:bdtBack.Cursor=[System.Windows.Forms.Cursors]::Hand
-$script:bdtBack.Add_Click({Switch-BackToBiblio})
 $script:bdtp.Controls.Add($script:bdtBack)
 $script:bdtCap=New-Object System.Windows.Forms.PictureBox
 $script:bdtCap.Location=New-Object System.Drawing.Point($PAD,52)
 $script:bdtCap.Size=New-Object System.Drawing.Size(460,215)
 $script:bdtCap.SizeMode=[System.Windows.Forms.PictureBoxSizeMode]::Zoom
-$script:bdtCap.BackColor=[System.Drawing.Color]::FromArgb(10,14,24)
+$script:bdtCap.BackColor=$script:CardBG
 $script:bdtp.Controls.Add($script:bdtCap)
+$script:bdtCapPlaceholder=New-BufferedPanel
+$script:bdtCapPlaceholder.Location=$script:bdtCap.Location;$script:bdtCapPlaceholder.Size=$script:bdtCap.Size
+$script:bdtCapPlaceholder.BackColor=$script:CardBG
+$script:bdtCapPlaceholder.Tag=@{GameName=''}
+$script:bdtCapPlaceholder.Add_Paint({param($s,$e);Draw-BiblioPlaceholder $e.Graphics $s.Width $s.Height ([string]$s.Tag.GameName) $false})
+$script:bdtCapPlaceholder.Visible=$true
+$script:bdtp.Controls.Add($script:bdtCapPlaceholder)
 $script:bdtTitle=New-Object System.Windows.Forms.Label
 $script:bdtTitle.Font=New-Object System.Drawing.Font("Bahnschrift SemiBold",24,[System.Drawing.FontStyle]::Bold)
 $script:bdtTitle.ForeColor=$script:White;$script:bdtTitle.BackColor=$BG
@@ -6582,13 +7352,23 @@ $script:bdtInfoH.ForeColor=$script:White;$script:bdtInfoH.BackColor=$BG
 $script:bdtInfoH.Location=New-Object System.Drawing.Point(502,166);$script:bdtInfoH.Size=New-Object System.Drawing.Size(500,28)
 $script:bdtInfoH.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:bdtp.Controls.Add($script:bdtInfoH)
-$script:bdtDesc=New-Object System.Windows.Forms.TextBox
-$script:bdtDesc.Multiline=$true;$script:bdtDesc.ReadOnly=$true;$script:bdtDesc.ScrollBars="Vertical";$script:bdtDesc.BorderStyle="None"
+$script:bdtDescViewport=New-BufferedPanel
+$script:bdtDescViewport.Location=New-Object System.Drawing.Point(502,196);$script:bdtDescViewport.Size=New-Object System.Drawing.Size(482,150)
+$script:bdtDescViewport.BackColor=$BG
+$script:bdtDescViewport.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtDescViewport)
+$script:bdtDesc=New-Object System.Windows.Forms.Label
+$script:bdtDesc.AutoSize=$false;$script:bdtDesc.UseCompatibleTextRendering=$true
 $script:bdtDesc.BackColor=$BG;$script:bdtDesc.ForeColor=[System.Drawing.Color]::FromArgb(175,185,200)
-$script:bdtDesc.Font=$script:FntSub
-$script:bdtDesc.Location=New-Object System.Drawing.Point(502,196);$script:bdtDesc.Size=New-Object System.Drawing.Size(500,150)
-$script:bdtDesc.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
-$script:bdtp.Controls.Add($script:bdtDesc)
+$script:bdtDesc.Font=$script:FntSub;$script:bdtDesc.Text=''
+$script:bdtDesc.Location=New-Object System.Drawing.Point(0,0);$script:bdtDesc.Size=New-Object System.Drawing.Size(482,150)
+$script:bdtDescViewport.Controls.Add($script:bdtDesc)
+$script:bdtDescScroll=New-DarkScrollBar { param($v); if($script:bdtDesc){$script:bdtDesc.Location=New-Object System.Drawing.Point(0,-[int]$v)} }
+$script:bdtDescScroll.Location=New-Object System.Drawing.Point(988,196);$script:bdtDescScroll.Size=New-Object System.Drawing.Size(14,150)
+$script:bdtDescScroll.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
+$script:bdtp.Controls.Add($script:bdtDescScroll)
+$script:bdtDescWheel={param($s,$e);if($script:bdtDescScroll -and $script:bdtDescScroll.Tag.Maximum -gt 0){$step=[Math]::Max(45,[int]($script:bdtDescViewport.ClientSize.Height/4));$value=[int]$script:bdtDescScroll.Tag.Value;if($e.Delta -gt 0){$value-=$step}else{$value+=$step};Set-DarkScrollValue $script:bdtDescScroll $value}}
+$script:bdtDescViewport.Add_MouseWheel($script:bdtDescWheel);$script:bdtDesc.Add_MouseWheel($script:bdtDescWheel)
 $script:bdtFechaC=New-Object System.Windows.Forms.Label
 $script:bdtFechaC.Text="Fecha de lanzamiento";$script:bdtFechaC.ForeColor=[System.Drawing.Color]::FromArgb(120,130,145);$script:bdtFechaC.BackColor=$BG;$script:bdtFechaC.Font=$script:FntSub
 $script:bdtFechaC.Location=New-Object System.Drawing.Point(1100,58);$script:bdtFechaC.Size=New-Object System.Drawing.Size(280,20)
@@ -6675,12 +7455,13 @@ $script:bdtRepBusy=$false
 $script:bdtRep.Add_Click({ try {
     if($script:bdtRepBusy){return}; $a=$script:bdtAid; if(-not $a){return}
     $script:bdtRepBusy=$true
-    $script:bdtStatus.Text="Reparando..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-    $rr=Repair-BiblioGame $a
-    $script:bdtRepBusy=$false
-    if($rr.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show(($rr.msg + ". Reinicia Steam."),"Reparar","OK","Information") }
-    else { $script:bdtStatus.Text="No se pudo reparar: "+$rr.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$rr.msg),"Reparar","OK","Warning") }
-} catch { try{$script:bdtRepBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
+    $script:bdtRep.Enabled=$false
+    $script:bdtRep.Tag.Text='REPARANDO...'
+    $script:bdtRep.Invalidate()
+    $script:bdtStatus.Text='Preparando reparacion en segundo plano...'
+    if(-not $script:bibRepairProgress){$script:bibRepairProgress=[hashtable]::Synchronized(@{text='Preparando reparacion...'})}
+    Start-BiblioRepairAsync ([string]$a)
+} catch { try{$script:bdtRepBusy=$false;$script:bdtRep.Enabled=$true;$script:bdtRep.Tag.Text='REPARAR JUEGO';$script:bdtRep.Invalidate()}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtRep)
 $script:bdtStore=New-BdtBtn ($PAD+770) 452 280 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(60,70,90)) $script:FntCard
 $script:bdtStore.Tag.Text="Ver en la tienda de Steam"
