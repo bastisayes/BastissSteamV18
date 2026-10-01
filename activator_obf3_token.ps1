@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.75"
+$script:version = "V1.76"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1474,7 +1474,7 @@ function Initialize-GameNameMap {
 function Get-GameNameByAppId([string]$appid) {
     if (-not $script:GAME_NAME_BY_APPID) { Initialize-GameNameMap }
     $k = [string]$appid
-    if ($k -and $script:GAME_NAME_BY_APPID.ContainsKey($k)) { return $script:GAME_NAME_BY_APPID[$k] }
+    if ($k -and $script:GAME_NAME_BY_APPID.ContainsKey($k)) { $nn = $script:GAME_NAME_BY_APPID[$k]; if ($nn -and ($nn -notmatch '\(no data\)')) { return $nn } }
     return "Juego $k"
 }
 function Get-NameAliasTokens([string]$tok) {
@@ -3942,10 +3942,10 @@ try {
 
 
 
-$PAD=18;$FW=960;$CW=$FW-(2*$PAD);$GAP=10
+$PAD=18;$FW=480;$CW=$FW-(2*$PAD);$GAP=10
 $HW=[int](($CW-$GAP)/2);$CH=76;$FCH=68
 
-$HH=230;$CY=$HH
+$HH=115;$CY=$HH
 
 $R1Y=0;$R2Y=$CH+$GAP
 $WEB_Y=$R2Y+$CH+12;$DISC_Y=$WEB_Y+$FCH+$GAP;$TIK_Y=$DISC_Y+$FCH+$GAP
@@ -4051,6 +4051,7 @@ $script:gearBtn.Text="config";$script:gearBtn.Font=$FntSub
 $script:gearBtn.ForeColor=[System.Drawing.Color]::FromArgb(60,70,90);$script:gearBtn.BackColor=$BG
 $script:gearBtn.AutoSize=$true;$script:gearBtn.Cursor=[System.Windows.Forms.Cursors]::Hand
 $script:gearBtn.Location=New-Object System.Drawing.Point(($FW-60),($HH-25))
+$script:gearBtn.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right)
 $script:gearBtn.Add_MouseEnter({param($s);$s.ForeColor=$script:Cyan})
 $script:gearBtn.Add_MouseLeave({param($s);$s.ForeColor=[System.Drawing.Color]::FromArgb(60,70,90)})
 $script:gearBtn.Add_Click({Switch-ToConfig})
@@ -6332,12 +6333,12 @@ function Refresh-BiblioGrid([string]$filter) {
         foreach ($g in $games) {
             if ($f -and ($g.name.ToLower().IndexOf($f) -lt 0) -and ($g.appid.IndexOf($f) -lt 0)) { continue }
             $pn = New-Object System.Windows.Forms.Panel
-            $pn.Size = New-Object System.Drawing.Size(200,330)
+            $pn.Size = New-Object System.Drawing.Size(170,297)
             $pn.BackColor = $script:CardBG
-            $pn.Margin = New-Object System.Windows.Forms.Padding(10)
+            $pn.Margin = New-Object System.Windows.Forms.Padding(8)
             $pb = New-Object System.Windows.Forms.PictureBox
-            $pb.Location = New-Object System.Drawing.Point(8,0)
-            $pb.Size = New-Object System.Drawing.Size(184,276)
+            $pb.Location = New-Object System.Drawing.Point(0,0)
+            $pb.Size = New-Object System.Drawing.Size(170,255)
             $pb.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::StretchImage
             $pb.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)
             $pb.Cursor = [System.Windows.Forms.Cursors]::Hand
@@ -6347,8 +6348,8 @@ function Refresh-BiblioGrid([string]$filter) {
             $pb.Add_Click({ param($s) try { $t=$s.Tag; [System.Windows.Forms.MessageBox]::Show(($t.name + "`nAppID: " + $t.appid),"Juego","OK","Information") } catch {} })
             $pn.Controls.Add($pb)
             $lb = New-Object System.Windows.Forms.Label
-            $lb.Location = New-Object System.Drawing.Point(0,278)
-            $lb.Size = New-Object System.Drawing.Size(200,50)
+            $lb.Location = New-Object System.Drawing.Point(0,257)
+            $lb.Size = New-Object System.Drawing.Size(170,38)
             $lb.ForeColor = $script:White
             $lb.Font = $script:FntSub
             $lb.TextAlign = [System.Drawing.ContentAlignment]::TopCenter
