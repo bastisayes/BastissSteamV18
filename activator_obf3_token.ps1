@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V1.79"
+$script:version = "V1.80"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6446,6 +6446,38 @@ function Test-BiblioLua([string]$appid) {
     try { foreach ($lib in @(Ss3Jd)) { foreach ($sub in @('config\stplug-in','config\lua')) { if (Test-Path -LiteralPath (Join-Path (Join-Path $lib $sub) ($appid + ".lua"))) { return $true } } } } catch {}
     return $false
 }
+function Repair-BiblioGame([string]$appid) {
+    $out=@{ok=$false;msg='';method=''}
+    try {
+        $gpath=$null;$gfolder=$null
+        try {
+            $im=Get-InstallFolderMap
+            if($im.ContainsKey($appid)){ $gfolder=$im[$appid] }
+            if($gfolder){
+                $all=Ii5Hb
+                if($all.ContainsKey($gfolder)){ $gpath=$all[$gfolder] }
+                else { foreach($lib in @(Ss3Jd)){ $cand=Join-Path (Join-Path $lib "steamapps\common") $gfolder; if(Test-Path -LiteralPath $cand){$gpath=$cand;break} } }
+            }
+        } catch {}
+        if($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath)){
+            try{ if($script:bdtStatus){$script:bdtStatus.Text="Reparando: buscando fix de $gfolder en GitHub..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+            $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
+            if($fixes -and $fixes.Count -gt 0){
+                $fx=Apply-FixAutomatically $gfolder $gpath $fixes
+                if($fx[0]){ $out.ok=$true;$out.msg=$fx[1];$out.method='github'; return $out }
+            }
+        }
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Sin fix en GitHub, probando metodo 2..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        $r=Repair-UnoApp $appid
+        if($r.ok){ $out.ok=$true;$out.msg="Juego reparado (metodo 2, $($r.man) manifests)";$out.method='sb'; return $out }
+        $m2msg=$r.msg
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Metodo 2 fallo, probando metodo 1..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        $ok1=$false; try{ $ok1=Xz9Qk -Silent }catch{}
+        if($ok1){ $out.ok=$true;$out.msg="Juego reparado (metodo 1)";$out.method='patch'; return $out }
+        $out.msg=$m2msg
+    } catch { $out.msg=$_.Exception.Message }
+    return $out
+}
 function Show-BiblioDetail($g) {
     if (-not $g) { return }
     try { $script:bibTimer.Stop() } catch {}
@@ -6637,16 +6669,11 @@ $script:bdtRepBusy=$false
 $script:bdtRep.Add_Click({ try {
     if($script:bdtRepBusy){return}; $a=$script:bdtAid; if(-not $a){return}
     $script:bdtRepBusy=$true
-    $script:bdtStatus.Text="Reparando (metodo 2)..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-    $r=Repair-UnoApp $a
-    if($r.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show("Juego reparado correctamente. Reinicia Steam.","Reparar","OK","Information") }
-    else {
-        $script:bdtStatus.Text="Metodo 2 fallo, probando metodo 1..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-        $ok1=$false; try{ $ok1=Xz9Qk -Silent }catch{}
-        if($ok1){ $script:bdtStatus.Text="Reparado OK (metodo 1)"; [System.Windows.Forms.MessageBox]::Show("Juego reparado con el metodo 1. Reinicia Steam.","Reparar","OK","Information") }
-        else { $script:bdtStatus.Text="No se pudo reparar: "+$r.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$r.msg),"Reparar","OK","Warning") }
-    }
+    $script:bdtStatus.Text="Reparando..."; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+    $rr=Repair-BiblioGame $a
     $script:bdtRepBusy=$false
+    if($rr.ok){ $script:bdtStatus.Text="Reparado OK"; [System.Windows.Forms.MessageBox]::Show(($rr.msg + ". Reinicia Steam."),"Reparar","OK","Information") }
+    else { $script:bdtStatus.Text="No se pudo reparar: "+$rr.msg; [System.Windows.Forms.MessageBox]::Show(("No se pudo reparar: "+$rr.msg),"Reparar","OK","Warning") }
 } catch { try{$script:bdtRepBusy=$false}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtRep)
 $script:bdtStore=New-BdtBtn ($PAD+570) 452 280 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(60,70,90)) $script:FntCard
