@@ -182,7 +182,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.10"
+$script:version = "V2.11"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -6968,7 +6968,7 @@ function Set-BiblioMode([bool]$downloadedOnly) {
     if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
 }
 function Switch-BiblioView{
-    if($script:bibView -eq 'grande'){ $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande'; $script:bibPageSize=120 }
+    if($script:bibView -eq 'grande'){ $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande'; $script:bibPageSize=288 }
     else { $script:bibView='grande'; $script:bibViewBtn.Tag.Text='Vista compacta'; $script:bibPageSize=96 }
     $script:bibViewBtn.Invalidate()
     $script:bibPage=0;$script:bibFilterKey=$null
