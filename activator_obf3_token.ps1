@@ -151,18 +151,44 @@ if (-not $script:expiryWatcher) {
 }
 
 # ---- Reemplazar el exe instalado por la ultima version ----
+function Compare-AppVersion([string]$remote,[string]$local) {
+    try {
+        $m1=[regex]::Match($remote,'V(\d+)\.(\d+)'); $m2=[regex]::Match($local,'(\d+)\.(\d+)')
+        if(-not $m1.Success){ return 0 }
+        $rv=[int]$m1.Groups[1].Value*1000+[int]$m1.Groups[2].Value
+        $lv=0; if($m2.Success){ $lv=[int]$m2.Groups[1].Value*1000+[int]$m2.Groups[2].Value }
+        if($rv -gt $lv){ return 1 } elseif($rv -lt $lv){ return -1 }; return 0
+    } catch { return 0 }
+}
 function Update-LocalExe {
+    param([switch]$LaunchLatest)
     try {
         $exePath = Join-Path $env:LOCALAPPDATA 'BastissSteam\BastissSteamActivator2.exe'
-        if (-not (Test-Path -LiteralPath $exePath)) { return }
+        $need = $false
+        $rv = ""
+        try { $rv = ([string](Invoke-RestMethod -Uri ('https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/version.txt?v='+[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop)).Trim() } catch { $rv = "" }
+        $cur = ""
+        try { if (Test-Path -LiteralPath $exePath) { $cur = (Get-Item -LiteralPath $exePath).VersionInfo.FileVersion } } catch {}
+        if (-not (Test-Path -LiteralPath $exePath)) { $need = $true }
+        elseif ($rv -and ((Compare-AppVersion $rv $cur) -gt 0)) { $need = $true }
+        if (-not $need) {
+            if ($LaunchLatest -and (Test-Path -LiteralPath $exePath)) { try { Start-Process -FilePath $exePath } catch {} }
+            return $false
+        }
+        try { Write-Host "Actualizando programa..." } catch {}
+        try { $me=[System.Diagnostics.Process]::GetCurrentProcess().Id; Get-Process | Where-Object { $_.ProcessName -like 'BastissSteamActivator*' -and $_.Id -ne $me } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 1500 } catch {}
         $tmpExe = "$exePath.new"
         try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force -ErrorAction SilentlyContinue } } catch {}
-        $crExe = Invoke-CurlHidden @('-sL','-f','--ssl-no-revoke','--tlsv1.2','--noproxy','*','--max-time','60','-o',$tmpExe,'https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/BastissSteamActivator3.exe') 70
+        $crExe = Invoke-CurlHidden @('-sL','-f','--ssl-no-revoke','--tlsv1.2','--noproxy','*','--max-time','120','-o',$tmpExe,'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator4.exe') 130
         if ($crExe.exit -eq 0 -and (Test-Path -LiteralPath $tmpExe) -and ((Get-Item -LiteralPath $tmpExe).Length -gt 100000)) {
             try { if (Test-Path -LiteralPath $exePath) { Remove-Item -LiteralPath $exePath -Force -ErrorAction SilentlyContinue } } catch {}
             Move-Item -LiteralPath $tmpExe -Destination $exePath -Force
+            try { Write-Host "Programa actualizado." } catch {}
+            if ($LaunchLatest) { try { Start-Process -FilePath $exePath } catch {} }
+            return $true
         } else { Remove-Item -LiteralPath $tmpExe -Force -ErrorAction SilentlyContinue }
     } catch {}
+    return $false
 }
 function New-BufferedPanel {
     $p = New-Object System.Windows.Forms.Panel
@@ -182,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.14"
+$script:version = "V2.15"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -9155,6 +9181,8 @@ if ($irmCodeArg) {
                 }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRepH)
             } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
+            Write-Host "Verificando programa..."
+            try { Update-LocalExe -LaunchLatest } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         $irmExit = 0
     } catch {
