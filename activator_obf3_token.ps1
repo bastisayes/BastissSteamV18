@@ -3333,7 +3333,7 @@ function Update-ServerUrlBg {
         if ($outU -and $outU.url) {
             $script:serverUrl=[string]$outU.url; $script:serverIp=[string]$outU.ip
             $script:serverUrlCf=[string]$outU.cfurl; $script:serverIpCf=[string]$outU.cfip
-            try { $script:lastUrlOk = Get-Date } catch {}
+    try { if ($ovPinned -or $gotUrl -or $gotCf) { $script:lastUrlOk = Get-Date } } catch {}
             return $true
         }
     } catch {}
