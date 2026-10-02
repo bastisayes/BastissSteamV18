@@ -1,6 +1,23 @@
-﻿param([int]$Port = 9878)
+﻿param([int]$Port = 18880)
 $ErrorActionPreference = "Continue"
 $srvPort = $Port
+if (-not $srvPort) { $srvPort = 0 }
+$wantedPorts = @(18880,18881,18882,18883,18884)
+if ($srvPort -ne 0) { $wantedPorts = @($srvPort) + @($wantedPorts | Where-Object { $_ -ne $srvPort }) } else { $srvPort = 0 }
+try {
+    $hcOut = & curl.exe -s -o NUL -w "%{http_code}" "http://127.0.0.1:18880/" --max-time 3 2>&1
+    if ([string]$hcOut -eq "200") { exit 0 }
+} catch {}
+foreach ($pc in $wantedPorts) {
+    try {
+        $tProbe = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, $pc)
+        $tProbe.Start(5)
+        $tProbe.Stop()
+        $srvPort = $pc
+        break
+    } catch {}
+}
+if (-not $srvPort) { exit 1 }
 $startLog = Join-Path $env:LOCALAPPDATA "BastissSteam\server_start.log"
 try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] INICIO port=$srvPort payload=$($MyInvocation.MyCommand.Path)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
 $jsonDb = Join-Path $PSScriptRoot "codes_token.json"
@@ -39,6 +56,8 @@ function Test-ArUsed {
     return $false
 }
 $script:pubUrl = "http://127.0.0.1:$srvPort"
+$script:pubUrlCf = ""
+$script:fixedPublicUrl = "https://bastii.tailbe072e.ts.net"
 $script:urlCache = Join-Path $env:TEMP "bsmap_current_url.txt"
 $script:ghKey = ""
 try {
@@ -53,10 +72,67 @@ if (-not (Test-Path $script:wipeFile)) { Set-Content $script:wipeFile '[]' -Enco
 function Load-Wipe { try { $c=Get-Content $script:wipeFile -Raw -Encoding UTF8 | ConvertFrom-Json; if ($c -is [array]) { return $c } else { return @($c) } } catch { return @() } }
 function Save-Wipe { param($w); try { $w | ConvertTo-Json -Depth 10 | Set-Content $script:wipeFile -Encoding UTF8 } catch {} }
 if (-not (Test-Path $jsonDb)) { Set-Content $jsonDb '{"codes":{},"redemptions":[]}' -Encoding UTF8 }
-function Load-Db {
-    try { return Get-Content $jsonDb -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return @{codes=@{};redemptions=@()} }
+function New-IrmAlias($d) {
+    $achars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    $used = @()
+    try { foreach ($p in $d.codes.PSObject.Properties) { try { if ($p.Value.alias) { $used += [string]$p.Value.alias } } catch {}; try { $used += [string]$p.Name } catch {} } } catch {}
+    for ($t = 0; $t -lt 20; $t++) {
+        $a = -join ((1..10 | ForEach-Object { $achars[(Get-Random -Max $achars.Length)] }))
+        if ($used -notcontains $a) { return $a }
+    }
+    return ("IRM" + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
 }
-function Save-Db { param($d); try { $d | ConvertTo-Json -Depth 10 | Set-Content $jsonDb -Encoding UTF8 } catch {} }
+try {
+    $dbMig = Load-Db
+    $migDirty = $false
+    foreach ($p in @($dbMig.codes.PSObject.Properties)) {
+        try {
+            if (-not [string]$p.Value.alias) {
+                $na = New-IrmAlias $dbMig
+                $p.Value | Add-Member NoteProperty alias $na -Force
+                $migDirty = $true
+            }
+            if (-not [string]$p.Value.short) {
+                try {
+                    $alM = [string]$p.Value.alias
+                    if ($alM) {
+                        $fullM = $script:fixedPublicUrl + '/s/' + $alM
+                        $tuM = Invoke-WebRequest -Uri ('https://tinyurl.com/api-create.php?url=' + [uri]::EscapeDataString($fullM)) -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                        $tcM = ([string]$tuM.Content).Trim()
+                        if ($tcM -match '^https://tinyurl\.com/[A-Za-z0-9]+$') { $p.Value | Add-Member NoteProperty short $tcM -Force; $migDirty = $true }
+                    }
+                } catch {}
+            }
+        } catch {}
+    }
+    if ($migDirty) { Save-Db $dbMig }
+} catch {}
+$script:lastGoodDb = $null
+$script:bakDb = Join-Path $PSScriptRoot "codes_token.json.bak_auto"
+function Load-Db {
+    try {
+        $d = Get-Content $jsonDb -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+        if ($d -and $d.codes) { $script:lastGoodDb = $d; return $d }
+        throw "db sin codes"
+    } catch {}
+    try {
+        if (Test-Path -LiteralPath $script:bakDb) {
+            $b = Get-Content $script:bakDb -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+            if ($b -and $b.codes -and @($b.codes.PSObject.Properties).Count -gt 0) { $script:lastGoodDb = $b; return $b }
+        }
+    } catch {}
+    if ($script:lastGoodDb) { return $script:lastGoodDb }
+    return @{codes=@{};redemptions=@()}
+}
+function Save-Db { param($d); try {
+    $nc = 0; try { $nc = @($d.codes.PSObject.Properties).Count } catch {}
+    $oc = 0; try { $odb = Get-Content $jsonDb -Raw -Encoding UTF8 -ErrorAction SilentlyContinue | ConvertFrom-Json; $oc = @($odb.codes.PSObject.Properties).Count } catch {}
+    if ($nc -eq 0 -and $oc -gt 0) { try { Add-Content -LiteralPath (Join-Path $PSScriptRoot "db_guard.log") -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] GUARD: intento de guardar DB vacia con $oc codigos previos - BLOQUEADO" -Encoding UTF8 } catch {}; return }
+    try { Copy-Item -LiteralPath $jsonDb -Destination $script:bakDb -Force -ErrorAction SilentlyContinue } catch {}
+    $tmpDb = "$jsonDb.tmp"
+    $d | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $tmpDb -Encoding UTF8 -ErrorAction Stop
+    Move-Item -LiteralPath $tmpDb -Destination $jsonDb -Force -ErrorAction Stop
+} catch {} }
 $script:secretFile = Join-Path $PSScriptRoot "secret.key"
 $script:secret = $null
 if (Test-Path -LiteralPath $script:secretFile) {
@@ -192,6 +268,20 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:rgba(0,212,255
 .footer{text-align:center;color:#3a4a6a;font-size:12px;margin-top:36px;padding:20px;border-top:1px solid rgba(255,255,255,.06)}
 #pubUrlBox{word-break:break-all;padding:12px 14px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:10px;font-size:13px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 #pubUrlBox span:first-child{color:#8aa0c0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.dcols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:720px){
+.container{padding:16px 12px}
+.header{padding:20px 14px}
+.header h1{font-size:24px}
+.panel{padding:18px 14px;border-radius:12px}
+.dcols{grid-template-columns:1fr!important;gap:0}
+#pubUrlBox{flex-direction:column;align-items:stretch;gap:8px}
+.code-card .code{font-size:13px}
+.btn{width:100%;justify-content:center}
+.btn-sm{width:auto}
+.quick-row{flex-direction:column}
+.quick-row .btn{width:100%;min-width:0!important}
+}
 </style>
 </head>
 <body>
@@ -204,6 +294,11 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:rgba(0,212,255
 <span style="color:#00ff88;font-family:Consolas;font-weight:700;user-select:all" id="pubUrlSpan">__PUBLIC_URL__</span>
 <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="copyPubUrl()">Copiar</button>
 </div>
+<div id="pubUrlCfBox" style="margin-top:6px">
+<span style="color:#6a737d">URL secundaria (Cloudflare):</span>
+<span style="color:#00ff88;font-family:Consolas;font-weight:700;user-select:all" id="pubUrlCfSpan">__PUBLIC_URL_CF__</span>
+<button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="copyPubUrlCf()">Copiar</button>
+</div>
 <div style="margin-top:8px;background:#0f1520;border:1px solid #252c36;border-radius:8px;padding:8px 14px;font-size:12px;color:#6a737d">
 Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/activator_obf3_token.ps1 | iex</span>
 </div>
@@ -211,7 +306,11 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <div class="panel">
 <div id="adminMsg" class="msg"></div>
 <div class="section-title">Crear codigo</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div class="quick-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+<button class="btn btn-success quickbtn" style="flex:1;min-width:220px;padding:16px 22px;font-size:15px" onclick="crearCodigoMensual()">Codigo Mensual</button>
+<button class="btn btn-primary quickbtn" style="flex:1;min-width:220px;padding:16px 22px;font-size:15px" onclick="crearCodigoPermanente()">Codigo Permanente</button>
+</div>
+<div class="dcols" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 <div class="form-group">
 <label>Codigo (vacio = auto)</label>
 <input type="text" id="newCode" placeholder="XVSX-VXHA-ASDA-XDASD" maxlength="50" onkeyup="this.value=this.value.toUpperCase()" autocomplete="off">
@@ -228,7 +327,7 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 </select>
 </div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div class="dcols" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 <div class="form-group">
 <label>Usos maximos</label>
 <input type="number" id="maxUses" value="1" min="1" max="999">
@@ -282,12 +381,27 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <button class="btn btn-sm btn-primary" id="btnShowAll" onclick="filterCodes('all')">Todos</button>
 <button class="btn btn-sm btn-ghost" id="btnShowCotidiano" onclick="filterCodes('cotidiano')">Cotidianos</button>
 <button class="btn btn-sm btn-ghost" id="btnShowCliente" onclick="filterCodes('cliente')">Clientes</button>
+<button class="btn btn-sm btn-ghost" id="btnShowIrm" onclick="filterCodes('irm')">IRM</button>
 <button class="btn btn-sm btn-danger" onclick="deleteAllCodes()">Borrar todos</button>
 </div>
 <hr style="border:none;border-top:2px solid #252c36;margin:24px 0">
 <div id="sectionCotidiano"><div class="section-title">Codigos Cotidianos</div><div id="codesCotidiano"><p style="color:#6a737d;text-align:center;padding:20px">Cargando...</p></div></div>
 <hr id="hrClientes" style="border:none;border-top:2px solid #252c36;margin:24px 0">
 <div id="sectionClientes"><div class="section-title">Codigos Clientes</div><div id="codesClientes"><p style="color:#6a737d;text-align:center;padding:20px">Cargando...</p></div></div>
+<hr style="border:none;border-top:2px solid #252c36;margin:24px 0">
+<div id="sectionIrm"><div class="section-title">Codigos IRM (consola)</div>
+<div class="dcols" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div class="form-group"><label>Codigo (vacio = auto)</label><input type="text" id="irmCode" maxlength="50" onkeyup="this.value=this.value.toUpperCase()" autocomplete="off"></div>
+<div class="form-group"><label>Nombre (opcional)</label><input type="text" id="irmName" maxlength="50" autocomplete="off"></div>
+<div class="form-group"><label>Usos maximos</label><input type="number" id="irmMaxUses" value="1" min="1" max="999"></div>
+<div class="form-group"><label>Modo de bloqueo</label><select id="irmMode" onchange="irmModeChanged()" style="width:100%;padding:10px 12px;background:#0a0e14;border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e6e6e6"><option value="normal">Normal - por usos totales</option><option value="ip">Por IP - limite por IP</option><option value="ar">Por AR - un solo uso</option></select></div>
+</div>
+<div class="form-group" id="irmPerIpGroup" style="display:none"><label>Usos por IP</label><input type="number" id="irmPerIpUses" value="1" min="0" max="999"></div>
+<div class="form-group"><label>Duracion</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm btn-ghost" onclick="pickIrmDur(0,1,0,0)">1h</button><button class="btn btn-sm btn-ghost" onclick="pickIrmDur(0,8,0,0)">8h</button><button class="btn btn-sm btn-ghost" onclick="pickIrmDur(1,0,0,0)">1d</button><button class="btn btn-sm btn-ghost" onclick="pickIrmDur(7,0,0,0)">7d</button><button class="btn btn-sm btn-ghost" onclick="pickIrmDur(30,0,0,0)">30d</button><button class="btn btn-sm btn-ghost" onclick="pickIrmDur(0,0,0,0)">Perm</button><span id="irmDurTotal" style="color:#00d4ff;font-size:12px">Perm</span></div><input type="hidden" id="irmDuration" value="0"></div>
+<button class="btn btn-success" onclick="createIrmCode()">Crear IRM (60 lotes)</button>
+<div id="irmMsg" class="msg"></div>
+<div id="codesIrm" style="margin-top:16px"><p style="color:#6a737d;text-align:center;padding:20px">Cargando...</p></div>
+</div>
 </div>
 <div class="footer">Servidor PowerShell &bull; localhost.run Tunnel &bull; <span id="status">Conectado</span></div>
 </div>
@@ -296,6 +410,7 @@ function calcDur(){const d=+document.getElementById('durD').value||0,h=+document
 function pickDur(d,h,m,s){document.getElementById('durD').value=d;document.getElementById('durH').value=h;document.getElementById('durM').value=m;document.getElementById('durS').value=s;calcDur()}
 calcDur();loadCodes();
 function copyPubUrl(){const t=document.getElementById('pubUrlSpan').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
+function copyPubUrlCf(){const t=document.getElementById('pubUrlCfSpan').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
 function showMsg(id,text,type){const e=document.getElementById(id);e.className='msg '+type;e.textContent=text;e.style.display='block';if(type==='success')setTimeout(()=>e.style.display='none',5000)}
 function addLink(v){v=v||'';const c=document.getElementById('linksContainer');const d=document.createElement('div');d.style='margin-bottom:6px';d.innerHTML='<input type="text" placeholder="https://www.mediafire.com/file/..." value="'+v.replace(/"/g,'"')+'" style="width:85%;padding:8px;background:#0a0e14;border:1px solid #252c36;border-radius:6px;color:#e6e6e6"><button onclick="this.parentElement.remove()" style="background:#f8514933;color:#f85149;border:none;border-radius:4px;padding:4px 10px;margin-left:6px;cursor:pointer">X</button>';c.appendChild(d)}
 function getLinks(){return Array.from(document.querySelectorAll('#linksContainer input')).map(i=>i.value.trim()).filter(v=>v)}
@@ -305,19 +420,33 @@ async function createCode(){const code=document.getElementById('newCode').value.
 const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:maxUses,per_ip:perIp,mode:mode,links,duration,name,category})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo creado: '+code+(mode==='ip'?' (POR IP x'+perIp+')':'')+(mode==='ar'?' (POR AR)':''),'success');document.getElementById('newCode').value='';document.getElementById('userName').value='';document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
 function modeChanged(){const m=document.getElementById('limitMode').value;document.getElementById('perIpGroup').style.display=(m==='ip')?'block':'none'}
 async function create14LotesCode(){document.getElementById('newCode').value='';document.getElementById('maxUses').value=1;document.getElementById('limitMode').value='normal';modeChanged();pickDur(30,0,0,0);document.getElementById('linksContainer').innerHTML='';for(let i=1;i<=60;i++){addLink('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.'+i+'.zip')}window.scrollTo({top:0,behavior:'smooth'})}
+function lotesLinks(){const l=[];for(let i=1;i<=60;i++){l.push('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.'+i+'.zip')}return l}
+async function crearCodigoRapido(plan,duration){const code=genCode();const links=lotesLinks();const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:1,per_ip:0,mode:'normal',duration,links,name:'grupo-'+plan,category:'cotidiano'})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo '+(plan==='mensual'?'MENSUAL':'PERMANENTE')+' creado: '+code,'success');document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';document.getElementById('createdCodeDisplay').scrollIntoView({behavior:'smooth',block:'center'});loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
+async function crearCodigoMensual(){await crearCodigoRapido('mensual',2592000)}
+async function crearCodigoPermanente(){await crearCodigoRapido('permanente',0)}
 async function createPruebaCode(){const code=genCode();const links=[];for(let i=1;i<=60;i++){links.push('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.'+i+'.zip')};const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code, max_uses:1, per_ip:0, mode:'normal', links, duration:600, name:'PRUEBA', category:'cliente'})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo de prueba creado: '+code+' (10 min, 60 lotes)','success');document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
 function copyCreatedCode(){const t=document.getElementById('createdCodeText').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
 function copyExistingCode(code){navigator.clipboard.writeText(code).catch(()=>{const ta=document.createElement('textarea');ta.value=code;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)});showMsg('adminMsg','Codigo copiado: '+code,'success')}
-async function loadCodes(){try{const res=await fetch('/api/codes');const data=await res.json();const cot=document.getElementById('codesCotidiano');const cli=document.getElementById('codesClientes');if(!data.codes||Object.keys(data.codes).length===0){cot.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos cotidianos</p>';cli.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos de clientes</p>';return}
-let htmlC='<div class="codes-grid">',htmlK='<div class="codes-grid">';const sorted=Object.entries(data.codes).sort((a,b)=>(b[1].pinned?1:0)-(a[1].pinned?1:0));for(const[code,info]of sorted){const sc=info.used_count>=info.max_uses?'status-full':(info.used_count>0?'status-used':'status-available');const st=info.used_count>=info.max_uses?'AGOTADO':(info.used_count+'/'+info.max_uses+' usos');const cat=(info.category||'cotidiano');let card='<div class="code-card"><div class="code" style="display:flex;align-items:center;gap:8px"><span>'+(info.pinned?'&#128204; ':'')+code+'</span><button class="btn btn-sm btn-primary" onclick="copyExistingCode(\''+code.replace(/'/g,"\\'")+'\')">Copiar</button></div><div class="meta">Usos: <span class="'+sc+'">'+st+'</span>'+(info.name?' &bull; Cliente: <b style="color:#00d4ff">'+String(info.name).replace(/</g,'&lt;')+'</b>':'')+' &bull; Duracion: '+fmtDur(info.duration)+(info.mode==='ar'?' &bull; <b style="color:#ff9800">POR AR</b>':((info.mode==='ip'||(!info.mode&&info.per_ip>0))?' &bull; <b style="color:#f85149">POR IP'+(info.per_ip>0?' x'+info.per_ip:'')+'</b>':''))+' &bull; <b style="color:#8aa0c0">'+cat.toUpperCase()+'</b></div><div class="links-list">'+info.links.map(l=>'<a href="'+l+'" target="_blank">'+l+'</a>').join('')+'</div><div class="redeemed-list">IDs: '+(info.redeemed_by&&info.redeemed_by.length?info.redeemed_by.join(', '):'ninguno')+'</div><div class="redeemed-list">IPs: '+(info.redeemed_ips&&Object.keys(info.redeemed_ips).length?Object.keys(info.redeemed_ips).map(k=>k+' ('+info.redeemed_ips[k]+')').join(', '):'ninguna')+'</div><div class="card-actions">'
+function pickIrmDur(d,h,m,s){const t=d*86400+h*3600+m*60+s;document.getElementById('irmDuration').value=t;const e=document.getElementById('irmDurTotal');e.textContent=t?t+'s':'Perm'}
+function irmModeChanged(){const m=document.getElementById('irmMode').value;document.getElementById('irmPerIpGroup').style.display=(m==='ip')?'block':'none'}
+function irmCmd(u){return "[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072; irm "+u+" | iex"}
+function irmFullUrl(code,info){const base=document.getElementById('pubUrlSpan').textContent.trim();const p=(info&&info.alias)?'/s/'+info.alias:'/api/irm/'+code;return base+p}
+function irmOneLiner(code,info){const u=(info&&info.short)?info.short:irmFullUrl(code,info);return 'irm '+u+' | iex'}
+function copyClientPage(btn){const c=btn.closest('.code-card');const code=c.dataset.code;const short=c.dataset.short;const name=c.dataset.name;const p={code:code};if(name)p.name=name;if(short)p.irm2='irm '+short+' | iex';const j=JSON.stringify(p);const b=btoa(unescape(encodeURIComponent(j))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');const u='https://bastisssteamentrega.netlify.app/#cliente='+b;navigator.clipboard.writeText(u).catch(()=>{const ta=document.createElement('textarea');ta.value=u;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)});window.open(u,'_blank');showMsg('adminMsg','Pagina del cliente copiada','success')}
+function cardIrm(code,info){const cmd=irmOneLiner(code,info);const st=info.used_count>=info.max_uses?'AGOTADO':(info.used_count+'/'+info.max_uses+' usos');let h='<div class="code-card" data-code="'+code+'" data-short="'+String(info.short||'').replace(/"/g,'&quot;')+'" data-name="'+String(info.name||'').replace(/"/g,'&quot;')+'"><div class="code">'+code+'</div><div class="meta">Usos: '+st+' &bull; Duracion: '+fmtDur(info.duration)+(info.mode==='ar'?' &bull; <b style="color:#ff9800">POR AR</b>':((info.mode==='ip'||(!info.mode&&info.per_ip>0))?' &bull; <b style="color:#f85149">POR IP'+(info.per_ip>0?' x'+info.per_ip:'')+'</b>':''))+(info.name?' &bull; Cliente: <b style="color:#00d4ff">'+String(info.name).replace(/</g,'&lt;')+'</b>':'')+'</div><div style="display:flex;gap:6px;margin:8px 0"><input type="text" readonly value="'+cmd.replace(/"/g,'&quot;')+'" style="flex:1;padding:8px;background:#0a0e14;border:1px solid #252c36;border-radius:6px;color:#00ff88;font-family:Consolas;font-size:11px"><button class="btn btn-sm btn-primary" onclick="copyIrm(this)">Copiar IRM</button></div><div class="card-actions"><button class="btn btn-sm btn-ghost" onclick="copyClientPage(this)">Pagina cliente</button><button class="btn btn-sm btn-danger" onclick="delCode(\''+code.replace(/'/g,"\\'")+'\')">Eliminar</button></div></div>';return h}
+function copyIrm(btn){const t=btn.previousElementSibling.value;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)});showMsg('irmMsg','IRM copiado','success')}
+async function createIrmCode(){const code=document.getElementById('irmCode').value.trim().toUpperCase()||genCode();const maxUses=+document.getElementById('irmMaxUses').value||1;const mode=document.getElementById('irmMode').value;const perIp=(mode==='ip')?(+document.getElementById('irmPerIpUses').value||1):0;const duration=+document.getElementById('irmDuration').value||0;const name=document.getElementById('irmName').value.trim();const links=lotesLinks();const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:maxUses,per_ip:perIp,mode:mode,links,duration,name,category:'cotidiano',kind:'irm'})});const data=await res.json();if(data.ok){showMsg('irmMsg','IRM creado: '+code,'success');document.getElementById('irmCode').value='';document.getElementById('irmName').value='';loadCodes()}else{showMsg('irmMsg',data.err,'error')}}
+async function loadCodes(){try{const res=await fetch('/api/codes');const data=await res.json();const cot=document.getElementById('codesCotidiano');const cli=document.getElementById('codesClientes');const irm=document.getElementById('codesIrm');if(!data.codes||Object.keys(data.codes).length===0){cot.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos cotidianos</p>';cli.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos de clientes</p>';irm.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos IRM</p>';return}
+let htmlC='<div class="codes-grid">',htmlK='<div class="codes-grid">',htmlI='<div class="codes-grid">';const sorted=Object.entries(data.codes).sort((a,b)=>(b[1].pinned?1:0)-(a[1].pinned?1:0));for(const[code,info]of sorted){const sc=info.used_count>=info.max_uses?'status-full':(info.used_count>0?'status-used':'status-available');const st=info.used_count>=info.max_uses?'AGOTADO':(info.used_count+'/'+info.max_uses+' usos');const cat=(info.category||'cotidiano');let card='<div class="code-card" data-code="'+code+'" data-short="'+String(info.short||'').replace(/"/g,'&quot;')+'" data-name="'+String(info.name||'').replace(/"/g,'&quot;')+'"><div class="code" style="display:flex;align-items:center;gap:8px"><span>'+(info.pinned?'&#128204; ':'')+code+'</span><button class="btn btn-sm btn-primary" onclick="copyExistingCode(\''+code.replace(/'/g,"\\'")+'\')">Copiar</button></div><div class="meta">Usos: <span class="'+sc+'">'+st+'</span>'+(info.name?' &bull; Cliente: <b style="color:#00d4ff">'+String(info.name).replace(/</g,'&lt;')+'</b>':'')+' &bull; Duracion: '+fmtDur(info.duration)+(info.mode==='ar'?' &bull; <b style="color:#ff9800">POR AR</b>':((info.mode==='ip'||(!info.mode&&info.per_ip>0))?' &bull; <b style="color:#f85149">POR IP'+(info.per_ip>0?' x'+info.per_ip:'')+'</b>':''))+' &bull; <b style="color:#8aa0c0">'+cat.toUpperCase()+'</b></div><div class="links-list">'+info.links.map(l=>'<a href="'+l+'" target="_blank">'+l+'</a>').join('')+'</div><div class="redeemed-list">IDs: '+(info.redeemed_by&&info.redeemed_by.length?info.redeemed_by.join(', '):'ninguno')+'</div><div class="redeemed-list">IPs: '+(info.redeemed_ips&&Object.keys(info.redeemed_ips).length?Object.keys(info.redeemed_ips).map(k=>k+' ('+info.redeemed_ips[k]+')').join(', '):'ninguna')+'</div><div class="card-actions">'
 card+='<button class="btn btn-sm btn-ghost" onclick="pinCode(\''+code.replace(/'/g,"\\'")+'\')">'+(info.pinned?'Desfijar':'Fijar')+'</button>'
 card+='<button class="btn btn-sm btn-primary" onclick="dupCode(\''+code.replace(/'/g,"\\'")+'\')">Duplicar</button>'
 card+='<button class="btn btn-sm btn-ghost" onclick="renewCode(\''+code.replace(/'/g,"\\'")+'\')">Renovar</button>'
 if(info.redeemed_by&&info.redeemed_by.length>0){card+='<button class="btn btn-sm btn-danger" onclick="showRemPc(\''+code.replace(/'/g,"\\'")+'\',[\''+info.redeemed_by.join("','")+'\'])">Remover PC</button><button class="btn btn-sm btn-danger" style="background:#ff9800;border-color:#ff9800" onclick="showRemPc(\''+code.replace(/'/g,"\\'")+'\',[\''+info.redeemed_by.join("','")+'\'])">Borrar juegos</button>'}
+card+='<button class="btn btn-sm btn-ghost" onclick="copyClientPage(this)">Pagina cliente</button>'
 card+='<button class="btn btn-sm btn-danger" onclick="delCode(\''+code.replace(/'/g,"\\'")+'\')">Eliminar</button>'
-card+='</div></div>';if(cat==='cliente'){htmlK+=card}else{htmlC+=card}}
-htmlC+='</div>';htmlK+='</div>';cot.innerHTML=htmlC;cli.innerHTML=htmlK}catch(e){document.getElementById('codesCotidiano').innerHTML='<p style="color:#f85149">Error: '+e.message+'</p>';document.getElementById('codesClientes').innerHTML='<p style="color:#f85149">Error: '+e.message+'</p>'}}
-function filterCodes(cat){const sC=document.getElementById('sectionCotidiano'),sK=document.getElementById('sectionClientes'),hr=document.getElementById('hrClientes'),bA=document.getElementById('btnShowAll'),bC=document.getElementById('btnShowCotidiano'),bK=document.getElementById('btnShowCliente');[bA,bC,bK].forEach(b=>{b.className='btn btn-sm btn-ghost'});if(cat==='all'){sC.style.display='';sK.style.display='';hr.style.display='';bA.className='btn btn-sm btn-primary'}else if(cat==='cotidiano'){sC.style.display='';sK.style.display='none';hr.style.display='none';bC.className='btn btn-sm btn-primary'}else{sC.style.display='none';sK.style.display='';hr.style.display='none';bK.className='btn btn-sm btn-primary'}window.scrollTo({top:document.getElementById('sectionCotidiano').offsetTop-20,behavior:'smooth'})}
+card+='</div></div>';if(info.kind==='irm'){htmlI+=cardIrm(code,info)}else if(cat==='cliente'){htmlK+=card}else{htmlC+=card}}
+htmlC+='</div>';htmlK+='</div>';htmlI+='</div>';cot.innerHTML=htmlC;cli.innerHTML=htmlK;irm.innerHTML=htmlI}catch(e){document.getElementById('codesCotidiano').innerHTML='<p style="color:#f85149">Error: '+e.message+'</p>';document.getElementById('codesClientes').innerHTML='<p style="color:#f85149">Error: '+e.message+'</p>';document.getElementById('codesIrm').innerHTML='<p style="color:#f85149">Error: '+e.message+'</p>'}}
+function filterCodes(cat){const sC=document.getElementById('sectionCotidiano'),sK=document.getElementById('sectionClientes'),sI=document.getElementById('sectionIrm'),hr=document.getElementById('hrClientes'),bA=document.getElementById('btnShowAll'),bC=document.getElementById('btnShowCotidiano'),bK=document.getElementById('btnShowCliente'),bI=document.getElementById('btnShowIrm');[bA,bC,bK,bI].forEach(b=>{b.className='btn btn-sm btn-ghost'});if(cat==='all'){sC.style.display='';sK.style.display='';sI.style.display='';hr.style.display='';bA.className='btn btn-sm btn-primary'}else if(cat==='cotidiano'){sC.style.display='';sK.style.display='none';sI.style.display='none';hr.style.display='none';bC.className='btn btn-sm btn-primary'}else if(cat==='irm'){sC.style.display='none';sK.style.display='none';sI.style.display='';hr.style.display='none';bI.className='btn btn-sm btn-primary'}else{sC.style.display='none';sK.style.display='';sI.style.display='none';hr.style.display='none';bK.className='btn btn-sm btn-primary'}window.scrollTo({top:document.getElementById('sectionCotidiano').offsetTop-20,behavior:'smooth'})}
 async function delCode(code){if(!confirm('Eliminar codigo '+code+'?'))return;const res=await fetch('/api/delete-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo eliminado: '+code,'success');loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
 async function deleteAllCodes(){if(!confirm('¿Borrar TODOS los códigos?'))return;if(!confirm('Confirmar: se borrarán TODOS los códigos'))return;const res=await fetch('/api/delete-all-codes',{method:'POST'});const data=await res.json();if(data.ok){showMsg('adminMsg','Todos los códigos borrados ('+data.deleted+')','success');loadCodes()}else{showMsg('adminMsg',data.err||'Error','error')}}
 async function pinCode(code){const res=await fetch('/api/pin-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});const data=await res.json();if(data.ok){showMsg('adminMsg',data.pinned?'Fijado: '+code:'Desfijado: '+code,'success');loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
@@ -335,17 +464,18 @@ $cfLog = Join-Path $env:TEMP "cf_tunnel_v18.log"
 $cfPath = Join-Path $PSScriptRoot "cloudflared.exe"
 $script:cfCmdPid = $null
 $script:lastCfStart = [datetime]::MinValue
+$script:lastCfCheck = [datetime]::MinValue
+$script:cfSuspect = 0
 $script:lastUrlPushed = ""
 function Start-Tunnel {
     try {
-        Remove-Item $cfLog -Force -ErrorAction SilentlyContinue
-        New-Item $cfLog -ItemType File -Force -ErrorAction SilentlyContinue | Out-Null
+        try { if (Test-Path -LiteralPath $cfLog) { Move-Item -LiteralPath $cfLog -Destination ($cfLog + ".prev.log") -Force -ErrorAction SilentlyContinue } } catch {}
         if (-not (Test-Path $cfPath)) {
             $alt = Join-Path $env:LOCALAPPDATA "BastissSteam\cloudflared.exe"
             if (Test-Path $alt) { $cfPath = $alt }
             else { $alt2 = "C:\Users\basti\OneDrive\Desktop\cloudflared.exe"; if (Test-Path $alt2) { $cfPath = $alt2 } }
         }
-        $cfArgs = "tunnel --url http://127.0.0.1:$srvPort --no-autoupdate"
+        $cfArgs = "tunnel --url http://127.0.0.1:$srvPort --protocol http2 --edge-ip-version 4 --no-autoupdate"
         $p = Start-Process -FilePath $cfPath -ArgumentList $cfArgs -RedirectStandardOutput $cfLog -RedirectStandardError $cfLog -WindowStyle Hidden -PassThru -ErrorAction SilentlyContinue
         if ($p) { $script:cfCmdPid = $p.Id; $script:lastCfStart = [datetime]::UtcNow }
         else {
@@ -362,13 +492,17 @@ function Start-Tunnel {
 # TCP Listener (IPv4-only)
 $tcpListener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, $srvPort)
 $tcpListener.Start(100)
+try { $tcpListener.Server.Blocking = $false } catch {}
+try { $tcpListener.Server.Blocking = $false } catch {}
+try { [System.IO.File]::WriteAllText((Join-Path $env:TEMP 'bsmap_srv_port.txt'), [string]$srvPort, (New-Object System.Text.UTF8Encoding $false)) } catch {}
+try { $tsExe = 'C:\Program Files\Tailscale\tailscale.exe'; if (Test-Path -LiteralPath $tsExe) { & $tsExe funnel --bg $srvPort 2>&1 | Out-Null } } catch {}
 function Send-HttpResponse {
     param($client, [string]$body, [string]$contentType = "text/html; charset=utf-8", [int]$statusCode = 200)
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
     $statusLine = "HTTP/1.1 $statusCode OK`r`n"
-    $headers = "Content-Type: $contentType`r`nContent-Length: $($bytes.Length)`r`nConnection: close`r`nAccess-Control-Allow-Origin: *`r`n`r`n"
+    $headers = "Content-Type: $contentType`r`nContent-Length: $($bytes.Length)`r`nConnection: close`r`nCache-Control: no-store, no-cache, must-revalidate`r`nPragma: no-cache`r`nAccess-Control-Allow-Origin: *`r`n`r`n"
     $responseBytes = [System.Text.Encoding]::UTF8.GetBytes($statusLine + $headers)
-    try { $stream = $client.GetStream(); $stream.Write($responseBytes, 0, $responseBytes.Length); $stream.Write($bytes, 0, $bytes.Length); $stream.Flush() } catch {} finally { try { $client.Close() } catch {} }
+    try { $stream = $client.GetStream(); $stream.WriteTimeout = 5000; $stream.ReadTimeout = 5000; $stream.Write($responseBytes, 0, $responseBytes.Length); $stream.Write($bytes, 0, $bytes.Length); $stream.Flush() } catch {} finally { try { $client.Close() } catch {} }
 }
 function Read-HttpRequest {
     param($client)
@@ -431,6 +565,36 @@ function Read-Body {
         return [System.Text.Encoding]::UTF8.GetString($body, 0, $totalRead)
     } catch { return "" }
 }
+function Send-IrmLoader($client, $codeStr) {
+    $loaderShared = @'
+$ErrorActionPreference='SilentlyContinue'
+$irmCode='@@IRMCODE@@'
+$srvBase='@@SRV@@'
+$srvBaseCf='@@SRVCF@@'
+$wh='https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM'
+function IrmFail($m){ try { $p=@{content="**IRM LOADER FAIL** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**Codigo:** $irmCode`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Error:** $m"} | ConvertTo-Json; Invoke-RestMethod -Uri $wh -Method Post -Body $p -ContentType 'application/json' -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop | Out-Null } catch {} }
+Write-Host "BastissSteam IRM - $irmCode"
+$act=Join-Path $env:TEMP 'bsa_irm_act.ps1'
+$gotAct=$false
+try {
+  $jj=irm 'https://api.github.com/repos/bastisayes/BastissSteamV18/contents/activator_obf3_token.ps1' -Headers @{'User-Agent'='BastissSteam'} -UseBasicParsing -TimeoutSec 12
+  if ($jj -and $jj.content) { [IO.File]::WriteAllBytes($act,[Convert]::FromBase64String(($jj.content -replace '\s',''))); $gotAct=$true }
+} catch {}
+if (-not $gotAct) {
+  try {
+    $uu='https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/activator_obf3_token.ps1?v='+[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    (New-Object Net.WebClient).DownloadFile($uu,$act); $gotAct=$true
+  } catch {}
+}
+if ($gotAct -and (Test-Path -LiteralPath $act)) { & powershell -NoProfile -ExecutionPolicy Bypass -File $act -IrmCode $irmCode -SrvBase $srvBase -SrvBaseCf $srvBaseCf } else { Write-Host 'No se pudo descargar el activador. Revisa tu internet.'; IrmFail 'no se pudo descargar el activador (api+raw)' }
+'@
+    $loaderShared = $loaderShared -replace '@@IRMCODE@@', $codeStr
+    $loaderShared = $loaderShared -replace '@@SRV@@', $script:fixedPublicUrl
+    $cfNow = ""
+    try { $cfNow = [string]$script:pubUrlCf } catch {}
+    $loaderShared = $loaderShared -replace '@@SRVCF@@', $cfNow
+    Send-HttpResponse $client $loaderShared "text/plain; charset=utf-8"
+}
 function Monitor-Url {
     try {
         $out = Get-Content $cfLog -Raw -ErrorAction SilentlyContinue
@@ -441,28 +605,37 @@ function Monitor-Url {
             $script:lastUrlSeen = [datetime]::UtcNow
             if ($newUrl -ne $script:pubUrl) {
                 $script:pubUrl = $newUrl
+                $script:pubUrlCf = $newUrl
                 Set-Content $script:urlCache $newUrl -Force -ErrorAction SilentlyContinue
             }
         }
     } catch {}
 }
 function Push-UrlToGitHub {
-    param([string]$newUrl)
-    try {
-        if ($newUrl -eq $script:lastUrlPushed) { return }
-        $b64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($newUrl))
-        $body = @{message = "URL update"; content = $b64} | ConvertTo-Json -Compress
-        $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$script:ghRepo/contents/current_url.txt" -Headers @{Authorization = "token $script:ghKey"} -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
-        if ($existing.sha) { $body = @{message = "URL update"; content = $b64; sha = $existing.sha} | ConvertTo-Json -Compress }
-        $null = Invoke-RestMethod -Uri "https://api.github.com/repos/$script:ghRepo/contents/current_url.txt" -Method Put -Headers @{Authorization = "token $script:ghKey"} -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-        $script:lastUrlPushed = $newUrl
-    } catch {}
+    param([string]$newUrl, [string]$file = "current_url.txt")
+    foreach ($repo in @($script:ghRepo)) {
+        try {
+            $pk = "$repo/$file"
+            if ($script:lastPushedUrl[$pk] -eq $newUrl) { continue }
+            $b64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($newUrl))
+            $body = @{message = "URL update"; content = $b64} | ConvertTo-Json -Compress
+            $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/contents/$file" -Headers @{Authorization = "token $script:ghKey"} -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
+            if ($existing.sha) { $body = @{message = "URL update"; content = $b64; sha = $existing.sha} | ConvertTo-Json -Compress }
+            $null = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/contents/$file" -Method Put -Headers @{Authorization = "token $script:ghKey"} -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+            $script:lastPushedUrl[$pk] = $newUrl
+            try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PUSH OK $repo -> $newUrl" -Encoding UTF8 } catch {}
+        } catch { try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PUSH FAIL $repo err=$($_.Exception.Message)" -Encoding UTF8 } catch {} }
+    }
 }
 $lastUrlCheck = [datetime]::MinValue
 $lastGhPush = [datetime]::MinValue
+$script:lastPushedUrl = @{}
 $script:lastUrlSeen = [datetime]::UtcNow
 $lastGc = Get-Date
-Start-Tunnel
+$script:multiFlag = Join-Path $env:LOCALAPPDATA "BastissSteam\multi_tunnel_active.flag"
+if (-not (Test-Path $script:multiFlag)) { $cf0 = @(Get-Process cloudflared -ErrorAction SilentlyContinue); if ($cf0.Count -eq 0) { Start-Tunnel } else { $script:lastCfStart = [datetime]::UtcNow } } else {
+    try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] MODO MULTI-TUNNEL (supervisor externo)" -Encoding UTF8 } catch {}
+}
 while ($true) {
     if (((Get-Date) - $lastGc).TotalMinutes -ge 5) {
         try { [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers(); [System.GC]::Collect() } catch {}
@@ -476,27 +649,46 @@ while ($true) {
             }
         } catch {}
     }
-    if (-not $tcpListener.Server.Poll(500000, [System.Net.Sockets.SelectMode]::SelectRead)) {
-        # Monitor URL from SSH log every 500ms
-        Monitor-Url
-        # Push to GitHub every 5 seconds if URL changed
-        $now = [datetime]::UtcNow
-        if (($now - $lastGhPush).TotalSeconds -ge 5) {
-            $lastGhPush = $now
-            if ($script:pubUrl -match "^https://") { Push-UrlToGitHub $script:pubUrl }
-        }
-# Check cloudflared zombie cada 30 segundos: reiniciar el tunnel propio solo
-        # si no hay ningun cloudflared (no tocar tunnels de otras versiones)
-        if (($now - $script:lastCfStart).TotalSeconds -gt 30) {
+$now = [datetime]::UtcNow
+    if (-not (Test-Path $script:multiFlag)) {
+    Monitor-Url
+    if (($now - $lastGhPush).TotalSeconds -ge 5) {
+        $lastGhPush = $now
+        if ($script:fixedPublicUrl -match "^https://") { Push-UrlToGitHub $script:fixedPublicUrl "current_url.txt" }
+        if ($script:pubUrlCf -match "^https://") { Push-UrlToGitHub $script:pubUrlCf "current_url_cf.txt" }
+    }
+if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastCfCheck).TotalSeconds -gt 120) {
+            $script:lastCfCheck = $now
             $cfProcs = @(Get-Process cloudflared -ErrorAction SilentlyContinue)
             if ($cfProcs.Count -eq 0) {
+                try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TUNNEL SIN PROCESO, reinicio" -Encoding UTF8 } catch {}
                 try { & taskkill /F /T /IM cloudflared.exe 2>&1 | Out-Null } catch {}
+                $script:lastCfStart=[datetime]::MinValue
+                $script:cfSuspect=0
                 Start-Tunnel
+            } elseif ($script:pubUrl -match '^https://') {
+                $hasPending = $false
+                try { $hasPending = $tcpListener.Server.Poll(0, [System.Net.Sockets.SelectMode]::SelectRead) } catch {}
+                if (-not $hasPending) {
+                    $healthUrl = $script:pubUrl
+                    try { if ($script:fixedPublicUrl -match '^https://') { $healthUrl = $script:fixedPublicUrl } } catch {}
+                    $codeH = (& curl.exe -s -k --noproxy "*" -o NUL -w "%{http_code}:%{exitcode}" "$healthUrl" --max-time 15 2>$null)
+                    $ch = 0; $cx = -1
+                    try { $pp = ([string]$codeH).Split(':'); $ch = [int]$pp[0]; if ($pp.Count -gt 1) { $cx = [int]$pp[1] } } catch {}
+                    if ($ch -lt 1 -or $ch -ge 500) { $script:cfSuspect = [int]$script:cfSuspect + 1 } else { $script:cfSuspect = 0 }
+                    if ([int]$script:cfSuspect -ge 6) {
+                        try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TUNNEL DOWN 3 ciclos (http=$ch exit=$cx), reinicio" -Encoding UTF8 } catch {}
+                        try { & taskkill /F /T /IM cloudflared.exe 2>&1 | Out-Null } catch {}
+                        $script:cfSuspect = 0
+                        $script:lastCfStart=[datetime]::MinValue
+                        Start-Tunnel
+                    }
+                }
             }
         }
-        continue
     }
-    try { $client = $tcpListener.AcceptTcpClient() } catch { continue }
+    if (-not $tcpListener.Server.Poll(500000, [System.Net.Sockets.SelectMode]::SelectRead)) { continue }
+    try { $client = $tcpListener.AcceptTcpClient(); try { $client.Client.Blocking = $true } catch {} } catch { continue }
     try {
         $req = Read-HttpRequest $client
         if (-not $req) { Send-HttpResponse $client '{"ok":false}' "application/json" 400; continue }
@@ -513,7 +705,21 @@ while ($true) {
         }
         # GET / - serve panel HTML
         if ($path -eq "/" -or $path -eq "/index.html") {
-            Send-HttpResponse $client ($pageHtml -replace '__PUBLIC_URL__', $script:pubUrl)
+            $cfShow = if ($script:pubUrlCf -match '^https://') { $script:pubUrlCf } else { '(tunel CF inactivo)' }
+            Send-HttpResponse $client (($pageHtml -replace '__PUBLIC_URL__', $script:fixedPublicUrl) -replace '__PUBLIC_URL_CF__', $cfShow)
+            continue
+        }
+        # GET /api/shutdown - apagado limpio solo-local (evita sockets fantasma)
+        if ($path -eq "/api/shutdown") {
+            $isLocal = $false
+            try { $repEp = $client.Client.RemoteEndPoint.ToString(); if ($repEp -match '^(127\.0\.0\.1|::1)') { $isLocal = $true } } catch {}
+            if ($isLocal) {
+                Send-HttpResponse $client '{"ok":true}' "application/json; charset=utf-8"
+                try { $tcpListener.Stop() } catch {}
+                exit 0
+            } else {
+                Send-HttpResponse $client '{"ok":false}' "application/json; charset=utf-8" 403
+            }
             continue
         }
         # GET /api/codes - list all codes
@@ -523,8 +729,38 @@ while ($true) {
             Send-HttpResponse $client $body "application/json; charset=utf-8"
             continue
         }
+        # GET /s/<alias> - loader opaco para codigos IRM (no expone codigo ni api)
+        if ($path -match '^/s/([A-Za-z0-9]{4,32})$') {
+            $alReq = $Matches[1].Trim()
+            $dAl = Load-Db
+            $codeAl = ""
+            try {
+                foreach ($p in @($dAl.codes.PSObject.Properties)) {
+                    try { if ([string]$p.Value.alias -ceq $alReq) { $codeAl = [string]$p.Name } } catch {}
+                }
+            } catch {}
+            if (-not $codeAl) {
+                Send-HttpResponse $client '{"ok":false,"err":"No encontrado"}' "application/json; charset=utf-8" 404
+            } else {
+                Send-IrmLoader $client $codeAl
+            }
+            continue
+        }
+        # GET /api/irm/<code> - loader de consola para codigos IRM
+        if ($path -match '^/api/irm/([A-Za-z0-9.\-]+)$') {
+            $irmReq = $Matches[1].ToUpper().Trim()
+            $dIrm = Load-Db
+            $okIrm = $false
+            try { $fIrm = $dIrm.codes.$irmReq; if ($fIrm -and [string]$fIrm.kind -eq 'irm') { $okIrm = $true } } catch {}
+            if (-not $okIrm) {
+                Send-HttpResponse $client '{"ok":false,"err":"Codigo IRM invalido"}' "application/json; charset=utf-8" 404
+            } else {
+                Send-IrmLoader $client $irmReq
+            }
+            continue
+        }
         # POST endpoints - need body
-        if ($path -in @("/api/create-code","/api/redeem-code","/api/token-links","/api/token-info","/api/delete-code","/api/delete-all-codes","/api/pin-code","/api/renew-code","/api/remove-redeemed","/api/wipe","/api/check-wipe","/api/clear-wipe")) {
+        if ($path -in @("/api/create-code","/api/redeem-code","/api/token-links","/api/token-info","/api/delete-code","/api/delete-all-codes","/api/pin-code","/api/renew-code","/api/remove-redeemed","/api/wipe","/api/check-wipe","/api/clear-wipe","/api/install-ok")) {
             $rawBody = $req.Body
             if (-not $rawBody) {
                 $contentLength = 0
@@ -581,7 +817,18 @@ while ($true) {
                     }
                     $cat=""; try { $cat=([string]$bodyData.category).ToLower().Trim() } catch { $cat="" }; if ($cat -ne "cliente" -and $cat -ne "cotidiano") { $cat="cotidiano" }
                     $nm=""; try { $nm=([string]$bodyData.name).Trim() } catch { $nm="" }
-                    $d.codes | Add-Member NoteProperty $code @{links=@($bodyData.links);max_uses=[int]$bodyData.max_uses;duration=[int]$bodyData.duration;used_count=0;redeemed_by=@();pinned=$false;per_ip=[int]$bodyData.per_ip;mode=$newMode;category=$cat;name=$nm;machine_ids=@();tokens=@();activated_at=$null;created_at=[DateTime]::UtcNow.ToString('o')}
+                    $knd=""; try { $knd=([string]$bodyData.kind).ToLower().Trim() } catch { $knd="" }; if ($knd -ne "irm") { $knd = "" }
+                    $als=""; $sht=""
+                    $als = New-IrmAlias $d
+                    try {
+                        $fullLoader = $script:fixedPublicUrl + '/s/' + $als
+                        $tu = Invoke-WebRequest -Uri ('https://tinyurl.com/api-create.php?url=' + [uri]::EscapeDataString($fullLoader)) -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                        $tc = ([string]$tu.Content).Trim()
+                        if ($tc -match '^https://tinyurl\.com/[A-Za-z0-9]+$') { $sht = $tc }
+                    } catch {}
+                    $lnkIn = @($bodyData.links)
+                    if ($knd -eq "irm" -and $lnkIn.Count -eq 0) { $lnkIn = @(1..61 | ForEach-Object { "https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.$_.zip" }) }
+                    $d.codes | Add-Member NoteProperty $code @{links=$lnkIn;max_uses=[int]$bodyData.max_uses;duration=[int]$bodyData.duration;used_count=0;redeemed_by=@();pinned=$false;per_ip=[int]$bodyData.per_ip;mode=$newMode;category=$cat;name=$nm;kind=$knd;alias=$als;short=$sht;machine_ids=@();tokens=@();activated_at=$null;created_at=[DateTime]::UtcNow.ToString('o')}
                     Save-Db $d
                     $respBody = @{ok=$true;code=$code} | ConvertTo-Json
                 }
@@ -599,6 +846,9 @@ while ($true) {
                         $info | Add-Member NoteProperty machine_ids $initMids -Force
                     }
                     if (-not ($info.PSObject.Properties.Name -contains 'tokens')) { $info | Add-Member NoteProperty tokens @() -Force }
+                    if (-not ($info.PSObject.Properties.Name -contains 'redeemed_by')) { $info | Add-Member NoteProperty redeemed_by @() -Force }
+                    if (-not ($info.PSObject.Properties.Name -contains 'used_count')) { $info | Add-Member NoteProperty used_count 0 -Force }
+                    if (-not ($info.PSObject.Properties.Name -contains 'install_ok')) { $info | Add-Member NoteProperty install_ok @() -Force }
                     $mids = @($info.machine_ids)
                     $boundToken = ""
                     try { $boundToken = [string]$bodyData.token } catch {}
@@ -613,11 +863,11 @@ while ($true) {
                     Ensure-CodeActivation $info
                     if (Get-CodeExpired $info) {
                         $respBody = @{ok=$false;err="Codigo expirado (la vigencia ya termino)"} | ConvertTo-Json
-                    } elseif ($alreadyBound) {
-                        $respBody = @{ok=$false;err="Codigo usado"} | ConvertTo-Json
-                    } elseif (($mode -eq 'ar') -and ($mids.Count -gt 0)) {
+                    } elseif ($alreadyBound -and (@($info.install_ok) -contains $cid)) {
                         $respBody = @{ok=$false;err="Codigo ya usado"} | ConvertTo-Json
-                    } elseif ($mids.Count -ge [int]$info.max_uses) {
+                    } elseif (($mode -eq 'ar') -and ($mids.Count -gt 0) -and -not $alreadyBound) {
+                        $respBody = @{ok=$false;err="Codigo ya usado"} | ConvertTo-Json
+                    } elseif (($mids.Count -ge [int]$info.max_uses) -and -not $alreadyBound) {
                         $respBody = @{ok=$false;err="Codigo ya usado en otra maquina ($($mids.Count)/$([int]$info.max_uses))"} | ConvertTo-Json
                     } else {
                     $clip = ""
@@ -660,6 +910,23 @@ while ($true) {
                         }
                     }
                 }
+            } elseif ($path -eq "/api/install-ok" -and $bodyData) {
+                $d = Load-Db
+                $okI = $false
+                try {
+                    $codeI = ([string]$bodyData.code).ToUpper().Trim()
+                    $cidI = $bodyData.client_id
+                    if ($codeI -and $d.codes.$codeI) {
+                        $infoI = $d.codes.$codeI
+                        $tokI = ""; try { $tokI = [string]$bodyData.token } catch {}
+                        if ($cidI -and (@($infoI.machine_ids) -contains $cidI) -and $tokI -and (Test-BsaToken $tokI $codeI $cidI)) {
+                            if (-not ($infoI.PSObject.Properties.Name -contains 'install_ok')) { $infoI | Add-Member NoteProperty install_ok @() -Force }
+                            if (@($infoI.install_ok) -notcontains $cidI) { $infoI.install_ok = @(@($infoI.install_ok) + $cidI); Save-Db $d }
+                            $okI = $true
+                        }
+                    }
+                } catch {}
+                $respBody = (@{ok=$okI} | ConvertTo-Json)
             } elseif ($path -eq "/api/token-links" -and $bodyData) {
                 $d = Load-Db
                 $tok = ""
@@ -787,7 +1054,7 @@ if ($d.codes.$code) {
         }
         # 404
         Send-HttpResponse $client '{"ok":false}' "application/json" 404
-    } catch {
+} catch {
         try { Send-HttpResponse $client (@{ok=$false;err="Error interno"} | ConvertTo-Json) "application/json" 500 } catch {}
     }
 }
