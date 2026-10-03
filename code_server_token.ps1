@@ -666,23 +666,20 @@ if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastC
                 $script:lastCfStart=[datetime]::MinValue
                 $script:cfSuspect=0
                 Start-Tunnel
-            } elseif ($script:pubUrl -match '^https://') {
-                $hasPending = $false
-                try { $hasPending = $tcpListener.Server.Poll(0, [System.Net.Sockets.SelectMode]::SelectRead) } catch {}
-                if (-not $hasPending) {
-                    $healthUrl = $script:pubUrl
-                    try { if ($script:fixedPublicUrl -match '^https://') { $healthUrl = $script:fixedPublicUrl } } catch {}
-                    $codeH = (& curl.exe -s -k --noproxy "*" -o NUL -w "%{http_code}:%{exitcode}" "$healthUrl" --max-time 15 2>$null)
-                    $ch = 0; $cx = -1
-                    try { $pp = ([string]$codeH).Split(':'); $ch = [int]$pp[0]; if ($pp.Count -gt 1) { $cx = [int]$pp[1] } } catch {}
-                    if ($ch -lt 1 -or $ch -ge 500) { $script:cfSuspect = [int]$script:cfSuspect + 1 } else { $script:cfSuspect = 0 }
-                    if ([int]$script:cfSuspect -ge 6) {
-                        try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TUNNEL DOWN 3 ciclos (http=$ch exit=$cx), reinicio" -Encoding UTF8 } catch {}
-                        try { & taskkill /F /T /IM cloudflared.exe 2>&1 | Out-Null } catch {}
-                        $script:cfSuspect = 0
-                        $script:lastCfStart=[datetime]::MinValue
-                        Start-Tunnel
-                    }
+            } else {
+                $localOk = $false
+                try {
+                    $tc = New-Object System.Net.Sockets.TcpClient
+                    $iar = $tc.BeginConnect('127.0.0.1', [int]$srvPort, $null, $null)
+                    if ($iar.AsyncWaitHandle.WaitOne(3000)) { $tc.EndConnect($iar); $localOk = $true }
+                    try { $tc.Close() } catch {}
+                } catch {}
+                if ($localOk) { $script:cfSuspect = 0 }
+                else {
+                    $script:cfSuspect = [int]$script:cfSuspect + 1
+                    try { Add-Content $startLog "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] LISTENER local sin respuesta (intento $script:cfSuspect)" -Encoding UTF8 } catch {}
+                }
+            }
                 }
             }
         }

@@ -40,7 +40,7 @@ function Dl-File([string]$url,[string]$out,[int]$timeoutSec) {
     return $false
 }
 WPhase "inicio code=$code"
-Write-Host "BastissSteam IRM standalone - $code"
+Write-Host "BastissSteam - Activando juegos..."
 $steamRoot=Get-SteamRoot
 if(-not $steamRoot){ $m="No se encontro Steam instalado."; Write-Host $m; WPhase "sin-steam"; WRep "IRM STANDALONE ERROR" $m; exit 1 }
 WPhase "steam=$steamRoot"
@@ -54,7 +54,8 @@ if($SoloLote -gt 0){ $loteNums=@($SoloLote) }
 foreach($n in $loteNums){
     $zip=Join-Path $env:TEMP ("bsmap_lote_"+$n+".zip")
     $url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.$n.zip"
-    Write-Host ("Lote $n/"+$loteNums.Count+" descargando...")
+    $pct=[int](($n*100)/$loteNums.Count)
+    Write-Host ("Instalando juegos... $n/"+$loteNums.Count+" ($pct%)")
     WPhase "lote $n inicio"
     if(-not (Dl-File $url $zip 180)){ $errors+="lote $n : descarga fallida"; WPhase "lote $n fallo descarga"; continue }
     $tmp=Join-Path $env:TEMP ("bsmap_lote_"+$n)
@@ -70,7 +71,6 @@ foreach($n in $loteNums){
         }
         foreach($f in $mans){ try{ Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $manDir $f.Name) -Force -ErrorAction SilentlyContinue; $totMans++ }catch{} }
         $okLotes++
-        Write-Host "Lote $n OK ($($luas.Count) luas, $($mans.Count) manifests)"
         WPhase "lote $n ok luas=$($luas.Count) mans=$($mans.Count)"
     }catch{
         $errors+="lote $n : $($_.Exception.Message)"; WPhase "lote $n error $($_.Exception.Message)"
@@ -80,7 +80,6 @@ foreach($n in $loteNums){
 }
 $patchOk=$false; $patchMsg=""
 try{
-    Write-Host "Instalando parche..."
     $pz=Join-Path $env:TEMP 'bsmap_parche_nuevo.zip'
     if(Dl-File 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip' $pz 120){
         Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
@@ -99,16 +98,14 @@ try{
         try{ Remove-Item -LiteralPath $pz -Force -ErrorAction SilentlyContinue }catch{}
     } else { $patchMsg="no se pudo descargar el parche" }
 }catch{ $patchMsg="parche error: $($_.Exception.Message)" }
-Write-Host $patchMsg
 WPhase "fin lotes_ok=$okLotes luas=$totLuas mans=$totMans patch=$patchMsg"
 if($errors.Count -gt 0 -and $okLotes -eq 0){
+    Write-Host "No se pudo completar. Revisa tu internet e intenta de nuevo."
     $m="No se pudo activar ningun lote.`n"+($errors -join "`n")
-    Write-Host $m
     WRep "IRM STANDALONE ERROR" ($m+"`nSteam: "+$steamRoot)
     exit 1
 }
+Write-Host "Listo, juegos activados."
 $rep="Canjeo IRM standalone OK.`nLotes: $okLotes`nLuas: $totLuas`nManifests: $totMans`nParche: $patchMsg"
-if($errors.Count -gt 0){ $rep+="`nFallos:`n"+($errors -join "`n") }
-Write-Host $rep
 WRep "IRM STANDALONE OK" ($rep+"`nSteam: "+$steamRoot)
 exit 0
