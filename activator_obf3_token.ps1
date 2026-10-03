@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.16"
+$script:version = "V2.17"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1802,11 +1802,36 @@ $lines += "**Test tunnel /api/redeem-code:** curl exit $($crT.exit) (serverIp: $
 
 
 $CLIENT_ID_FILE = Join-Path $env:LOCALAPPDATA (S("YnNtYXBfY2xpZW50X2lkLnR4dA=="))
+function Get-HardwareId {
+    try {
+        $u = (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop).UUID
+        if ($u -and $u -notmatch '^0+$' -and $u -notmatch '^[Ff]+$' -and $u -match '[0-9A-Fa-f]{4,}') { return $u }
+    } catch {}
+    try {
+        $d = Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Select-Object -First 1
+        if ($d.SerialNumber -and $d.SerialNumber.Trim()) { return "DISK-"+$d.SerialNumber.Trim() }
+    } catch {}
+    try {
+        $m = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" -ErrorAction Stop | Select-Object -First 1
+        if ($m.MACAddress) { return "MAC-"+$m.MACAddress }
+    } catch {}
+    return ""
+}
 function Get-ClientId {
     if (Test-Path $CLIENT_ID_FILE) {
-        try { return (Get-Content $CLIENT_ID_FILE -Raw -ErrorAction Stop).Trim() } catch {}
+        try { $c=(Get-Content $CLIENT_ID_FILE -Raw -ErrorAction Stop).Trim(); if($c){return $c} } catch {}
     }
-    $id = "PC-" + (-join ((48..57)+(65..90) | Get-Random -Count 32 | ForEach-Object { [char]$_ }))
+    $id = ""
+    try {
+        $hwid = Get-HardwareId
+        if ($hwid) {
+            $bytes=[Text.Encoding]::UTF8.GetBytes("BastissSteam:"+$hwid)
+            $hash=[Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+            $b64=[Convert]::ToBase64String($hash).Replace('+','').Replace('/','').Replace('=','')
+            $id = "PC-" + $b64.Substring(0,32).ToUpper()
+        }
+    } catch {}
+    if (-not $id) { $id = "PC-" + (-join ((48..57)+(65..90) | Get-Random -Count 32 | ForEach-Object { [char]$_ })) }
     try { Set-Content $CLIENT_ID_FILE $id -Force -ErrorAction Stop } catch {}
     return $id
 }
