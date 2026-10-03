@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.15"
+$script:version = "V2.16"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -9083,7 +9083,29 @@ if ($irmCodeArg) {
         if (-not $steamRoot) { throw "No se encontro Steam instalado." }
         try { Set-LoteJob (New-LoteJob $code $links $duration $expDate $steamRoot) } catch {}
         Write-Phase ("patch-start code=" + $code)
-        try { $script:patchSilentOK = Xz9Qk -Silent } catch { $script:patchSilentOK = $false }
+        try {
+            $patchNeed = $true
+            try { $srChk0=Get-SteamPath; if (Test-ParcheActual $srChk0) { $patchNeed=$false; try{ Set-ParcheInstalado $true }catch{}; $script:patchSilentOK=$true; try{ Write-Phase "patch-ya-ok" }catch{} } } catch {}
+            if ($patchNeed) {
+                if(-not $script:bibRepairPool){ try{ New-BiblioRepairPool }catch{} }
+                $psP=$null; $hP=$null
+                try {
+                    $psP=[PowerShell]::Create(); $psP.RunspacePool=$script:bibRepairPool
+                    [void]$psP.AddScript({ Xz9Qk -Silent })
+                    $hP=$psP.BeginInvoke()
+                    $waited=0
+                    while (-not $hP.IsCompleted -and $waited -lt 120) { Start-Sleep -Milliseconds 500; $waited+=0.5 }
+                    if ($hP.IsCompleted) {
+                        try { $pv=@($psP.EndInvoke($hP)); if($pv.Count -gt 0){ $script:patchSilentOK=[bool]$pv[$pv.Count-1] } else { $script:patchSilentOK=$false } } catch { $script:patchSilentOK=$false }
+                        try{ if($psP){$psP.Dispose()} }catch{}
+                    } else {
+                        $script:patchSilentOK=$false
+                        try{ Write-Phase "patch-timeout, sigo a activar" }catch{}
+                        try{ $psP.Stop() }catch{}
+                    }
+                } catch { $script:patchSilentOK=$false }
+            }
+        } catch { $script:patchSilentOK = $false }
         if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {} }
         Write-Phase ("postpatch code=" + $code)
         $total = $links.Count
