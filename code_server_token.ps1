@@ -682,8 +682,6 @@ if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastC
             }
                 }
             }
-        }
-    }
     if (-not $tcpListener.Server.Poll(500000, [System.Net.Sockets.SelectMode]::SelectRead)) { continue }
     try { $client = $tcpListener.AcceptTcpClient(); try { $client.Client.Blocking = $true } catch {} } catch { continue }
     try {
