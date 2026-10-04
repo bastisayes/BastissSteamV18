@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.17"
+$script:version = "V2.18"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5911,6 +5911,45 @@ function Merge-RepairGithub {
         $script:repairGithub = $gh2
     } catch {}
 }
+function Write-RepairLog([string]$msg) {
+    try { Add-Content -LiteralPath (Join-Path $env:TEMP 'bsmap_repair.log') -Value ("["+(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')+"] "+$msg) -Encoding ASCII -ErrorAction SilentlyContinue } catch {}
+}
+function Show-RepairLogWindow {
+    try{
+        $dlg=New-Object System.Windows.Forms.Form
+        $dlg.Text="Log del reparador"
+        $dlg.ClientSize=New-Object System.Drawing.Size(640,440)
+        $dlg.StartPosition="CenterParent";$dlg.BackColor=$BG
+        $dlg.FormBorderStyle="FixedSingle";$dlg.MaximizeBox=$false
+        $tb=New-Object System.Windows.Forms.TextBox
+        $tb.Multiline=$true;$tb.ReadOnly=$true;$tb.ScrollBars="Vertical"
+        $tb.BackColor=$script:InputBG;$tb.ForeColor=$script:White
+        $tb.Font=$script:FntSub;$tb.BorderStyle="FixedSingle"
+        $tb.Location=New-Object System.Drawing.Point(12,12);$tb.Size=New-Object System.Drawing.Size(616,372)
+        $tb.Anchor=([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+        $dlg.Controls.Add($tb)
+        $upd={ param($t) try{
+            $lf=Join-Path $env:TEMP 'bsmap_repair.log'
+            if(Test-Path -LiteralPath $lf){ $ll=@(Get-Content -LiteralPath $lf -Tail 500 -ErrorAction SilentlyContinue); $t.Text=($ll -join "`r`n") } else { $t.Text="(Sin registros todavia)" }
+            $t.SelectionStart=$t.Text.Length;$t.ScrollToCaret()
+        }catch{} }
+        &$upd $tb
+        $bR=New-Object System.Windows.Forms.Button
+        $bR.Text="Actualizar"
+        $bR.Location=New-Object System.Drawing.Point(12,394);$bR.Size=New-Object System.Drawing.Size(120,32)
+        $bR.BackColor=$script:CardBG;$bR.ForeColor=$script:White;$bR.FlatStyle="Flat"
+        $bR.Add_Click({ &$upd $tb })
+        $dlg.Controls.Add($bR)
+        $bC=New-Object System.Windows.Forms.Button
+        $bC.Text="Cerrar"
+        $bC.Location=New-Object System.Drawing.Point(508,394);$bC.Size=New-Object System.Drawing.Size(120,32)
+        $bC.BackColor=$script:CardBG;$bC.ForeColor=$script:White;$bC.FlatStyle="Flat"
+        $bC.Add_Click({ $dlg.Close() })
+        $dlg.Controls.Add($bC)
+        $dlg.ShowDialog() | Out-Null
+        $dlg.Dispose()
+    }catch{}
+}
 function Refresh-RepairRows {
     try { $lvR = $script:repairLv; if (-not $lvR -or $lvR.IsDisposed) { return 0 } } catch { return 0 }
     $gamesR = @{}; try { $gamesR = $script:repairGames; if (-not $gamesR) { $gamesR = @{} } } catch { $gamesR = @{} }
@@ -5987,6 +6026,7 @@ function Mn3Vp {
         $script:repairFixes = $fixes
         $script:repairGithub = @()
         Merge-RepairGithub
+        Write-RepairLog "Reparador abierto"
         $dlg = New-Object System.Windows.Forms.Form
         $dlg.Text=(S("UmVwYXJhZG9yIGRlIGp1ZWdvcw=="))
         $dlg.ClientSize=New-Object System.Drawing.Size(560,420)
@@ -6069,7 +6109,7 @@ function Mn3Vp {
             foreach ($it in $sel) {
                 $i++
                 $r=$it.Tag
-                if (-not $r.FixUrl) { $it.SubItems[1].Text="No requiere reparacion"; continue }
+                if (-not $r.FixUrl) { $it.SubItems[1].Text="No requiere reparacion"; Write-RepairLog "$($r.Game): no requiere reparacion"; continue }
                 $st.Text="($i/$($sel.Count)) Buscando reparacion..."
                 $st.ForeColor=$script:Yellow
                 $pb.Style="Marquee"; $pb.MarqueeAnimationSpeed=30
@@ -6097,11 +6137,13 @@ function Mn3Vp {
                     Aw8Nq $r.Game
                     $it.SubItems[1].Text="Reparado"
                     $st.Text="($i/$($sel.Count)) $($r.Game) reparado."
+                    Write-RepairLog "$($r.Game): reparado"
                     $st.ForeColor=$script:Green
                 } catch {
                     Remove-Item $zip -Force -ErrorAction SilentlyContinue
                     $it.SubItems[1].Text="Error"
                     $st.Text="($i/$($sel.Count)) No se pudo reparar $($r.Game)."
+                    Write-RepairLog "$($r.Game): ERROR no se pudo reparar"
                     $st.ForeColor=$script:Red
                 }
                 $pb.Style="Continuous"; $pb.MarqueeAnimationSpeed=0
@@ -6109,6 +6151,7 @@ function Mn3Vp {
                 [System.Windows.Forms.Application]::DoEvents()
             }
             $st.Text="Listo: $($sel.Count) juegos procesados."
+            Write-RepairLog "Listo: $($sel.Count) juegos procesados"
             $st.ForeColor=$script:Green
             $btnRep.Enabled=$true
         })
@@ -6513,7 +6556,7 @@ function Td7Re {
 $form.KeyPreview = $true
 $form.Add_KeyDown({
     param($s2, $e2)
-    if ($e2.Control -and $e2.KeyCode -eq 'K') { Td7Re; $e2.Handled = $true }
+    if ($e2.Control -and $e2.KeyCode -eq 'K') { Show-RepairLogWindow; $e2.Handled = $true }
 })
 $script:watcherLogTimer.Start()
 $script:luatoolsLogTimer.Start()
@@ -7980,6 +8023,7 @@ function Start-BiblioDlWatch([string]$appid) {
 }
 function Repair-BiblioGame([string]$appid) {
     $out=@{ok=$false;msg='';method=''}
+    try { Write-RepairLog "Reparar $appid iniciado" } catch {}
     try {
         $gpath=$null;$gfolder=$null
         try {
@@ -7991,15 +8035,15 @@ function Repair-BiblioGame([string]$appid) {
                 else { foreach($lib in @(Ss3Jd)){ $cand=Join-Path (Join-Path $lib "steamapps\common") $gfolder; if(Test-Path -LiteralPath $cand){$gpath=$cand;break} } }
             }
         } catch {}
-        if(-not ($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath))){ $out.msg="Este juego no requiere reparacion."; return $out }
+        if(-not ($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath))){ $out.msg="Este juego no requiere reparacion."; Write-RepairLog "$appid : no requiere reparacion (sin carpeta)"; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
         $fn,$fu = $null,$null
         if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
-        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; return $out }
+        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Aplicando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $fx=Apply-FixAutomatically $gfolder $gpath $fixes
-        if($fx[0]){ $out.ok=$true;$out.msg="Reparacion terminada.";$out.method='github'; return $out }
+        if($fx[0]){ $out.ok=$true;$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
         $out.msg="Este juego no requiere reparacion."
     } catch { $out.msg="Este juego no requiere reparacion." }
     return $out
