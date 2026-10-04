@@ -437,6 +437,7 @@ $watcher.Add_Tick({
                 foreach ($f in $parsed) {
                     $name = $f.filename -replace '\.zip$', ''
                     $script:fixesCache[$name] = @{url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/$($f.filename)"; size=$f.size}
+                    if ($f.game -and $f.game.Trim().Length -gt 0 -and -not $script:fixesCache.ContainsKey([string]$f.game)) { $script:fixesCache[[string]$f.game] = @{url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/$($f.filename)"; size=$f.size} }
                 }
                 $ok = $true
                 & $script:lg "Catalogo fixes_list.json: $($fixesCache.Count) fixes"
@@ -450,6 +451,7 @@ $watcher.Add_Tick({
                         foreach ($f in $cached) {
                             $name = $f.filename -replace '\.zip$', ''
                             $script:fixesCache[$name] = @{url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/$($f.filename)"; size=$f.size}
+                            if ($f.game -and $f.game.Trim().Length -gt 0 -and -not $script:fixesCache.ContainsKey([string]$f.game)) { $script:fixesCache[[string]$f.game] = @{url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/$($f.filename)"; size=$f.size} }
                         }
                         & $script:lg "Catalogo cache: $($fixesCache.Count) fixes"
                         $ok = $true
@@ -460,6 +462,7 @@ $watcher.Add_Tick({
                 foreach ($f in $script:fixesFallback) {
                     $name = $f.fn -replace '\.zip$', ''
                     $script:fixesCache[$name] = @{url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/$($f.fn)"; size=$f.sz}
+                    if ($f.game -and $f.game.Trim().Length -gt 0 -and -not $script:fixesCache.ContainsKey([string]$f.game)) { $script:fixesCache[[string]$f.game] = @{url="https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/$($f.fn)"; size=$f.sz} }
                 }
                 & $script:lg "Catalogo fallback: $($fixesCache.Count) fixes"
             }
