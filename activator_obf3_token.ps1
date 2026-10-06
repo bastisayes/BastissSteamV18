@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.19"
+$script:version = "V2.20"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5299,6 +5299,31 @@ function Invoke-ActualizarApp {
 }
 
 
+function Get-WatcherLiveStatus {
+    try {
+        $lp = Join-Path $env:TEMP "bsmap_watcher.log"
+        if (-not (Test-Path -LiteralPath $lp)) { return $null }
+        $lines = @(Get-Content -LiteralPath $lp -Tail 25 -ErrorAction Stop)
+        for ($i = $lines.Count-1; $i -ge 0; $i--) {
+            if ($lines[$i] -match '(\d+) descarga\(s\): (.+?)  \|') {
+                if ([int]$Matches[1] -gt 0) {
+                    $s = ("Ahora: " + $Matches[2].Trim())
+                    if ($s.Length -gt 44) { $s = $s.Substring(0,44) + "…" }
+                    return $s
+                }
+            }
+        }
+        for ($i = $lines.Count-1; $i -ge 0; $i--) {
+            if ($lines[$i] -match 'FIX APLICADO: (.+?) ->') {
+                $s = ("Último fix: " + $Matches[1].Trim())
+                if ($s.Length -gt 44) { $s = $s.Substring(0,44) + "…" }
+                return $s
+            }
+        }
+    } catch {}
+    return $null
+}
+
 $script:sWatcher=New-BufferedPanel
 $script:sWatcher.Location=New-Object System.Drawing.Point($PAD,$sY)
 $script:sWatcher.Size=New-Object System.Drawing.Size($CW,50);$script:sWatcher.BackColor=$BG
@@ -5317,12 +5342,16 @@ $script:sWatcher.Add_Paint({param($s,$e)
     $wOn=$we -and $wp -and -not $he
     $st=if($wOn){(T (S("cmVwYXJhZG9yT24=")))}else{(T (S("cmVwYXJhZG9yT2Zm")))}
     $tw=New-Object System.Drawing.SolidBrush($script:White);$g.DrawString($st,$script:FntCard,$tw,14,7);$tw.Dispose()
-    $sub=if($wOn){(S("Q2xpY2sgcGFyYSBkZXNhY3RpdmFyIGVsIHJlcGFyYWRvcg=="))}else{(S("Q2xpY2sgcGFyYSBhY3RpdmFyIGVsIHJlcGFyYWRvcg=="))}
+    $sub=if($wOn){ $live=Get-WatcherLiveStatus; if($live){$live}else{"Doble clic para desactivar"} }else{"Click para abrir - Doble clic on/off"}
     $sw=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString($sub,$script:FntSub,$sw,14,27);$sw.Dispose()
     $clr=if($wOn){$script:Green}else{$script:Red}
     $dot=New-Object System.Drawing.SolidBrush($clr);$g.FillEllipse($dot,($s.Width-152),20,10,10);$dot.Dispose()
 })
 $script:sWatcher.Add_Click({
+    Show-WatcherWindow
+    $script:sWatcher.Invalidate()
+})
+$script:sWatcher.Add_DoubleClick({
     $wRunning=$script:watcherProcess -and -not $script:watcherProcess.HasExited
     if ($wRunning) {
         try { $script:watcherProcess.Kill(); $script:watcherProcess.WaitForExit(2000) } catch {}
@@ -8981,6 +9010,50 @@ function Ensure-ExpiryWatcher {
 }
 
 
+function Show-WatcherWindow {
+    try {
+        try { Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class WsWin { [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); }
+'@ -ErrorAction Stop } catch {}
+        try {
+            foreach ($wp in @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bsmap_watcher\.ps1|download_watcher\.ps1' })) {
+                try {
+                    $gp = Get-Process -Id $wp.ProcessId -ErrorAction Stop
+                    if ($gp.MainWindowHandle -ne 0 -and ($gp.MainWindowTitle -eq "Steam Download Watcher" -or $gp.MainWindowTitle -eq "Steam Reparador")) {
+                        [WsWin]::ShowWindow($gp.MainWindowHandle, 9) | Out-Null
+                        [WsWin]::SetForegroundWindow($gp.MainWindowHandle) | Out-Null
+                        return
+                    }
+                } catch {}
+            }
+        } catch {}
+        $tmp = Join-Path $env:TEMP "bsmap_watcher.ps1"
+        $fixed = Join-Path $env:LOCALAPPDATA "BastissSteam\download_watcher.ps1"
+        $needCopy = $true
+        if (Test-Path -LiteralPath $tmp) {
+            try { $tc = Get-Content -LiteralPath $tmp -Raw -ErrorAction Stop; if ($tc -match 'CenterScreen' -and $tc -match 'watcherVersion = 3') { $needCopy = $false } } catch {}
+        }
+        if ($needCopy -and (Test-Path -LiteralPath $fixed)) {
+            try { $fc = Get-Content -LiteralPath $fixed -Raw -ErrorAction Stop; if ($fc -match 'CenterScreen') { Copy-Item -LiteralPath $fixed -Destination $tmp -Force -ErrorAction Stop; $needCopy = $false } } catch {}
+        }
+        if ($needCopy) {
+            try { Invoke-RestMethod -Uri $script:watcherUrl -UseBasicParsing -TimeoutSec 20 -OutFile $tmp -ErrorAction Stop; $needCopy = $false } catch {}
+        }
+        if ($needCopy -or -not (Test-Path -LiteralPath $tmp)) { [System.Windows.Forms.MessageBox]::Show("No se pudo preparar el reparador. Revisa tu internet.","Reparador","OK","Error") | Out-Null; return }
+        try { Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bsmap_watcher\.ps1|download_watcher\.ps1' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} } } catch {}
+        Start-Sleep -Milliseconds 800
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "powershell.exe"
+        $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tmp`""
+        $psi.WindowStyle = "Hidden"; $psi.CreateNoWindow = $true; $psi.UseShellExecute = $false
+        $script:watcherProcess = [System.Diagnostics.Process]::Start($psi)
+        $script:watcherEnabled = $true
+        Set-ReparadorFlag 1
+        $script:sWatcher.Invalidate()
+    } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo abrir el reparador.","Reparador","OK","Error") | Out-Null }
+}
 function Start-WatcherProcess {
     try {
         
