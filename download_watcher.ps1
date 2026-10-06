@@ -128,7 +128,7 @@ function Find-Fix {
         $pct = Get-Similarity $name $key
         if ($pct -gt $bestPct) { $bestPct = $pct; $bestKey = $key }
     }
-    if ($bestPct -ge 50) { return $fixesCache[$bestKey] }
+    if ($bestPct -ge 65) { return $fixesCache[$bestKey] }
     return $null
 }
 
@@ -169,13 +169,13 @@ function Find-CommonFolder {
             foreach ($d in [System.IO.Directory]::GetDirectories($cp)) {
                 $fn = [System.IO.Path]::GetFileName($d)
                 $fnNorm = (($fn -replace '[^a-zA-Z0-9\s]', ' ') -replace '\s+', ' ').Trim().ToLower()
-                if ($fnNorm.Contains($nNorm) -or $nNorm.Contains($fnNorm)) { return $d }
+                if ($fnNorm.Length -ge 3 -and $nNorm.Length -ge 3 -and ($fnNorm.Contains($nNorm) -or $nNorm.Contains($fnNorm))) { return $d }
                 $pct = Get-Similarity $name $fn
                 if ($pct -gt $bestPct) { $bestPct = $pct; $best = $d }
             }
         } catch { }
     }
-    if ($bestPct -ge 50) { return $best }
+    if ($bestPct -ge 65) { return $best }
     return $null
 }
 
@@ -355,7 +355,68 @@ throw "Chunk failed after $mr attempts: $le"
 }
 
 $watcherLog = Join-Path $env:TEMP "bsmap_watcher.log"
-try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER] Watcher iniciado" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+$watcherVersion = 3
+$watcherLockFile = Join-Path $env:TEMP "bsmap_watcher.lock"
+$watchStateFile = Join-Path $env:TEMP "bsmap_watchstate.json"
+$appNameCache = @{}
+$folderCache = @{}
+# ── instancia unica v3: si hay otro watcher v3 vivo, salir; sino tomar el control (mata copias viejas/duplicadas) ──
+$takeover = $true
+try {
+    if (Test-Path -LiteralPath $watcherLockFile) {
+        $lk = Get-Content -LiteralPath $watcherLockFile -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($lk.pid -and ([int]$lk.pid) -ne $PID) {
+            $lp = Get-Process -Id ([int]$lk.pid) -ErrorAction SilentlyContinue
+            if ($lp -and $lp.ProcessName -eq 'powershell' -and [int]$lk.ver -ge $watcherVersion) { $takeover = $false }
+        }
+    }
+} catch {}
+if (-not $takeover) { return }
+try {
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'watcher\.ps1' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+} catch {}
+try { @{pid=$PID; ver=$watcherVersion; time=([DateTime]::Now.ToString('s'))} | ConvertTo-Json -Compress | Set-Content -LiteralPath $watcherLockFile -Encoding UTF8 -Force } catch {}
+# ── estado persistente (sobrevive reinicios: no re-descarga fixes ya aplicados, retoma descargas) ──
+$watchState = @{version=$watcherVersion; apps=@{}}
+try {
+    if (Test-Path -LiteralPath $watchStateFile) {
+        $sj = Get-Content -LiteralPath $watchStateFile -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($sj.apps) { foreach ($p in $sj.apps.PSObject.Properties) { try { $watchState.apps[[string]$p.Name] = @{name=[string]$p.Value.name; status=[string]$p.Value.status; fixed=[bool]$p.Value.fixed; fix=[string]$p.Value.fix; attempts=[int]$p.Value.attempts; lastBytes=[long]$p.Value.lastBytes; lastSeen=[string]$p.Value.lastSeen} } catch {} } }
+    }
+} catch {}
+function Save-WatchState { try { $o=@{version=$watcherVersion; apps=@{}}; foreach ($k in @($watchState.apps.Keys)) { $o.apps[$k]=$watchState.apps[$k] }; ($o | ConvertTo-Json -Depth 5 -Compress) | Set-Content -LiteralPath $watchStateFile -Encoding UTF8 -Force } catch {} }
+function Get-DirActivity {
+    param([string]$dir, [int]$budget=4000)
+    $bytes=[long]0; $count=0; $newest=[DateTime]::MinValue; $hitBudget=$false
+    try {
+        $stack = New-Object System.Collections.Stack
+        $stack.Push($dir)
+        while ($stack.Count -gt 0 -and $count -lt $budget) {
+            $d = [string]$stack.Pop()
+            try { $fis = [System.IO.Directory]::GetFiles($d) } catch { continue }
+            foreach ($f in $fis) {
+                if ($count -ge $budget) { $hitBudget=$true; break }
+                try { $fi = New-Object System.IO.FileInfo $f; $bytes += $fi.Length; $count++; if ($fi.LastWriteTime -gt $newest) { $newest = $fi.LastWriteTime } } catch {}
+            }
+            if ($count -ge $budget) { $hitBudget=$true; break }
+            try { foreach ($sd in [System.IO.Directory]::GetDirectories($d)) { $stack.Push($sd) } } catch {}
+        }
+    } catch {}
+    return @{bytes=$bytes; files=$count; newest=$newest; truncated=$hitBudget}
+}
+function Get-ManifestInfo {
+    param([string]$acfPath)
+    $info = @{appid=''; name=''; installdir=''; flags=4}
+    try {
+        $raw = [System.IO.File]::ReadAllText($acfPath)
+        if ($raw -match '"appid"\s+"(\d+)"') { $info.appid = $Matches[1] }
+        if ($raw -match '"name"\s+"([^"]+)"') { $info.name = $Matches[1].Trim() }
+        if ($raw -match '"installdir"\s+"([^"]+)"') { $info.installdir = $Matches[1].Trim() }
+        if ($raw -match '"StateFlags"\s+"(\d+)"') { $info.flags = [int]$Matches[1] }
+    } catch {}
+    return $info
+}
+try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER v3] Watcher iniciado (PID=$PID)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
 $steamLibs = Get-SteamLibraries
 if ($steamLibs.Count -eq 0) { try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER] ERROR: No se encontro Steam" -Encoding UTF8 } catch {}; return }
 
@@ -469,55 +530,163 @@ $watcher.Add_Tick({
             if ($fixesCache.Count -gt 0) { $script:fixesLoaded = $true; $script:apiRetryTick = $script:tickCount + 999999 }
         }
 
-        # ── detectar descargas ──
+        # ── detectar descargas e instalaciones (v3: manifests + staging + estado persistente) ──
+        # Sin filtro por antiguedad: una descarga pausada de ayer se sigue detectando por actividad/flags.
         $activeCount = 0
         $activeNames = @()
+        $baseline = ($script:tickCount -le 2)
+        $saveStateNeeded = $false
         foreach ($lib in $steamLibs) {
-            $dlDir = Join-Path (Join-Path $lib "steamapps") "downloading"
-            if (-not (Test-Path $dlDir)) { continue }
-            foreach ($sub in Get-ChildItem $dlDir -Directory -ErrorAction SilentlyContinue) {
-                $appid = $sub.Name
-                if ($sub.CreationTime -lt (Get-Date).AddDays(-1)) { continue }
-                $activeCount++
-                $gn = Get-AppName $appid $steamLibs
-                if ($gn) { $activeNames += "$gn ($appid)" }
-                if ($knownDirs.ContainsKey($appid) -or $pendingJobs.ContainsKey($appid)) { continue }
-                if (-not $gn) { $knownDirs[$appid] = $true; continue }
-                & $script:lg "Buscando fix para: $gn ... "
-                $fixInfo = Find-Fix $gn
-                if (-not $fixInfo) { & $script:lg "NO ENCONTRADO"; continue }
-                $gameFolder = Find-CommonFolder $gn $steamLibs
-                if (-not $gameFolder) {
-                    foreach ($fk in $fixesCache.Keys) {
-                        $gameFolder = Find-CommonFolder $fk $steamLibs
-                        if ($gameFolder) { break }
+            $sapath = Join-Path $lib "steamapps"
+            $dlDir = Join-Path $sapath "downloading"
+            $staging = @{}
+            try {
+                if ([System.IO.Directory]::Exists($dlDir)) {
+                    foreach ($sd in [System.IO.Directory]::GetDirectories($dlDir)) {
+                        $bn = [System.IO.Path]::GetFileName($sd)
+                        if ($bn -match '^\d+$') { $staging[$bn] = $sd }
                     }
                 }
-                if (-not $gameFolder) { & $script:lg "ENCONTRADO, esperando carpeta..."; continue }
-                $knownDirs[$appid] = $true
-                $zipPath = Join-Path $gameFolder "$(Normalize-Name $gn).predl.zip"
-                & $script:lg "ENCONTRADO! descargando a: $gameFolder"
-                & $script:st "Descargando fix para $gn..."
-                # Iniciar job en segundo plano (runspace with inline function)
-                $ps = [powershell]::Create()
-                $rs = [RunspaceFactory]::CreateRunspace()
-                $ps.Runspace = $rs
-                $rs.Open()
-                $progressInfo = [hashtable]::Synchronized(@{Percent=0;Speed=0;Current=0;Total=0;DlHost="";RetryCount=0;LogMsg=$null})
-                $script:downloadProgress = $progressInfo
-                $script:downloadName = $gn
-                & $script:lg "  URL: $($fixInfo.url)"
-                $funcSrc = (Get-Command Start-GitHubDownload).Definition
-                $sb = {
-                    param($url, $zip, $ua, $sz, $pi, $fsrc)
-                    Invoke-Expression ('function Start-GitHubDownload { ' + $fsrc + ' }')
-                    Start-GitHubDownload -Url $url -OutFile $zip -UserAgent $ua -KnownSize $sz -ProgressInfo $pi
+            } catch {}
+            $manifests = @{}
+            try {
+                foreach ($af in [System.IO.Directory]::GetFiles($sapath, "appmanifest_*.acf")) {
+                    $mi = Get-ManifestInfo $af
+                    $aid = $mi.appid
+                    if (-not $aid) { $bn2 = [System.IO.Path]::GetFileNameWithoutExtension($af); if ($bn2 -match 'appmanifest_(\d+)') { $aid = $Matches[1] } }
+                    if ($aid) { $manifests[[string]$aid] = $mi }
                 }
-                [void]$ps.AddScript($sb).AddArgument($fixInfo.url).AddArgument($zipPath).AddArgument($ua).AddArgument([long]$fixInfo.size).AddArgument($progressInfo).AddArgument($funcSrc)
-                $handle = $ps.BeginInvoke()
-                $pendingJobs[$appid] = @{ps=$ps;handle=$handle;gn=$gn;zip=$zipPath;dest=$gameFolder;rs=$rs;progress=$progressInfo;dlPath=(Join-Path $dlDir $appid)}
+            } catch {}
+            $allIds = @{}
+            foreach ($k in $staging.Keys) { $allIds[[string]$k] = $true }
+            foreach ($k in $manifests.Keys) { $allIds[[string]$k] = $true }
+            foreach ($appid in $allIds.Keys) {
+                $appid = [string]$appid
+                $mi = $manifests[$appid]
+                $stagePath = $staging[$appid]
+                $flags = 4; $installdir = $null; $mName = $null
+                if ($mi) { $flags = [int]$mi.flags; $installdir = $mi.installdir; $mName = $mi.name }
+                $dlBytes = [long]0; $dlRecent = $false
+                if ($stagePath -and (Test-Path -LiteralPath $stagePath)) {
+                    $act = Get-DirActivity $stagePath
+                    $dlBytes = [long]$act.bytes
+                    if ($act.newest -gt (Get-Date).AddMinutes(-20)) { $dlRecent = $true }
+                }
+                $activeFlags = ((($flags -band 1024) -ne 0) -or (($flags -band 131072) -ne 0) -or (($flags -band 262144) -ne 0) -or (($flags -band 256) -ne 0) -or (($flags -band 524288) -ne 0))
+                $prev = $null
+                if ($watchState.apps.ContainsKey($appid)) { $prev = $watchState.apps[$appid] }
+                $prevBytes = [long]0; try { if ($prev) { $prevBytes = [long]$prev.lastBytes } } catch {}
+                $growing = ($dlBytes -gt $prevBytes)
+                $isDownloading = $false
+                if ($stagePath) {
+                    if ($activeFlags -or $dlRecent -or $growing) { $isDownloading = $true }
+                    elseif (-not $mi) { $isDownloading = $true }
+                }
+                if ($isDownloading) {
+                    $activeCount++
+                    if (-not $script:appNameCache.ContainsKey($appid)) { $script:appNameCache[$appid] = Get-AppName $appid $steamLibs }
+                    $gn = $script:appNameCache[$appid]
+                    if (-not $gn -and $mName) { $gn = $mName; $script:appNameCache[$appid] = $gn }
+                    if ($gn) { $activeNames += "$gn ($appid)" } else { $activeNames += "appid $appid" }
+                    $gameFolder = $null
+                    if ($script:folderCache.ContainsKey($appid)) {
+                        $fc = $script:folderCache[$appid]
+                        if ($fc -and (Test-Path -LiteralPath $fc)) { $gameFolder = $fc } else { $script:folderCache.Remove($appid) }
+                    }
+                    if (-not $gameFolder) {
+                        $commonBase = Join-Path $sapath "common"
+                        if ($installdir) { $cand = Join-Path $commonBase $installdir; if (Test-Path -LiteralPath $cand) { $gameFolder = $cand } }
+                        if (-not $gameFolder -and $gn) { $gameFolder = Find-CommonFolder $gn $steamLibs }
+                        if ($gameFolder) { $script:folderCache[$appid] = $gameFolder }
+                    }
+                    $destTxt = if ($gameFolder) { $gameFolder } else { "(carpeta final aun no creada)" }
+                    & $script:lg "DESCARGANDO: $(if ($gn) { $gn } else { $appid }) ($appid) | Instalando en: staging=$stagePath destino=$destTxt"
+                    if (-not $prev) { $watchState.apps[$appid] = @{name=[string]$gn; status='downloading'; fixed=$false; fix=''; attempts=0; lastBytes=$dlBytes; lastSeen=([DateTime]::Now.ToString('s'))}; $saveStateNeeded = $true }
+                    else { $prev.status='downloading'; $prev.lastBytes=$dlBytes; $prev.lastSeen=([DateTime]::Now.ToString('s')); if ($gn -and -not $prev.name) { $prev.name=[string]$gn }; $saveStateNeeded = $true }
+                    if ($pendingJobs.ContainsKey($appid) -or $script:pendingExtract.ContainsKey($appid)) { continue }
+                    $alreadyFixed = ($prev -and [bool]$prev.fixed)
+                    if ($alreadyFixed) { continue }
+                    $atts = 0; try { if ($prev) { $atts = [int]$prev.attempts } } catch {}
+                    if ($atts -ge 3) { continue }
+                    if (-not $gn) { continue }
+                    $fixInfo = Find-Fix $gn
+                    if (-not $fixInfo) { & $script:lg "NO ENCONTRADO: fix para $gn"; continue }
+                    $zipDestDir = $gameFolder
+                    if ($zipDestDir) { $zipPath = Join-Path $zipDestDir "$(Normalize-Name $gn).predl.zip"; & $script:lg "ENCONTRADO! fix para $gn -> $zipDestDir" }
+                    else { $zipPath = Join-Path ([System.IO.Path]::GetTempPath()) "predl_$appid.zip"; & $script:lg "ENCONTRADO! fix para $gn (carpeta final aun no creada, pre-descargando...)" }
+                    & $script:st "Descargando fix para $gn..."
+                    $knownDirs[$appid] = $true
+                    $ps = [powershell]::Create()
+                    $rs = [RunspaceFactory]::CreateRunspace()
+                    $ps.Runspace = $rs
+                    $rs.Open()
+                    $progressInfo = [hashtable]::Synchronized(@{Percent=0;Speed=0;Current=0;Total=0;DlHost="";RetryCount=0;LogMsg=$null})
+                    $script:downloadProgress = $progressInfo
+                    $script:downloadName = $gn
+                    & $script:lg "  URL: $($fixInfo.url)"
+                    $funcSrc = (Get-Command Start-GitHubDownload).Definition
+                    $sb = {
+                        param($url, $zip, $ua, $sz, $pi, $fsrc)
+                        Invoke-Expression ('function Start-GitHubDownload { ' + $fsrc + ' }')
+                        Start-GitHubDownload -Url $url -OutFile $zip -UserAgent $ua -KnownSize $sz -ProgressInfo $pi
+                    }
+                    [void]$ps.AddScript($sb).AddArgument($fixInfo.url).AddArgument($zipPath).AddArgument($ua).AddArgument([long]$fixInfo.size).AddArgument($progressInfo).AddArgument($funcSrc)
+                    $handle = $ps.BeginInvoke()
+                    $pendingJobs[$appid] = @{ps=$ps;handle=$handle;gn=$gn;zip=$zipPath;dest=$zipDestDir;rs=$rs;progress=$progressInfo;dlPath=$stagePath;installdir=$installdir;fixFile=[System.IO.Path]::GetFileName($fixInfo.url)}
+                }
+                else {
+                    # sin descarga activa: baseline silencioso, o instalacion nueva/completada
+                    if ($baseline) {
+                        if (-not $prev) { $watchState.apps[$appid] = @{name=[string]$mName; status='installed'; fixed=$false; fix=''; attempts=0; lastBytes=0; lastSeen=([DateTime]::Now.ToString('s'))}; $saveStateNeeded = $true }
+                        continue
+                    }
+                    $wasDownloading = ($prev -and $prev.status -eq 'downloading')
+                    $isNew = (-not $prev)
+                    if (($wasDownloading -or $isNew) -and -not $pendingJobs.ContainsKey($appid) -and -not $script:pendingExtract.ContainsKey($appid)) {
+                        if (-not $script:appNameCache.ContainsKey($appid)) { $script:appNameCache[$appid] = Get-AppName $appid $steamLibs }
+                        $gn2 = $script:appNameCache[$appid]
+                        if (-not $gn2) { $gn2 = $mName }
+                        $gf2 = $null
+                        $commonBase2 = Join-Path $sapath "common"
+                        if ($installdir) { $c2 = Join-Path $commonBase2 $installdir; if (Test-Path -LiteralPath $c2) { $gf2 = $c2 } }
+                        if (-not $gf2 -and $gn2) { $gf2 = Find-CommonFolder $gn2 $steamLibs }
+                        if ($gf2 -and $gn2) {
+                            $alreadyFixed2 = ($prev -and [bool]$prev.fixed)
+                            $atts2 = 0; try { if ($prev) { $atts2 = [int]$prev.attempts } } catch {}
+                            if (-not $alreadyFixed2 -and $atts2 -lt 3) {
+                                $fixInfo2 = Find-Fix $gn2
+                                if ($fixInfo2) {
+                                    & $script:lg "INSTALACION DETECTADA: $gn2 ($appid) en $gf2"
+                                    & $script:st "Descargando fix para $gn2..."
+                                    $knownDirs[$appid] = $true
+                                    $zip2 = Join-Path $gf2 "$(Normalize-Name $gn2).predl.zip"
+                                    $ps2 = [powershell]::Create()
+                                    $rs2 = [RunspaceFactory]::CreateRunspace()
+                                    $ps2.Runspace = $rs2
+                                    $rs2.Open()
+                                    $pi2 = [hashtable]::Synchronized(@{Percent=0;Speed=0;Current=0;Total=0;DlHost="";RetryCount=0;LogMsg=$null})
+                                    $script:downloadProgress = $pi2
+                                    $script:downloadName = $gn2
+                                    $funcSrc2 = (Get-Command Start-GitHubDownload).Definition
+                                    $sb2 = {
+                                        param($url, $zip, $ua, $sz, $pi, $fsrc)
+                                        Invoke-Expression ('function Start-GitHubDownload { ' + $fsrc + ' }')
+                                        Start-GitHubDownload -Url $url -OutFile $zip -UserAgent $ua -KnownSize $sz -ProgressInfo $pi
+                                    }
+                                    [void]$ps2.AddScript($sb2).AddArgument($fixInfo2.url).AddArgument($zip2).AddArgument($ua).AddArgument([long]$fixInfo2.size).AddArgument($pi2).AddArgument($funcSrc2)
+                                    $handle2 = $ps2.BeginInvoke()
+                                    $pendingJobs[$appid] = @{ps=$ps2;handle=$handle2;gn=$gn2;zip=$zip2;dest=$gf2;rs=$rs2;progress=$pi2;dlPath=$null;installdir=$installdir;fixFile=[System.IO.Path]::GetFileName($fixInfo2.url)}
+                                    $script:folderCache[$appid] = $gf2
+                                } else { & $script:lg "NO ENCONTRADO: fix para $gn2" }
+                            }
+                        }
+                    }
+                    if (-not $prev) { $watchState.apps[$appid] = @{name=[string]$mName; status='installed'; fixed=$false; fix=''; attempts=0; lastBytes=0; lastSeen=([DateTime]::Now.ToString('s'))}; $saveStateNeeded = $true }
+                    elseif ($prev.status -ne 'installed') { $prev.status='installed'; $prev.lastSeen=([DateTime]::Now.ToString('s')); $saveStateNeeded = $true }
+                }
             }
         }
+        if ($saveStateNeeded) { Save-WatchState }
 
         # ── verificar jobs completados ──
         $doneJobs = @()
@@ -532,11 +701,14 @@ $watcher.Add_Tick({
             if ($result -and $result.ok) {
                 $sz = $result.size
                 & $script:lg "  Descarga OK ($([math]::Round($sz/1KB,0)) KB)"
-                $script:pendingExtract[$appid] = @{zip=$info.zip;dest=$info.dest;gn=$info.gn;readyTick=-1;done=$false;dlPath=$info.dlPath}
+                $script:pendingExtract[$appid] = @{zip=$info.zip;dest=$info.dest;gn=$info.gn;readyTick=-1;readySize=-1;done=$false;dlPath=$info.dlPath;installdir=$info.installdir;fixFile=$info.fixFile}
             } else {
                 $err = if ($result -and $result.err) { $result.err } else { "desconocido" }
                 & $script:st "Error descargando fix para $($info.gn)" "#f85149"
                 & $script:lg "ERROR descarga: $($info.gn) - $err"
+                $knownDirs.Remove($appid)
+                if ($watchState.apps.ContainsKey($appid)) { try { $watchState.apps[$appid].attempts=[int]$watchState.apps[$appid].attempts+1 } catch {}; $watchState.apps[$appid].status='installed' }
+                Save-WatchState
             }
             $doneJobs += $appid
         }
@@ -547,47 +719,96 @@ $watcher.Add_Tick({
         foreach ($appid in $pendingExtract.Keys) {
             $ex = $script:pendingExtract[$appid]
             if ($ex.done) { $doneExtract += $appid; continue }
-            # 1) Verificar que la carpeta del juego exista y tenga archivos
-            $hasFiles = $false
-            try { $hasFiles = ([System.IO.Directory]::GetFiles($ex.dest, "*", [System.IO.SearchOption]::TopDirectoryOnly).Length -gt 0) } catch {}
-            if (-not $hasFiles) {
-                if ($ex.readyTick -ge 0) { & $script:lg "  Esperando archivos en: $($ex.dest)" }
+            # 0) resolver destino (el zip puede haber quedado en TEMP si common aun no existia)
+            $dest = $ex.dest
+            if ($ex.installdir) {
+                foreach ($slc in $steamLibs) {
+                    $exactC = Join-Path (Join-Path $slc "steamapps\common") $ex.installdir
+                    if ((Test-Path -LiteralPath $exactC) -and $exactC -ne $dest) { $dest = $exactC; $ex.dest = $dest; $script:folderCache[$appid] = $dest; & $script:lg "  Destino corregido a carpeta exacta: $dest"; break }
+                }
+            }
+            if (-not $dest -or -not (Test-Path -LiteralPath $dest)) {
+                $dest = $null
+                if ($ex.installdir) {
+                    foreach ($sl in $steamLibs) {
+                        $c = Join-Path (Join-Path $sl "steamapps\common") $ex.installdir
+                        if (Test-Path -LiteralPath $c) { $dest = $c; break }
+                    }
+                }
+                if (-not $dest) { $dest = Find-CommonFolder $ex.gn $steamLibs }
+                if ($dest) { $ex.dest = $dest; $script:folderCache[$appid] = $dest; & $script:lg "  Carpeta final resuelta: $dest" }
+            }
+            if (-not $dest) {
+                & $script:lg "  Esperando carpeta final de: $($ex.gn)"
                 $ex.readyTick = -1
                 continue
             }
-            # 2) Verificar que Steam ya no este descargando el juego (carpeta downloading/APPID vacia o eliminada)
+            # 1) Verificar que la carpeta del juego exista y tenga archivos
+            $hasFiles = $false; $destSize = [long]0
+            try {
+                $topFiles = [System.IO.Directory]::GetFiles($dest, "*", [System.IO.SearchOption]::TopDirectoryOnly)
+                $hasFiles = ($topFiles.Length -gt 0)
+                if ($hasFiles) { $act2 = Get-DirActivity $dest; $destSize = [long]$act2.bytes }
+            } catch {}
+            if (-not $hasFiles) {
+                if ($ex.readyTick -ge 0) { & $script:lg "  Esperando archivos en: $dest" }
+                $ex.readyTick = -1
+                continue
+            }
+            # 2) Verificar que Steam ya no este descargando (staging sin actividad reciente + manifest sin flags activos)
             $steamStillDownloading = $false
-            if ($ex.dlPath -and (Test-Path $ex.dlPath)) {
+            if ($ex.dlPath -and (Test-Path -LiteralPath $ex.dlPath)) {
                 try {
-                    $dlFiles = [System.IO.Directory]::GetFiles($ex.dlPath, "*", [System.IO.SearchOption]::AllDirectories)
-                    $dlSize = 0; foreach ($f in $dlFiles) { $dlSize += (New-Object System.IO.FileInfo $f).Length }
-                    if ($dlSize -gt 10MB) { $steamStillDownloading = $true }
+                    $act3 = Get-DirActivity $ex.dlPath
+                    if ($act3.newest -gt (Get-Date).AddMinutes(-3)) { $steamStillDownloading = $true }
                 } catch { $steamStillDownloading = $false }
             }
+            if (-not $steamStillDownloading) {
+                foreach ($sl2 in $steamLibs) {
+                    $acf2 = Join-Path (Join-Path $sl2 "steamapps") "appmanifest_$appid.acf"
+                    if (Test-Path -LiteralPath $acf2) {
+                        $mi2 = Get-ManifestInfo $acf2
+                        $fl2 = [int]$mi2.flags
+                        if ((($fl2 -band 1024) -ne 0) -or (($fl2 -band 131072) -ne 0) -or (($fl2 -band 262144) -ne 0) -or (($fl2 -band 256) -ne 0) -or (($fl2 -band 524288) -ne 0)) { $steamStillDownloading = $true; break }
+                    }
+                }
+            }
             if ($steamStillDownloading) {
-                if ($ex.readyTick -ge 0) { & $script:lg "  Steam aun descargando, esperando..." }
+                & $script:lg "  Steam aun descargando $($ex.gn), esperando..."
                 $ex.readyTick = -1
                 continue
             }
-            # 3) Marcar tick de listo y esperar estabilidad (2 ticks = ~6s)
-            if ($ex.readyTick -lt 0) {
+            # 3) estabilidad: 3 ticks con el mismo tamaño
+            if ($ex.readyTick -lt 0 -or $ex.readySize -ne $destSize) {
+                if ($ex.readyTick -lt 0) { & $script:lg "  Juego detectado en common, esperando estabilidad..." }
                 $ex.readyTick = $script:tickCount
-                & $script:lg "  Juego detectado en common, esperando estabilidad..."
+                $ex.readySize = $destSize
                 continue
             }
             $elapsedTicks = $script:tickCount - $ex.readyTick
-            if ($elapsedTicks -lt 2) { continue }
-            # 4) Extraer
+            if ($elapsedTicks -lt 3) { continue }
+            # 4) Extraer (mover el zip a destino si estaba en TEMP)
             try {
+                $zipSrc = $ex.zip
+                if ($zipSrc -and (Test-Path -LiteralPath $zipSrc)) {
+                    $zipName = [System.IO.Path]::GetFileName($zipSrc)
+                    $zipInDest = Join-Path $dest $zipName
+                    if ($zipSrc -ne $zipInDest) { Move-Item -LiteralPath $zipSrc -Destination $zipInDest -Force; $ex.zip = $zipInDest }
+                }
                 & $script:st "Extrayendo fix para $($ex.gn)..." "#ffaa00"
-                Expand-Archive -Path $ex.zip -DestinationPath $ex.dest -Force
+                Expand-Archive -Path $ex.zip -DestinationPath $dest -Force
                 & $script:st "Fix aplicado a $($ex.gn)!" "#00ff88"
-                & $script:lg "FIX APLICADO: $($ex.gn) -> $($ex.dest)"
+                & $script:lg "FIX APLICADO: $($ex.gn) -> $dest"
+                if ($watchState.apps.ContainsKey($appid)) { $watchState.apps[$appid].fixed=$true; $watchState.apps[$appid].fix=[string]$ex.fixFile; $watchState.apps[$appid].status='installed' }
+                Save-WatchState
             } catch {
                 & $script:st "Error extrayendo fix en $($ex.gn)" "#f85149"
                 & $script:lg "ERROR extrayendo fix: $($_.Exception.Message)"
+                if ($watchState.apps.ContainsKey($appid)) { try { $watchState.apps[$appid].attempts=[int]$watchState.apps[$appid].attempts+1 } catch {}; $watchState.apps[$appid].fixed=$false }
+                $knownDirs.Remove($appid)
+                Save-WatchState
             }
-            Remove-Item $ex.zip -Force -ErrorAction SilentlyContinue
+            try { if ($ex.zip -and (Test-Path -LiteralPath $ex.zip)) { Remove-Item $ex.zip -Force -ErrorAction SilentlyContinue } } catch {}
             $ex.done = $true
             $doneExtract += $appid
         }
