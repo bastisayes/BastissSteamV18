@@ -11,15 +11,14 @@ public class W {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Steam Download Watcher"
-$form.Size = New-Object System.Drawing.Size(1, 1)
-$form.StartPosition = "Manual"
-$form.Location = New-Object System.Drawing.Point(-32000, -32000)
-$form.WindowState = "Minimized"
+$form.Size = New-Object System.Drawing.Size(920, 620)
+$form.StartPosition = "CenterScreen"
 $form.BackColor = "#0d1117"
 $form.TopMost = $false
-$form.ShowInTaskbar = $false
-$form.Opacity = 0
-$form.Visible = $false
+$form.ShowInTaskbar = $true
+$form.Opacity = 1
+$form.Visible = $true
+$form.Add_FormClosing({ param($s,$e) $e.Cancel = $true; $s.WindowState = [System.Windows.Forms.FormWindowState]::Minimized })
 
 $status = New-Object System.Windows.Forms.Label
 $status.Location = New-Object System.Drawing.Point(20, 8)
