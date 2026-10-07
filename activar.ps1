@@ -2,6 +2,14 @@
 $ErrorActionPreference='SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072
 Write-Host 'BastissSteam - Activador'
+$admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if(-not $admin){
+  Write-Host 'Solicitando permisos de administrador...'
+  try { Start-Process powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-Command','irm https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/activar.ps1 | iex') -Verb RunAs } catch { Write-Host 'Se necesitan permisos de administrador para continuar.' }
+  return
+}
+function Stop-SteamQ { for($i=0;$i -lt 3;$i++){ try { Get-Process steam,steamwebhelper,steamservice,gameoverlayui -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}; Start-Sleep -Milliseconds 800 } }
+Stop-SteamQ
 Write-Host 'Paso 1/3: buscando instalacion...'
 function Get-SteamRoots {
   $r=@()
@@ -39,10 +47,10 @@ if(-not $dlOk -or -not (Test-Path -LiteralPath $zip) -or (Get-Item -LiteralPath 
 Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
 try { $zx=[System.IO.Compression.ZipFile]::OpenRead($zip); $nTest=@($zx.Entries).Count; $zx.Dispose() } catch { $nTest=0 }
 if($nTest -le 0){ Write-Host 'Descarga incompleta. Intenta de nuevo.'; Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; return }
-Write-Host 'Paso 3/3: aplicando y verificando...'
+Write-Host 'aplicando activacion...'
 $totOk=0; $totBad=0; $badFiles=@()
 foreach($sr in $roots){
-  try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+  Stop-SteamQ
   Start-Sleep -Milliseconds 1500
   $arch=[System.IO.Compression.ZipFile]::OpenRead($zip)
   try {
@@ -57,7 +65,7 @@ foreach($sr in $roots){
         try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e,$full,$true); $done=$true }
         catch {
           if($t -lt 4){
-            try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+            Stop-SteamQ
             Start-Sleep -Milliseconds 1500
           }
         }
@@ -85,5 +93,5 @@ if($totBad -gt 0){
   foreach($b in $badFiles){ Write-Host (" - " + $b) }
   return
 }
-Write-Host ("Activacion completa: " + $totOk + " de " + $totOk + " archivos verificados.")
-Write-Host 'Listo. Abre Steam.'
+Write-Host ("activacion completada: " + $totOk + " de " + $totOk + " archivos verificados.")
+try { Start-Process -FilePath (Join-Path $roots[0] 'steam.exe') -ErrorAction Stop } catch { Write-Host 'Abre Steam manualmente.' }
