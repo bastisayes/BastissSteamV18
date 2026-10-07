@@ -2,12 +2,6 @@
 $ErrorActionPreference='SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072
 Write-Host 'BastissSteam - Activador'
-$admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if(-not $admin){
-  Write-Host 'Solicitando permisos de administrador...'
-  try { Start-Process powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-Command','irm https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/activar.ps1 | iex') -Verb RunAs } catch { Write-Host 'Se necesitan permisos de administrador para continuar.' }
-  return
-}
 function Stop-SteamQ { for($i=0;$i -lt 3;$i++){ try { Get-Process steam,steamwebhelper,steamservice,gameoverlayui -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}; Start-Sleep -Milliseconds 800 } }
 Stop-SteamQ
 Write-Host 'Paso 1/3: buscando instalacion...'
