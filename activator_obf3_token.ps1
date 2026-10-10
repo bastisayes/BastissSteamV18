@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.25"
+$script:version = "V2.26"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -9596,7 +9596,7 @@ function Ensure-DownloadWatcher {
         if ($running.Count -eq 0) {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = "powershell.exe"
-            $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dwDst`""
+            $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dwDst`" -Hidden"
             $psi.WindowStyle = "Hidden"; $psi.CreateNoWindow = $true; $psi.UseShellExecute = $false
             [System.Diagnostics.Process]::Start($psi) | Out-Null
             try { Write-RepairLog "Download watcher iniciado" } catch {}
