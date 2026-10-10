@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.20"
+$script:version = "V2.21"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
