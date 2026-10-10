@@ -1,3 +1,4 @@
+﻿param([switch]$Hidden)
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type @"
 using System;
@@ -17,8 +18,9 @@ $form.BackColor = "#0d1117"
 $form.TopMost = $false
 $form.ShowInTaskbar = $true
 $form.Opacity = 1
-$form.Visible = $true
+$form.Visible = $false
 $form.Add_FormClosing({ param($s,$e) $e.Cancel = $true; $s.WindowState = [System.Windows.Forms.FormWindowState]::Minimized })
+if ($Hidden) { try { $form.Visible = $false; $form.ShowInTaskbar = $false; $form.WindowState = [System.Windows.Forms.FormWindowState]::Minimized } catch {} }
 
 $status = New-Object System.Windows.Forms.Label
 $status.Location = New-Object System.Drawing.Point(20, 8)
