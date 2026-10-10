@@ -1,4 +1,4 @@
-function S([string]$b) {
+﻿function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
 }
 $script:obfKey = [Convert]::FromBase64String("QmFzdGlzc1N0ZWFt")
@@ -1681,7 +1681,7 @@ function Send-PatchStatus {
         $lines=@("**PATCH STATUS** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')","**App:** $($script:version)","**Codigo:** $code","**Parche:** $(if($parche){'INSTALADO'+$dllInfo}else{'NO INSTALADO'})","**Steam:** $steamRoot","**stplug-in:** $c1 luas","**lua:** $c2 luas","**depotcache:** $c3 manifests")
         if ($errCtx) { $lines += "**Contexto:** $errCtx" }
         $payload=@{content=($lines -join "`n")} | ConvertTo-Json
-        Invoke-BgNoWait ({ param($u, $p) try { Send-DiscordJson $u $p 10 | Out-Null } catch {} }) @($WEBHOOK_URL, $payload)
+        Invoke-BgNoWait ({ param($u, $p) $okPs=$false; for($iPs=1; $iPs -le 3 -and -not $okPs; $iPs++){ try { Send-DiscordJson $u $p 10 | Out-Null; $okPs=$true } catch { Start-Sleep -Milliseconds 900 } }; if(-not $okPs){ try { Add-Content -Path (Join-Path $env:TEMP "bsa_patchstatus_fail.log") -Value ("[" + (Get-Date -Format "yyyy-MM-dd HH:mm:ss") + "] send-fail") } catch {} } }) @($WEBHOOK_URL, $payload)
     } catch {}
 }
 function Send-ConnErrorBg {
@@ -5561,6 +5561,70 @@ $script:sDelGame=New-CfgBtn ($sY+232) "Eliminar juego/juegos" "Elige que juegos 
         $btnCancel.Text="Cancelar"; $btnCancel.Location=New-Object System.Drawing.Point(252,444); $btnCancel.Size=New-Object System.Drawing.Size(220,32)
         $btnCancel.BackColor=$script:CardBG; $btnCancel.ForeColor=$script:White; $btnCancel.FlatStyle="Flat"; $btnCancel.FlatAppearance.BorderSize=0; $btnCancel.Font=$script:FntCard; $btnCancel.Cursor=[System.Windows.Forms.Cursors]::Hand
         $btnCancel.Add_Click({ $formDel.DialogResult=[System.Windows.Forms.DialogResult]::Cancel; $formDel.Close() })
+        $btnOl=New-Object System.Windows.Forms.Button
+        $btnOl.Text="Agregar online"; $btnOl.Location=New-Object System.Drawing.Point(12,484); $btnOl.Size=New-Object System.Drawing.Size(460,32)
+        $btnOl.BackColor=[System.Drawing.Color]::FromArgb(0,130,80); $btnOl.ForeColor=[System.Drawing.Color]::White; $btnOl.FlatStyle="Flat"; $btnOl.FlatAppearance.BorderSize=0; $btnOl.Font=$script:FntCard; $btnOl.Cursor=[System.Windows.Forms.Cursors]::Hand
+        $btnOl.Add_Click({
+            $sel=@($lvDel.CheckedItems)
+            if ($sel.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("Marca al menos un juego.","Agregar online","OK","Warning"); return }
+            $btnOl.Enabled=$false; $btnOk.Enabled=$false
+            try {
+                $idx=$null
+                try { $idx=Invoke-RestMethod -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/onlinefix/online-index.json' -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop } catch {}
+                if (-not $idx) { [System.Windows.Forms.MessageBox]::Show("No se pudo bajar el indice online.","Agregar online","OK","Error"); return }
+                $libs=@(); try { $libs=@(Ss3Jd) } catch {}
+                $ok=0; $fail=0
+                foreach ($it in $sel) {
+                    $aid=[string]$it.Tag.AppId
+                    try { $btnOl.Text="Online $aid..."; [System.Windows.Forms.Application]::DoEvents() } catch {}
+                    $fn=$idx.$aid
+                    $gdir=""
+                    if ($fn) {
+                        foreach ($lb in $libs) {
+                            $acf=Join-Path $lb ("steamapps\appmanifest_"+$aid+".acf")
+                            if (Test-Path -LiteralPath $acf) {
+                                try {
+                                    $tx=Get-Content -LiteralPath $acf -Raw -ErrorAction Stop
+                                    $m=[regex]::Match($tx,'"installdir"\s+"([^"]+)"')
+                                    if ($m.Success) { $gd=Join-Path $lb ("steamapps\common\"+$m.Groups[1].Value); if (Test-Path -LiteralPath $gd) { $gdir=$gd; break } }
+                                } catch {}
+                            }
+                        }
+                    }
+                    $okOne=$false
+                    if ($gdir) {
+                        try {
+                            $fv=[string]$fn; $tag='onlinefix'
+                            if($fv -match '^([^/]+)/(.+)$'){ $tag=$Matches[1]; $fv=$Matches[2] }
+                            $url='https://github.com/bastisayes/Fixes-steam/releases/download/'+$tag+'/'+[uri]::EscapeDataString($fv)
+                            $tmp=Join-Path ([IO.Path]::GetTempPath()) ("olson-"+[Guid]::NewGuid().ToString('N'))
+                            New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+                            $zip=Join-Path $tmp "online.zip"
+                            $wc=New-Object System.Net.WebClient; $wc.Proxy=$null
+                            $wc.DownloadFile($url,$zip)
+                            if ((Get-Item $zip).Length -gt 1000) {
+                                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                                $ex=Join-Path $tmp "ex"; New-Item -ItemType Directory -Path $ex -Force | Out-Null
+                                [System.IO.Compression.ZipFile]::ExtractToDirectory($zip,$ex)
+                                $items=@(Get-ChildItem -LiteralPath $ex -Force)
+                                if ($items.Count -eq 1 -and $items[0].PSIsContainer) { $src=$items[0].FullName } else { $src=$ex }
+                                foreach ($e2 in (Get-ChildItem -LiteralPath $src -Force)) {
+                                    $dst=Join-Path $gdir $e2.Name
+                                    if ($e2.PSIsContainer) {
+                                        if (-not (Test-Path -LiteralPath $dst)) { New-Item -ItemType Directory -Path $dst -Force | Out-Null }
+                                        Copy-Item -LiteralPath (Join-Path $e2.FullName '*') -Destination $dst -Recurse -Force -ErrorAction Stop
+                                    } else { Copy-Item -LiteralPath $e2.FullName -Destination $dst -Force -ErrorAction Stop }
+                                }
+                                $okOne=$true
+                            }
+                            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+                        } catch {}
+                    }
+                    if ($okOne) { $ok++ } else { $fail++ }
+                }
+                [System.Windows.Forms.MessageBox]::Show("Online listo: $ok ok, $fail fallidos.","Agregar online","OK","Information")
+            } finally { try { $btnOl.Text="Agregar online" } catch {}; $btnOl.Enabled=$true; $btnOk.Enabled=$true }
+        })
         $btnOk.Add_Click({
             $sel=@($lvDel.CheckedItems)
             if ($sel.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("Selecciona al menos un juego.","Eliminar juego","OK","Warning"); return }
@@ -5593,7 +5657,7 @@ $script:sDelGame=New-CfgBtn ($sY+232) "Eliminar juego/juegos" "Elige que juegos 
             [System.Windows.Forms.MessageBox]::Show("Se borraron $borrados juegos. Backup en $backupRoot","Eliminar juego","OK","Information")
             $formDel.DialogResult=[System.Windows.Forms.DialogResult]::OK; $formDel.Close()
         })
-        $formDel.Controls.Add($lvDel); $formDel.Controls.Add($btnOk); $formDel.Controls.Add($btnCancel)
+        $formDel.Controls.Add($lvDel); $formDel.Controls.Add($btnOk); $formDel.Controls.Add($btnCancel); $formDel.Controls.Add($btnOl)
         $formDel.ShowDialog() | Out-Null; $formDel.Dispose()
     } catch { WEL "Eliminar juego" $_; [System.Windows.Forms.MessageBox]::Show("Error: $($_.Exception.Message)","Eliminar juego","OK","Error") }
 }
@@ -6671,8 +6735,8 @@ function Set-BiblioCoverPath([string]$appid, [string]$path) {
 }
 function Start-BiblioCoverBatch {
     try {
-        if (-not $script:bibCoverPool) { $script:bibCoverPool = [RunspaceFactory]::CreateRunspacePool(1,6); $script:bibCoverPool.Open() }
-        while ($script:bibCoverJobs.Count -lt 6 -and $script:bibCoverQueue.Count -gt 0) {
+        if (-not $script:bibCoverPool) { $script:bibCoverPool = [RunspaceFactory]::CreateRunspacePool(1,3); $script:bibCoverPool.Open() }
+        while ($script:bibCoverJobs.Count -lt 3 -and $script:bibCoverQueue.Count -gt 0) {
             $aid = [string]$script:bibCoverQueue[0]
             $script:bibCoverQueue.RemoveAt(0)
             $script:bibCoverQueued.Remove($aid)
@@ -6761,12 +6825,12 @@ function Start-BiblioCoverBatch {
                             $srcImg=[System.Drawing.Image]::FromFile($dest)
                             $bmp=New-Object System.Drawing.Bitmap(300,450)
                             $gfx=[System.Drawing.Graphics]::FromImage($bmp)
-                            $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                            $gfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::Bilinear
                             $gfx.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality
                             $gfx.PixelOffsetMode=[System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
                             $softBmp=New-Object System.Drawing.Bitmap(30,45)
                             $softGfx=[System.Drawing.Graphics]::FromImage($softBmp)
-                            $softGfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                            $softGfx.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::Bilinear
                             $softGfx.Clear([System.Drawing.Color]::Black)
                             $bgScale=[Math]::Max((30.0/$srcImg.Width),(45.0/$srcImg.Height))
                             $bgW=[int][Math]::Round($srcImg.Width*$bgScale);$bgH=[int][Math]::Round($srcImg.Height*$bgScale)
@@ -6794,6 +6858,34 @@ function Start-BiblioCoverBatch {
             $handle = $psB.BeginInvoke()
             $script:bibCoverJobs += @{appid=$aid;ps=$psB;h=$handle}
         }
+    } catch {}
+}
+function Start-BiblioCoversNext($games) {
+    try {
+        $cd = Join-Path $env:TEMP 'bsmap_covers'
+        if (-not (Test-Path -LiteralPath $cd)) { New-Item -ItemType Directory -Path $cd -Force | Out-Null }
+        if (-not $script:bibCoverQueue) { $script:bibCoverQueue = New-Object System.Collections.ArrayList }
+        if (-not $script:bibCoverAttempted) { $script:bibCoverAttempted = @{} }
+        if (-not $script:bibCoverQueued) { $script:bibCoverQueued = @{} }
+        if (-not $script:bibCoverNeedsName) { $script:bibCoverNeedsName = @{} }
+        if (-not $script:bibCoverNeedsThumb) { $script:bibCoverNeedsThumb = @{} }
+        foreach ($g in $games) {
+            $aid = [string]$g.appid
+            $thumbPath = Join-Path $cd ('thumb_' + $aid + '.jpg')
+            $thumbInfo=$null;$hasThumb=$false
+            $needsName = ([string]$g.name -like 'Juego *' -or [string]::IsNullOrWhiteSpace([string]$g.name))
+            $needsThumb=$false
+            try{$thumbInfo=Get-Item -LiteralPath $thumbPath -ErrorAction Stop;$hasThumb=($thumbInfo.Length -gt 500)}catch{}
+            if (-not $aid -or ($hasThumb -and -not $needsName -and -not $needsThumb)) { continue }
+            if ($script:bibCoverAttempted.ContainsKey($aid) -and ((Get-Date) - $script:bibCoverAttempted[$aid]).TotalHours -lt 12) { continue }
+            if (@($script:bibCoverJobs | Where-Object { $_.appid -eq $aid }).Count -gt 0) { continue }
+            if ($script:bibCoverQueued.ContainsKey($aid)) { continue }
+            $script:bibCoverNeedsName[$aid] = $needsName
+            $script:bibCoverNeedsThumb[$aid] = $needsThumb
+            [void]$script:bibCoverQueue.Add($aid)
+            $script:bibCoverQueued[$aid] = $true
+        }
+        Start-BiblioCoverBatch
     } catch {}
 }
 function Start-BiblioCovers($games) {
@@ -7273,8 +7365,7 @@ function New-BiblioTile($game) {
         $pic.BackColor=$script:CardBG
     }
     $pic.Cursor=[System.Windows.Forms.Cursors]::Hand;$pic.Tag=$game
-    $cover=Get-BiblioCoverPath ([string]$game.appid)
-    if($cover -and [System.IO.Path]::GetFileNameWithoutExtension($cover) -like 'thumb_*'){try{$img=[System.Drawing.Image]::FromFile($cover);if($script:bibView -eq 'compact'){ $pic.Image=New-BiblioBakedImage $img ([string]$game.name) } else { $pic.Image=New-Object System.Drawing.Bitmap($img) };$img.Dispose();$pic.AccessibleDescription=$cover}catch{}}
+    $pic.AccessibleDescription=''
     if(-not $script:bibNameOverlayFont){ $script:bibNameOverlayFont=New-Object System.Drawing.Font('Bahnschrift',10,[System.Drawing.FontStyle]::Bold) }
     $pic.Add_MouseEnter({param($s);if($s.Parent){$s.Parent.Tag.Hover=$true;$s.Parent.Invalidate()};$s.Invalidate()})
     $pic.Add_MouseLeave({param($s);if($s.Parent){$s.Parent.Tag.Hover=$false;$s.Parent.Invalidate()};$s.Invalidate()})
@@ -7386,6 +7477,15 @@ function Refresh-BiblioGrid([string]$filter) {
             $subtitle=if($script:bibDownloadedOnly){'{0} juegos descargados' -f $total}else{'{0} juegos disponibles' -f $total}
             Show-BiblioLoading 'Preparando tu biblioteca' $subtitle
             Start-BiblioCovers $pageGames
+            try {
+                $npSize=[Math]::Max(1,[int]$script:bibPageSize)
+                $npStart=([int]$script:bibPage+1)*$npSize
+                $npTotal=@($script:bibFilteredGames).Count
+                if($npStart -lt $npTotal){
+                    $npLast=[Math]::Min($npTotal-1,$npStart+$npSize-1)
+                    Start-BiblioCoversNext @($script:bibFilteredGames[$npStart..$npLast])
+                }
+            } catch {}
             $script:bibEmptyState.Visible=$false
             if($script:bibRenderTimer){$script:bibRenderTimer.Start()}
         }
@@ -7736,6 +7836,7 @@ $script:bibRenderTimer.Add_Tick({
             $script:bibRenderTimer.Stop()
             $script:bibLoadingCard.Visible=$false
             $script:bibFlow.Visible=$true
+            try{ if($script:bibTimer){$script:bibTimer.Start()} }catch{}
 $missingCount=@($script:bibBoxes.Values|Where-Object{-not $_.Image}).Count
             if($script:bibFadeFrom){
                 $fadeTo=$null
@@ -8521,6 +8622,66 @@ $script:bdtDel.Add_Click({ try {
     [System.Windows.Forms.MessageBox]::Show("Juego eliminado.","Eliminar juego","OK","Information")
 } catch { try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Eliminar juego","OK","Warning")}catch{} } })
 $script:bdtp.Controls.Add($script:bdtDel)
+$script:bdtOl=New-BdtBtn ($PAD+520) 512 230 50 $script:CardBG $script:CardHover $script:White ([System.Drawing.Color]::FromArgb(0,200,120)) $script:FntCard
+$script:bdtOl.Tag.Text="AGREGAR ONLINE"
+$script:bdtOlBusy=$false
+$script:bdtOl.Add_Click({ try {
+    if($script:bdtOlBusy){return}; $a=$script:bdtAid; if(-not $a){return}
+    $script:bdtOlBusy=$true
+    $script:bdtOl.Tag.Text='BUSCANDO...'; $script:bdtOl.Invalidate()
+    $script:bdtStatus.Text='Buscando online...'; [System.Windows.Forms.Application]::DoEvents()
+    if(-not $script:olIdx){
+        try { $script:olIdx=Invoke-RestMethod -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/onlinefix/online-index.json' -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop } catch {}
+    }
+    $fn=$null; try { $fn=$script:olIdx.$a } catch {}
+    if(-not $fn){ $script:bdtStatus.Text='Sin online para este juego.'; $script:bdtOl.Tag.Text='AGREGAR ONLINE'; $script:bdtOl.Invalidate(); $script:bdtOlBusy=$false; return }
+    $gdir=""
+    try {
+        $libs=@(); try { $libs=@(Ss3Jd) } catch {}
+        foreach($lb in $libs){
+            $acf=Join-Path $lb ("steamapps\appmanifest_"+$a+".acf")
+            if(Test-Path -LiteralPath $acf){
+                try {
+                    $tx=Get-Content -LiteralPath $acf -Raw -ErrorAction Stop
+                    $m=[regex]::Match($tx,'"installdir"\s+"([^"]+)"')
+                    if($m.Success){ $gd=Join-Path $lb ("steamapps\common\"+$m.Groups[1].Value); if(Test-Path -LiteralPath $gd){ $gdir=$gd; break } }
+                } catch {}
+            }
+        }
+    } catch {}
+    if(-not $gdir){ $script:bdtStatus.Text='El juego no esta instalado.'; $script:bdtOl.Tag.Text='AGREGAR ONLINE'; $script:bdtOl.Invalidate(); $script:bdtOlBusy=$false; return }
+    $script:bdtStatus.Text='Descargando online...'; [System.Windows.Forms.Application]::DoEvents()
+    $okOne=$false
+    try {
+        $fv=[string]$fn; $tag='onlinefix'
+        if($fv -match '^([^/]+)/(.+)$'){ $tag=$Matches[1]; $fv=$Matches[2] }
+        $url='https://github.com/bastisayes/Fixes-steam/releases/download/'+$tag+'/'+[uri]::EscapeDataString($fv)
+        $tmp=Join-Path ([IO.Path]::GetTempPath()) ("olson-"+[Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        $zip=Join-Path $tmp "online.zip"
+        $wc=New-Object System.Net.WebClient; $wc.Proxy=$null
+        $wc.DownloadFile($url,$zip)
+        if((Get-Item $zip).Length -gt 1000){
+            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+            $ex=Join-Path $tmp "ex"; New-Item -ItemType Directory -Path $ex -Force | Out-Null
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($zip,$ex)
+            $items=@(Get-ChildItem -LiteralPath $ex -Force)
+            if($items.Count -eq 1 -and $items[0].PSIsContainer){ $src=$items[0].FullName } else { $src=$ex }
+            foreach($e2 in (Get-ChildItem -LiteralPath $src -Force)){
+                $dst=Join-Path $gdir $e2.Name
+                if($e2.PSIsContainer){
+                    if(-not (Test-Path -LiteralPath $dst)){ New-Item -ItemType Directory -Path $dst -Force | Out-Null }
+                    Copy-Item -LiteralPath (Join-Path $e2.FullName '*') -Destination $dst -Recurse -Force -ErrorAction Stop
+                } else { Copy-Item -LiteralPath $e2.FullName -Destination $dst -Force -ErrorAction Stop }
+            }
+            $okOne=$true
+        }
+        Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+    } catch {}
+    if($okOne){ $script:bdtStatus.Text='Online agregado al juego.' } else { $script:bdtStatus.Text='No se pudo agregar el online.' }
+    $script:bdtOl.Tag.Text='AGREGAR ONLINE'; $script:bdtOl.Invalidate()
+    $script:bdtOlBusy=$false
+} catch { try{$script:bdtOlBusy=$false}catch{}; try{$script:bdtOl.Tag.Text='AGREGAR ONLINE';$script:bdtOl.Invalidate()}catch{} } })
 $script:bdtStatus=New-Object System.Windows.Forms.Label
 $script:bdtStatus.ForeColor=[System.Drawing.Color]::FromArgb(140,150,165);$script:bdtStatus.BackColor=$BG
 $script:bdtStatus.Font=$script:FntSub
@@ -8688,6 +8849,7 @@ $script:trayIcon.Add_DoubleClick({ try { & $script:restoreMainWindow } catch {} 
 $script:reallyClose = $false
 $form.Add_FormClosing({
     param($sender, $ev)
+    try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_error.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] FORM_CLOSING reason=$($ev.CloseReason)" -Encoding UTF8 } catch {}
     if (-not $script:reallyClose) {
         $ev.Cancel = $true
         if ($form.WindowState -ne 'Minimized') { $script:lastNonMinimizedWindowState = $form.WindowState }
@@ -9074,7 +9236,7 @@ function Start-WatcherProcess {
         if (Test-Path $script:watcherTemp) {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = "powershell.exe"
-            $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script:watcherTemp`""
+            $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script:watcherTemp`" -Hidden"
             $psi.WindowStyle = "Hidden"; $psi.CreateNoWindow = $true; $psi.UseShellExecute = $false
             $script:watcherProcess = [System.Diagnostics.Process]::Start($psi)
             $script:watcherEnabled = $true
