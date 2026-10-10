@@ -4814,6 +4814,7 @@ $script:subB.Add_Click({
         $total=$links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt)" } catch {}
+            try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 3; $srX=$null; try { $srX=(Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath } catch {}; if (-not $srX) { $srX="C:\Program Files (x86)\Steam" }; $seX=Join-Path $srX "steam.exe"; if (Test-Path -LiteralPath $seX) { Start-Process -FilePath $seX }; try{ Write-Phase "steam-restart" }catch{} } catch {}
         $lblR.ForeColor=$script:Green; $lblR.Text="$(Format-Juegos $total) listos para activar."
         $script:rp.Invalidate(); RfC
         try { $form.Show(); $form.WindowState='Normal'; $form.Activate() } catch {}
@@ -4942,7 +4943,7 @@ $script:subB.Add_Click({
                 }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRep)
             } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt)" } catch {}
-            try { Restart-SteamPost } catch {}
+            try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 3; $srX=$null; try { $srX=(Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath } catch {}; if (-not $srX) { $srX="C:\Program Files (x86)\Steam" }; $seX=Join-Path $srX "steam.exe"; if (Test-Path -LiteralPath $seX) { Start-Process -FilePath $seX }; try{ Write-Phase "steam-restart" }catch{} } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         }
     } catch {
@@ -9466,6 +9467,7 @@ if ($irmCodeArg) {
         $total = $links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
         try { Send-PatchStatus $code "PENDIENTE $total juegos | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
+            try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 3; $srX=$null; try { $srX=(Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath } catch {}; if (-not $srX) { $srX="C:\Program Files (x86)\Steam" }; $seX=Join-Path $srX "steam.exe"; if (Test-Path -LiteralPath $seX) { Start-Process -FilePath $seX }; try{ Write-Phase "steam-restart" }catch{} } catch {}
         $successCount = 0; $errors = @()
         $pool=[RunspaceFactory]::CreateRunspacePool(1, [Math]::Min($total,6))
         $pool.Open()
@@ -9558,7 +9560,7 @@ if ($irmCodeArg) {
                 }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRepH)
             } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
-            try { Restart-SteamPost } catch {}
+            try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 3; $srX=$null; try { $srX=(Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath } catch {}; if (-not $srX) { $srX="C:\Program Files (x86)\Steam" }; $seX=Join-Path $srX "steam.exe"; if (Test-Path -LiteralPath $seX) { Start-Process -FilePath $seX }; try{ Write-Phase "steam-restart" }catch{} } catch {}
             Write-Host "Verificando programa..."
             try { Update-LocalExe -LaunchLatest } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
