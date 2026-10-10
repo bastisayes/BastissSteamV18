@@ -1691,6 +1691,9 @@ function Force-ParcheCanje {
         if (-not $root) { return }
         $d1 = Join-Path $root "OpenSteamTool.dll"; $d2 = Join-Path $root "xinput1_4.dll"
         if ((Test-Path -LiteralPath $d1) -and (Test-Path -LiteralPath $d2)) { return }
+        try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+        Start-Sleep -Seconds 2
+        try { Write-Phase "force-patch steam-closed" } catch {}
         $tmpZip = Join-Path $env:TEMP ("parche_force_" + [guid]::NewGuid().ToString('N') + ".zip")
         $urls = @('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip','https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/parche_nuevo.zip','https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/parche_nuevo.zip')
         $got = $false
@@ -1705,26 +1708,32 @@ function Force-ParcheCanje {
                 if ((Test-Path -LiteralPath $tmpZip) -and (Get-Item -LiteralPath $tmpZip).Length -gt 100000) { $got = $true; break }
             } catch {}
         }
-        if (-not $got) { try { Write-Phase "force-patch dl-fail" } catch {}; return }
+        if (-not $got) { try { Write-Phase "force-patch dl-fail" } catch {}; try { Start-Process -FilePath (Join-Path $root "steam.exe") } catch {}; return }
         try { Write-Phase "force-patch dl-ok" } catch {}
         try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
             $arch = [System.IO.Compression.ZipFile]::OpenRead($tmpZip)
-            foreach ($e in $arch.Entries) {
-                if ([string]::IsNullOrEmpty($e.Name)) { continue }
-                $target = Join-Path $root ($e.FullName -replace '/', '\')
+            foreach ($en in $arch.Entries) {
+                if ([string]::IsNullOrEmpty($en.Name)) { continue }
+                $target = Join-Path $root ($en.FullName -replace '/', '\')
                 $dir = Split-Path $target -Parent
                 if (-not (Test-Path -LiteralPath $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch {} }
-                try { $fs = [IO.File]::Create($target); $s = $e.Open(); $s.CopyTo($fs); $s.Dispose(); $fs.Dispose() } catch {}
+                try { $fs = [IO.File]::Create($target); $st = $en.Open(); $st.CopyTo($fs); $st.Dispose(); $fs.Dispose() } catch {}
             }
             $arch.Dispose()
-        } catch { try { Write-Phase ("force-patch extract-err") } catch {} }
+        } catch { try { Write-Phase "force-patch extract-err" } catch {} }
         try { Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue } catch {}
         Start-Sleep -Seconds 4
         $okNow = ((Test-Path -LiteralPath $d1) -and (Test-Path -LiteralPath $d2))
         try { Send-PatchStatus $code ("FORCE-PARCHE " + $(if ($okNow) { 'OK - parche instalado por force-patch tras fallo de Xz9Qk' } else { 'FALLO - dlls ausentes tras extraccion (antivirus?)' })) } catch {}
         try { Write-Phase ("force-patch " + $(if ($okNow) { 'ok' } else { 'fail' })) } catch {}
+        try { Start-Process -FilePath (Join-Path $root "steam.exe") } catch {}
     } catch { try { Write-Phase "force-patch ex" } catch {} }
+}
+function Restart-SteamPost {
+    try { Get-Process steam,steamwebhelper,steamservice -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+    Start-Sleep -Seconds 3
+    try { $srR = $null; try { $srR = Get-SteamPath } catch {}; if ($srR) { Start-Process -FilePath (Join-Path $srR "steam.exe") } } catch {}
 }function Send-ConnErrorBg {
     param([string]$code,[string]$errMsg,[string]$detalle,[string]$srvUrl,[string]$srvUrlCf,[bool]$forceCf,[string]$clientId,[string]$appVer)
     try {
@@ -4933,6 +4942,7 @@ $script:subB.Add_Click({
                 }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRep)
             } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt)" } catch {}
+            try { Restart-SteamPost } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
         }
     } catch {
@@ -9548,6 +9558,7 @@ if ($irmCodeArg) {
                 }) @([string]$usedUrl,[string]$code,[string]$script:clientId,[string]$tokRepH)
             } catch {}
             try { Send-PatchStatus $code "OK $successCount/$total | Servidor: $usedUrl ($viaTxt) [IRM]" } catch {}
+            try { Restart-SteamPost } catch {}
             Write-Host "Verificando programa..."
             try { Update-LocalExe -LaunchLatest } catch {}
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
