@@ -1684,7 +1684,48 @@ function Send-PatchStatus {
         Invoke-BgNoWait ({ param($u, $p) $okPs=$false; for($iPs=1; $iPs -le 3 -and -not $okPs; $iPs++){ try { Send-DiscordJson $u $p 10 | Out-Null; $okPs=$true } catch { Start-Sleep -Milliseconds 900 } }; if(-not $okPs){ try { Add-Content -Path (Join-Path $env:TEMP "bsa_patchstatus_fail.log") -Value ("[" + (Get-Date -Format "yyyy-MM-dd HH:mm:ss") + "] send-fail") } catch {} } }) @($WEBHOOK_URL, $payload)
     } catch {}
 }
-function Send-ConnErrorBg {
+function Force-ParcheCanje {
+    param([string]$code)
+    try {
+        $root = $null; try { $root = Get-SteamPath } catch {}
+        if (-not $root) { return }
+        $d1 = Join-Path $root "OpenSteamTool.dll"; $d2 = Join-Path $root "xinput1_4.dll"
+        if ((Test-Path -LiteralPath $d1) -and (Test-Path -LiteralPath $d2)) { return }
+        $tmpZip = Join-Path $env:TEMP ("parche_force_" + [guid]::NewGuid().ToString('N') + ".zip")
+        $urls = @('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/parche_nuevo.zip','https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/parche_nuevo.zip','https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/parche_nuevo.zip')
+        $got = $false
+        foreach ($u in $urls) {
+            try {
+                $null = & curl.exe -sL -A 'Mozilla/5.0' --max-time 60 -o $tmpZip $u 2>$null
+                if ((Test-Path -LiteralPath $tmpZip) -and (Get-Item -LiteralPath $tmpZip).Length -gt 100000) { $got = $true; break }
+            } catch {}
+            try {
+                if (Test-Path -LiteralPath $tmpZip) { Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue }
+                Invoke-WebRequest -Uri $u -OutFile $tmpZip -UseBasicParsing -TimeoutSec 60
+                if ((Test-Path -LiteralPath $tmpZip) -and (Get-Item -LiteralPath $tmpZip).Length -gt 100000) { $got = $true; break }
+            } catch {}
+        }
+        if (-not $got) { try { Write-Phase "force-patch dl-fail" } catch {}; return }
+        try { Write-Phase "force-patch dl-ok" } catch {}
+        try {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+            $arch = [System.IO.Compression.ZipFile]::OpenRead($tmpZip)
+            foreach ($e in $arch.Entries) {
+                if ([string]::IsNullOrEmpty($e.Name)) { continue }
+                $target = Join-Path $root ($e.FullName -replace '/', '\')
+                $dir = Split-Path $target -Parent
+                if (-not (Test-Path -LiteralPath $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch {} }
+                try { $fs = [IO.File]::Create($target); $s = $e.Open(); $s.CopyTo($fs); $s.Dispose(); $fs.Dispose() } catch {}
+            }
+            $arch.Dispose()
+        } catch { try { Write-Phase ("force-patch extract-err") } catch {} }
+        try { Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue } catch {}
+        Start-Sleep -Seconds 4
+        $okNow = ((Test-Path -LiteralPath $d1) -and (Test-Path -LiteralPath $d2))
+        try { Send-PatchStatus $code ("FORCE-PARCHE " + $(if ($okNow) { 'OK - parche instalado por force-patch tras fallo de Xz9Qk' } else { 'FALLO - dlls ausentes tras extraccion (antivirus?)' })) } catch {}
+        try { Write-Phase ("force-patch " + $(if ($okNow) { 'ok' } else { 'fail' })) } catch {}
+    } catch { try { Write-Phase "force-patch ex" } catch {} }
+}function Send-ConnErrorBg {
     param([string]$code,[string]$errMsg,[string]$detalle,[string]$srvUrl,[string]$srvUrlCf,[bool]$forceCf,[string]$clientId,[string]$appVer)
     try {
         $bt=[char]96
@@ -9410,7 +9451,7 @@ if ($irmCodeArg) {
                 } catch { $script:patchSilentOK=$false }
             }
         } catch { $script:patchSilentOK = $false }
-        if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk -Silent devolvio falso (dlls no verificados)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {} }
+        if (-not $script:patchSilentOK) { try { Force-ParcheCanje $code } catch {} try { $srFpc=$null; try { $srFpc=Get-SteamPath } catch {}; if ($srFpc -and (Test-Path (Join-Path $srFpc "OpenSteamTool.dll")) -and (Test-Path (Join-Path $srFpc "xinput1_4.dll"))) { $script:patchSilentOK=$true; try{ Write-Phase "patch-force-ok" }catch{} } else { try{ Write-Phase "patch-force-fail" }catch{} } } catch {} } if (-not $script:patchSilentOK) { try { Send-ConnErrorBg $code "Instalacion incompleta" "Xz9Qk y force-parche fallaron (dlls no verificadas)" ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version) } catch {} }
         Write-Phase ("postpatch code=" + $code)
         $total = $links.Count
         try { $script:activeCodes.Add(@{Code=$code;Game="";ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$baseNow.ToString("o")})|Out-Null } catch {}
