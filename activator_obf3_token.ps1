@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.28"
+$script:version = "V2.29"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2184,6 +2184,7 @@ function Remove-FileHard {
 
 function Rm9xExp {
     param([switch]$NoNetworkTime)
+    return;
     $timers = At5Vc; $remaining = @()
     $expired = @()
     $now, $isNet = Get-Now -LocalOnly:$NoNetworkTime
@@ -2312,6 +2313,7 @@ function Ad4Lo {
     } catch {}
 }
 function Rp6Mi {
+    try { [System.IO.File]::WriteAllText($PENDING_FILE, '[]', $script:utf8NoBom) } catch {}; return;
     $q = @(Pd9Uj)
     if ($q.Count -eq 0) { return }
     $remainingQ = @()
@@ -2361,6 +2363,7 @@ function Rp6Mi {
 
 
 function Check-RemoteWipe {
+    return;
     try {
         $cid=$script:clientId; if (-not $cid) { return }
         $body=@{client_id=$cid} | ConvertTo-Json
@@ -3351,7 +3354,6 @@ function ScD {
                 $this.Stop()
                 $script:cdX = $null
                 try { Rm9xExp | Out-Null } catch {}
-                [System.Windows.Forms.MessageBox]::Show("El tiempo para $g ha expirado.", (S("VGllbXBvIEV4cGlyYWRv")), "OK", "Information")
             }
         } catch {}
     })
