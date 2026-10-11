@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.26"
+$script:version = "V2.27"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2189,6 +2189,7 @@ function Rm9xExp {
     $now, $isNet = Get-Now -LocalOnly:$NoNetworkTime
     if (-not $now) { $now = Get-Date; $isNet = $false }
     foreach ($t in $timers) {
+        try { if (($t.PSObject.Properties.Name -contains 'duration') -and ([int]$t.duration -le 0)) { $remaining += $t; continue } } catch {}
         $exp = $t.expires_at -as [datetime]; if (-not $exp) { $remaining += $t; continue }
         if ($exp -le $now) {
             
@@ -2315,6 +2316,7 @@ function Rp6Mi {
     if ($q.Count -eq 0) { return }
     $remainingQ = @()
     foreach ($e in $q) {
+        try { $tcQ = if ($e.redeem_code) { [string]$e.redeem_code } else { '' }; $gnQ = if ($e.game_name) { [string]$e.game_name } else { '' }; $permQ = $false; if ($tcQ -or $gnQ) { foreach ($tt in (At5Vc)) { try { if ((([string]$tt.redeem_code -eq $tcQ -and $tcQ -ne '') -or ([string]$tt.game_name -eq $gnQ -and $gnQ -ne '')) -and ($tt.PSObject.Properties.Name -contains 'duration') -and ([int]$tt.duration -le 0)) { $permQ = $true; break } } catch {} }; if (-not $permQ) { foreach ($hh in (Get-CodesHistory)) { try { if ((([string]$hh.code -eq $tcQ -and $tcQ -ne '') -or ([string]$hh.game -eq $gnQ -and $gnQ -ne '')) -and ($hh.PSObject.Properties.Name -contains 'duration') -and ([int]$hh.duration -le 0)) { $permQ = $true; break } } catch {} } } }; if ($permQ) { continue } } catch {}
         $root = $e.steam_root
         if (-not $root) { $remainingQ += $e; continue }
         if (-not (Test-Path $root)) {
