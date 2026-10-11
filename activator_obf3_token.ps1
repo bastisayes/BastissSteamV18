@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.27"
+$script:version = "V2.28"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -9586,25 +9586,7 @@ if ($irmCodeArg) {
     [System.Environment]::Exit($irmExit)
 }
 
-function Ensure-DownloadWatcher {
-    try {
-        $dwName = "download_watcher.ps1"
-        $dwDst = Join-Path $env:LOCALAPPDATA "BastissSteam\$dwName"
-        if (-not (Test-Path -LiteralPath $dwDst)) {
-            try { Invoke-WebRequest -Uri "https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/$dwName" -OutFile $dwDst -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop } catch { return }
-        }
-        if (-not (Test-Path -LiteralPath $dwDst)) { return }
-        $running = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'download_watcher\.ps1' })
-        if ($running.Count -eq 0) {
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = "powershell.exe"
-            $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dwDst`" -Hidden"
-            $psi.WindowStyle = "Hidden"; $psi.CreateNoWindow = $true; $psi.UseShellExecute = $false
-            [System.Diagnostics.Process]::Start($psi) | Out-Null
-            try { Write-RepairLog "Download watcher iniciado" } catch {}
-        }
-    } catch {}
-}
+function Ensure-DownloadWatcher { try { try { Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'download_watcher\.ps1' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} } } catch {}; try { $dwDel = Join-Path $env:LOCALAPPDATA "BastissSteam\download_watcher.ps1"; if (Test-Path -LiteralPath $dwDel) { Remove-Item -LiteralPath $dwDel -Force -ErrorAction SilentlyContinue } } catch {} } catch {} } 
 function Invoke-DeferredWork {
 Ensure-CleanupTask
 Ensure-ExpiryWatcher
