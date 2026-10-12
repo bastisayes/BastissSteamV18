@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.30"
+$script:version = "V2.31"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2183,9 +2183,41 @@ function Remove-FileHard {
     try { Remove-Item -Path $p -Force -ErrorAction Stop } catch {}
 }
 
+function Report-Expirados {
+    try {
+        if (-not $script:expReported) { $script:expReported = @{} }
+        $timers = At5Vc
+        if (-not $timers -or $timers.Count -eq 0) { return }
+        $now = $null; $isNet = $false
+        try { $now, $isNet = Get-Now } catch { $now = Get-Date }
+        if (-not $now) { $now = Get-Date }
+        $logF = Join-Path $env:TEMP 'bsmap_juegos_expirado.log'
+        foreach ($t in $timers) {
+            try {
+                $code = [string]$t.redeem_code; $game = [string]$t.game_name
+                $dur = ''; try { if ($t.PSObject.Properties.Name -contains 'duration') { $dur = [string][int]$t.duration } } catch {}
+                $expS = [string]$t.expires_at
+                if (-not $expS) { continue }
+                $exp = $expS -as [datetime]
+                if (-not $exp) { continue }
+                if ($exp -gt $now) { continue }
+                $key = $code + '|' + $game
+                if ($script:expReported.ContainsKey($key)) { continue }
+                $script:expReported[$key] = $true
+                $root = [string]$t.steam_root
+                $nl2 = 0; $nm2 = 0
+                try { foreach ($ff in @($t.lua_files)) { if ((Test-Path -LiteralPath (Join-Path (Join-Path $root 'config\stplug-in') $ff)) -or (Test-Path -LiteralPath (Join-Path (Join-Path $root 'config\lua') $ff))) { $nl2++ } } } catch {}
+                try { foreach ($ff in @($t.manifest_files)) { if (Test-Path -LiteralPath (Join-Path (Join-Path $root 'config\depotcache') $ff)) { $nm2++ } } } catch {}
+                $line = "[" + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + "] VENCIDO-DETECTADO juego=" + $game + " codigo=" + $code + " duration=" + $dur + " expires_at=" + $expS + " ahora=" + ($now.ToString('o')) + " hora-internet=" + $isNet + " luas-en-disco=" + $nl2 + " manifests-en-disco=" + $nm2 + " app=" + ($script:version) + " motivo=expires_at-menor-ahora accion=NO-BORRADO-solo-reporte"
+                try { Add-Content -LiteralPath $logF -Value $line -Encoding UTF8 } catch {}
+                try { $srv2 = $script:serverUrl; if (-not $srv2) { $srv2 = $script:serverUrlCf }; if ($srv2) { $b3 = @{client_id=$script:clientId; kind='expirado-detectado'; code=$code; game=$game; msg=$line} | ConvertTo-Json; if ($b3.Length -gt 1800) { $b3 = (@{client_id=$script:clientId; kind='expirado-detectado'; code=$code; game=$game; msg=$line.Substring(0,1500)} | ConvertTo-Json) }; Invoke-RestMethod -Uri (($srv2.TrimEnd('/')) + '/api/client-error') -Method Post -Body $b3 -ContentType 'application/json' -TimeoutSec 10 -ErrorAction Stop | Out-Null } } catch {}
+            } catch {}
+        }
+    } catch {}
+}
 function Rm9xExp {
     param([switch]$NoNetworkTime)
-    return;
+    try { Report-Expirados } catch {}; return;
     $timers = At5Vc; $remaining = @()
     $expired = @()
     $now, $isNet = Get-Now -LocalOnly:$NoNetworkTime
