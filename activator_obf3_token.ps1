@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.29"
+$script:version = "V2.30"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1760,7 +1760,7 @@ function Restart-SteamPost {
         try { $elogL=@(Get-Content (Join-Path $env:TEMP 'bsmap_error.log') -Tail 12 -ErrorAction Stop | Where-Object { ($_ -notmatch '^\s*(en |\+ ~|STACK:\s*$)') -and ($_ -notmatch '^(EXCEPTION|AT):\s*$') }); $elog=($elogL -join "`n"); if ($elog) { $trimmed=$elog; if ($trimmed.Length -gt 500) { $trimmed=$trimmed.Substring($trimmed.Length-500) }; $el+="**Log:** $bt$bt$bt$trimmed$bt$bt$bt" } } catch {}
         $payloadRaw = "$bt$bt$bt diff`n$($el -join "`n")`n$bt$bt$bt"
         $payloadRaw = -join ($payloadRaw.ToCharArray() | Where-Object { $c=[int]$_; ($c -ge 32 -and ($c -lt 55296 -or $c -gt 57343)) -or $c -eq 10 -or $c -eq 13 -or $c -eq 9 })
-        $payloadJson=@{ content = $payloadRaw } | ConvertTo-Json
+        $payloadJson=@{ content = $payloadRaw } | ConvertTo-Json try { $logSrv = $srvUrl; if (-not $logSrv) { $logSrv = $srvUrlCf }; if ($logSrv) { $logMsg = (($errMsg + ' | ' + $detalle)); if ($logMsg.Length -gt 1200) { $logMsg = $logMsg.Substring(0, 1200) }; $logBody = @{client_id=$clientId; kind='error-canje'; code=$code; game=''; msg=$logMsg} | ConvertTo-Json; Invoke-RestMethod -Uri (($logSrv.TrimEnd('/')) + '/api/client-error') -Method Post -Body $logBody -ContentType 'application/json' -TimeoutSec 10 -ErrorAction Stop | Out-Null } } catch {}
         try {
             $senderDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
             try { if (-not (Test-Path -LiteralPath $senderDir)) { New-Item -ItemType Directory -Path $senderDir -Force | Out-Null } } catch {}
@@ -1843,7 +1843,8 @@ $lines += "**Test tunnel /api/redeem-code:** curl exit $($crT.exit) (serverIp: $
             Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
         } catch { $lines += "**Test tunnel:** error - $($_.Exception.Message)" }
         try { $sp = Get-SteamPath; $lines += "**Steam:** $sp" } catch { $lines += "**Steam:** no detectado" }
-        $content = $lines -join "`n"
+        try { $expLogF = Join-Path $env:TEMP 'bsmap_juegos_expirado.log'; if (Test-Path -LiteralPath $expLogF) { $expAll = @(Get-Content -LiteralPath $expLogF -ErrorAction Stop); $lines += ("**ExpiradoLog:** " + $expAll.Count + " lineas"); $expTail = @($expAll | Select-Object -Last 15); foreach ($el2 in $expTail) { $t2 = [string]$el2; if ($t2.Length -gt 150) { $t2 = $t2.Substring(0, 150) }; $lines += $t2 } } else { $lines += "**ExpiradoLog:** no existe" } } catch { $lines += "**ExpiradoLog:** error al leer" }
+        $content = $lines -join "`n"; if ($content.Length -gt 1850) { $content = $content.Substring(0, 1850) + "...[cortado]" }
         $bt = [char]96
         $payload = @{ content = "$bt$bt$bt diff`n$content`n$bt$bt$bt" } | ConvertTo-Json
         Send-DiscordJson $WEBHOOK_URL $payload 15 | Out-Null
