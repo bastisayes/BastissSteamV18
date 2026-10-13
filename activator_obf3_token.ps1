@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.32"
+$script:version = "V2.47"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2918,11 +2918,11 @@ function Download-FixArchive {
     $ProgressPreference='SilentlyContinue'
     for($attempt=1;$attempt -le 3;$attempt++){
         try {
-            Set-BibRepairProgress "Buscando reparacion..."
+            Set-BibRepairProgress "Descargando el arreglo, puede tardar unos minutos..."
             Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
             $requestUrl=$url
             if($attempt -eq 2 -and $requestUrl -notmatch '[?]'){ $requestUrl+='?download=1' }
-            Invoke-WebRequest -Uri $requestUrl -OutFile $part -UseBasicParsing -TimeoutSec 45 -MaximumRedirection 8 -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) BastissSteam'} -ErrorAction Stop
+            Invoke-WebRequest -Uri $requestUrl -OutFile $part -UseBasicParsing -TimeoutSec 600 -MaximumRedirection 8 -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) BastissSteam'} -ErrorAction Stop
             if(-not(Test-Path -LiteralPath $part) -or (Get-Item -LiteralPath $part).Length -lt 64){ throw 'El archivo descargado esta vacio o incompleto' }
             Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
             $archive=[System.IO.Compression.ZipFile]::OpenRead($part)
@@ -3028,7 +3028,7 @@ function Test-FixApplied {
 function Am3Fs {
     param([string]$gameName, [string]$gameRoot, [string[]]$newFiles)
     $manifest = Get-FixManifest
-    $manifest = $manifest | Where-Object { $_ -is [PSCustomObject] -and $_.game -ne $gameName }
+    $manifest = @($manifest | Where-Object { $_ -is [PSCustomObject] -and $_.game -ne $gameName })
     $entry = [PSCustomObject]@{ game = $gameName; game_root = $gameRoot; files = @($newFiles) }
     $manifest += $entry
     Save-FixManifest $manifest
@@ -3037,7 +3037,7 @@ function Am3Fs {
 
 $script:ParcheDllHash=@{
     'dwmapi.dll'='5b9e0e2067a4a948d68d0a35dc6910ac24574c32f22e9db938db789febc81a63';
-    'OpenSteamTool.dll'='b2ed24e0b4e2d0dae4caa8817ed4c0c34af8fdf056f356fd697ae1356ea22581';
+    'OpenSteamTool.dll'='fe849c7e2b532e4e54f2d0bdce94e03f0aeffe69a64e9601a775f16fab6cdef7';
     'xinput1_4.dll'='96fe0a6a6176703028ff674298de3ebd8f89f6f22a242db5587c66d51d1a9ac4'
 }
 function Test-ParcheActual {
@@ -3398,6 +3398,7 @@ $script:lastPatchCheck = Get-Date
 $script:rfT = New-Object System.Windows.Forms.Timer
 $script:rfT.Interval = 10000
 $script:rfT.Add_Tick({
+    if($script:chatOpen){return}
     try { if ($script:uiBusy) { return } } catch {}
     # Keep local expiry/retry behavior intact; the remote check runs in its background watcher.
     try { $null = Rm9xExp -NoNetworkTime } catch {}
@@ -3435,50 +3436,58 @@ $script:clpTicker.Add_Tick({
 $script:clpTicker.Start()
 
 
+$script:urlRefreshPool = $null
+$script:urlRefreshJob = $null
+$script:lastUrlRefreshStart = Get-Date
 function Update-ServerUrlBg {
     try {
-        $issU = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-        try {
-            foreach ($fcmd in @(Get-Command -CommandType Function)) {
-                try { if ($fcmd.ScriptBlock -and [string]$fcmd.ModuleName -eq '') { $issU.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name, $fcmd.ScriptBlock)) } } catch {}
+        $jobU = $script:urlRefreshJob
+        if ($jobU) {
+            if (-not $jobU.handle.IsCompleted) {
+                if ($jobU.watch.Elapsed.TotalSeconds -gt 45) { try { $jobU.ps.Stop() } catch {} }
+                return $false
             }
-        } catch {}
-        $poolU = [RunspaceFactory]::CreateRunspacePool($issU)
-        $poolU.Open()
-        $psU = [PowerShell]::Create()
-        $psU.RunspacePool = $poolU
+            $outU = $null
+            try { $oU = $jobU.ps.EndInvoke($jobU.handle); if ($oU) { $outU = @($oU)[0] } } catch {}
+            try { $jobU.ps.Dispose() } catch {}
+            $script:urlRefreshJob = $null
+            if ($outU -and $outU.url) {
+                $script:serverUrl=[string]$outU.url; $script:serverIp=[string]$outU.ip
+                $script:serverUrlCf=[string]$outU.cfurl; $script:serverIpCf=[string]$outU.cfip
+                $script:lastUrlOk=Get-Date
+                return $true
+            }
+            return $false
+        }
+        if (((Get-Date)-$script:lastUrlRefreshStart).TotalSeconds -lt 120) { return $false }
+        $script:lastUrlRefreshStart=Get-Date
+        if (-not $script:urlRefreshPool) {
+            $issU=[System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            foreach ($fnU in @('S','D','Invoke-CurlHidden','Resolve-ServerIpDoH','Update-ServerUrl')) {
+                try { $fcmd=Get-Command -Name $fnU -CommandType Function -ErrorAction Stop; $issU.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name,$fcmd.ScriptBlock)) } catch {}
+            }
+            $script:urlRefreshPool=[RunspaceFactory]::CreateRunspacePool($issU)
+            $script:urlRefreshPool.Open()
+        }
+        $psU=[PowerShell]::Create()
+        $psU.RunspacePool=$script:urlRefreshPool
         [void]$psU.AddScript({
             param($ovFile,$ghUrl,$ghIpUrl,$ghCfUrl,$ghCfIpUrl)
             try {
                 $script:serverOverrideFile=$ovFile; $script:ghRawUrl=$ghUrl; $script:ghRawIpUrl=$ghIpUrl
                 $script:ghRawUrlCf=$ghCfUrl; $script:ghRawIpCf=$ghCfIpUrl
-                $script:serverUrl=""; $script:serverIp=""; $script:serverUrlCf=""; $script:serverIpCf=""
+                $script:serverUrl=''; $script:serverIp=''; $script:serverUrlCf=''; $script:serverIpCf=''
                 Update-ServerUrl
-                return @{url=[string]$script:serverUrl; ip=[string]$script:serverIp; cfurl=[string]$script:serverUrlCf; cfip=[string]$script:serverIpCf}
+                return @{url=[string]$script:serverUrl;ip=[string]$script:serverIp;cfurl=[string]$script:serverUrlCf;cfip=[string]$script:serverIpCf}
             } catch { return $null }
         }).AddArgument([string]$script:serverOverrideFile).AddArgument([string]$script:ghRawUrl).AddArgument([string]$script:ghRawIpUrl).AddArgument([string]$script:ghRawUrlCf).AddArgument([string]$script:ghRawIpCf)
-        $hU = $psU.BeginInvoke()
-        $swU = [System.Diagnostics.Stopwatch]::StartNew()
-        while (-not $hU.IsCompleted) {
-            try { [System.Windows.Forms.Application]::DoEvents() } catch {}
-            Start-Sleep -Milliseconds 50
-            if ($swU.Elapsed.TotalSeconds -gt 45) { try { $psU.Stop() } catch {}; break }
-        }
-        $outU = $null
-        try { $oU = $psU.EndInvoke($hU); if ($oU) { $outU = @($oU)[0] } } catch {}
-        try { $psU.Dispose() } catch {}
-        try { $poolU.Close(); $poolU.Dispose() } catch {}
-        if ($outU -and $outU.url) {
-            $script:serverUrl=[string]$outU.url; $script:serverIp=[string]$outU.ip
-            $script:serverUrlCf=[string]$outU.cfurl; $script:serverIpCf=[string]$outU.cfip
-    try { if ($ovPinned -or $gotUrl -or $gotCf) { $script:lastUrlOk = Get-Date } } catch {}
-            return $true
-        }
-    } catch {}
-    return $false
+        $hU=$psU.BeginInvoke()
+        $script:urlRefreshJob=@{ps=$psU;handle=$hU;watch=[System.Diagnostics.Stopwatch]::StartNew()}
+        return $true
+    } catch { return $false }
 }
 $script:urlChecker = New-Object System.Windows.Forms.Timer
-$script:urlChecker.Interval = 120000
+$script:urlChecker.Interval = 2500
 $script:urlChecker.Add_Tick({ try { if ($form.WindowState -ne 'Minimized') { Update-ServerUrlBg | Out-Null } } catch {} })
 $script:urlChecker.Start()
 
@@ -4260,7 +4269,7 @@ $HW=[int](($CW-$GAP)/2);$CH=76;$FCH=68
 $HH=115;$CY=$HH
 
 $R1Y=0;$R2Y=$CH+$GAP
-$WEB_Y=$R2Y+$CH+12;$DISC_Y=$WEB_Y+$FCH+$GAP;$TIK_Y=$DISC_Y+$FCH+$GAP
+$WEB_Y=$R2Y+$CH+12;$DISC_Y=$WEB_Y+$FCH+$GAP;$AI_Y=$DISC_Y+$FCH+$GAP;$TIK_Y=$AI_Y+$FCH+$GAP
 $SAL_Y=$TIK_Y+$FCH+12;$SAL_H=40
 $FH=$CY+$SAL_Y+$SAL_H+14
 
@@ -4496,6 +4505,7 @@ function New-Card{param([int]$X,[int]$Y,[int]$W,[int]$H,[string]$Title,[string]$
                     $g.DrawImage($script:tiktokBmp,$ix2,$iy2,$isz,$isz)
                 }
             }
+            "chat"{ $cp=New-Object System.Drawing.Pen($script:Cyan,1.8);$bq=New-Object System.Drawing.SolidBrush($script:Cyan);$g.DrawEllipse($cp,($ic-11),($iy-9),22,15);$g.FillPolygon($bq,@((New-Object System.Drawing.PointF(($ic-7),($iy+4))),(New-Object System.Drawing.PointF(($ic-2),($iy+12))),(New-Object System.Drawing.PointF(($ic+1),($iy+4)))));foreach($dx in @(-5,0,5)){ $g.FillEllipse($bq,($ic+$dx-2),($iy-5),4,4) };$cp.Dispose();$bq.Dispose() }
         }
         $tb=New-Object System.Drawing.SolidBrush($script:White)
         $g.DrawString($n.Title,$script:FntCard,$tb,$tx2,$ty2);$tb.Dispose()
@@ -4511,6 +4521,1119 @@ function New-Card{param([int]$X,[int]$Y,[int]$W,[int]$H,[string]$Title,[string]$
 
 
 
+function Format-AiNorm([string]$s) {
+    try {
+        $s=([string]$s).ToLowerInvariant()
+        $s=$s -replace '[áàäâ]','a'
+        $s=$s -replace '[éèëê]','e'
+        $s=$s -replace '[íìïî]','i'
+        $s=$s -replace '[óòöô]','o'
+        $s=$s -replace '[úùüû]','u'
+        $s=$s -replace 'ñ','n'
+        $s=$s -replace '[^a-z0-9 ]',' '
+        $s=[regex]::Replace($s,'\s+',' ').Trim()
+        return $s
+    } catch { return [string]$s }
+}
+function Get-AiInstalledGames {
+    $games=@()
+    try {
+        $libs=@(); try { $libs=@(Ss3Jd) } catch {}
+        foreach($lb in $libs){
+            $dir=Join-Path $lb 'steamapps'
+            if(-not (Test-Path -LiteralPath $dir)){ continue }
+            $files=@(Get-ChildItem -LiteralPath $dir -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)
+            foreach($f in $files){
+                try {
+                    $tx=[IO.File]::ReadAllText($f.FullName,[Text.Encoding]::UTF8)
+                    $aid=[regex]::Match($tx,'"appid"\s+"(\d+)"').Groups[1].Value
+                    $nm=[regex]::Match($tx,'"name"\s+"([^"]*)"').Groups[1].Value
+                    if($aid -and $nm){ $games+=@(@{appid=[string]$aid;name=[string]$nm}) }
+                } catch {}
+            }
+        }
+    } catch {}
+    return $games
+}
+function Resolve-AiGame([string]$nombre) {
+    $out=@{ok=$false;appid='';name=''}
+    try {
+        $q=Format-AiNorm $nombre
+        if(-not $q){ return $out }
+        if($q -match '^(gtav|gta ?v|gta ?5)$'){ $q='grand theft auto v' }
+        elseif($q -match '^(rdr ?2|red dead( redemption)? ?2)$'){ $q='red dead redemption 2' }
+        elseif($q -match '^fifa ?2[0-9]$'){ $q='ea sports fc' }
+        elseif($q -match '^cod( |$)|call of duty'){ $q='call of duty' }
+        $q=[regex]::Replace($q,'\bgta\b','grand theft auto v')
+        $q=[regex]::Replace($q,'\brdr\b','red dead redemption 2')
+        $q=[regex]::Replace($q,'\bcod\b','call of duty')
+        $q=[regex]::Replace($q,'\bfifa\b','ea sports fc')
+        $q=[regex]::Replace($q,'\bcs\b','counter-strike')
+        $q=[regex]::Replace($q,'\blol\b','league of legends')
+        $q=[regex]::Replace($q,'\bdota\b','dota 2')
+        $q=[regex]::Replace($q,'\bpubg\b','playerunknown')
+        $q=[regex]::Replace($q,'\baoe\b','age of empires')
+        $q=[regex]::Replace($q,'\s+',' ').Trim()
+        $best=$null; $bestScore=0
+        $games=@(Get-AiInstalledGames)
+        foreach($g in $games){
+            $n=Format-AiNorm ([string]$g.name)
+            $score=0
+            if($n -eq $q){ $score=100 }
+            elseif($n -like ('*'+$q+'*')){ $score=70 }
+            elseif($q -like ('*'+$n+'*')){ $score=55 }
+            else {
+                $toks=@($q -split '\s+' | Where-Object { $_.Length -gt 2 })
+                if($toks.Count -gt 0){
+                    $hit=0
+                    foreach($tk in $toks){ if($n -like ('*'+$tk+'*')){ $hit++ } }
+                    if($hit -eq $toks.Count){ $score=45 }
+                    elseif($hit -gt 0){ $score=15*$hit }
+                }
+            }
+            if($score -gt $bestScore){ $bestScore=$score; $best=$g }
+        }
+        if($best -and $bestScore -ge 30){ $out.ok=$true; $out.appid=[string]$best.appid; $out.name=[string]$best.name }
+        return $out
+    } catch { return $out }
+}
+function Add-OnlineFix([string]$appid) {
+    $out=@{ok=$false;msg='No se pudo agregar el online.'}
+    try {
+        if(-not $appid){ $out.msg='Falta el juego.'; return $out }
+        if(-not $script:olIdx){
+            try { $script:olIdx=Invoke-RestMethod -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/onlinefix/online-index.json' -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop } catch {}
+        }
+        $fn=$null; try { $fn=$script:olIdx.$appid } catch {}
+        if(-not $fn){ $out.msg='Este juego no tiene online disponible por ahora. Si lo queres jugar con amigos escribinos por WhatsApp.'; return $out }
+        $gdir=''
+        try {
+            $libs=@(); try { $libs=@(Ss3Jd) } catch {}
+            foreach($lb in $libs){
+                $acf=Join-Path $lb ('steamapps\appmanifest_'+$appid+'.acf')
+                if(Test-Path -LiteralPath $acf){
+                    try {
+                        $tx=Get-Content -LiteralPath $acf -Raw -ErrorAction Stop
+                        $m=[regex]::Match($tx,'"installdir"\s+"([^"]+)"')
+                        if($m.Success){ $gd=Join-Path $lb ('steamapps\common\'+$m.Groups[1].Value); if(Test-Path -LiteralPath $gd){ $gdir=$gd; break } }
+                    } catch {}
+                }
+            }
+        } catch {}
+        if(-not $gdir){ $out.msg='El juego no esta instalado todavia. Instalalo desde la Biblioteca y volve a pedirme.'; return $out }
+        $okOne=$false
+        try {
+            $fv=[string]$fn; $tag='onlinefix'
+            if($fv -match '^([^/]+)/(.+)$'){ $tag=$Matches[1]; $fv=$Matches[2] }
+            $url='https://github.com/bastisayes/Fixes-steam/releases/download/'+$tag+'/'+[uri]::EscapeDataString($fv)
+            $tmp=Join-Path ([IO.Path]::GetTempPath()) ('olson-'+[Guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+            $zip=Join-Path $tmp 'online.zip'
+            $wc=New-Object System.Net.WebClient; $wc.Proxy=$null
+            $wc.DownloadFile($url,$zip)
+            if((Get-Item $zip).Length -gt 1000){
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $ex=Join-Path $tmp 'ex'; New-Item -ItemType Directory -Path $ex -Force | Out-Null
+                [System.IO.Compression.ZipFile]::ExtractToDirectory($zip,$ex)
+                $items=@(Get-ChildItem -LiteralPath $ex -Force)
+                if($items.Count -eq 1 -and $items[0].PSIsContainer){ $src=$items[0].FullName } else { $src=$ex }
+                foreach($e2 in (Get-ChildItem -LiteralPath $src -Force)){
+                    $dst=Join-Path $gdir $e2.Name
+                    if($e2.PSIsContainer){
+                        if(-not (Test-Path -LiteralPath $dst)){ New-Item -ItemType Directory -Path $dst -Force | Out-Null }
+                        Copy-Item -LiteralPath (Join-Path $e2.FullName '*') -Destination $dst -Recurse -Force -ErrorAction Stop
+                    } else { Copy-Item -LiteralPath $e2.FullName -Destination $dst -Force -ErrorAction Stop }
+                }
+                $okOne=$true
+            }
+            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+        } catch {}
+        if($okOne){ $out.ok=$true; $out.msg='Online agregado.' } else { $out.msg='No pude descargar el online ahora. Proba de nuevo en un rato o escribinos por WhatsApp.' }
+        return $out
+    } catch { return $out }
+}
+function Set-AiSync([object]$Sync,[string]$Status) {
+    try { if($Sync -ne $null){ $Sync.status=[string]$Status } } catch {}
+    try { if($script:bibRepairProgress -is [System.Collections.Hashtable]){ $script:bibRepairProgress['text']=[string]$Status } } catch {}
+}
+function Test-AiGameFixed([string]$appid) {
+    $out=@{ok=$false}
+    try {
+        $sp=""
+        try { $sp=Get-SteamPath } catch {}
+        if(-not $appid){
+            $pok=$false
+            try { if($sp){ $pok=[bool](Test-ParcheActual $sp) } } catch {}
+            $m=0
+            try { foreach($lb in @(Ss3Jd)){ $m+=@(Get-ChildItem -LiteralPath (Join-Path $lb 'steamapps') -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue).Count } } catch {}
+            if($pok -and $m -gt 0){ $out.ok=$true }
+            return $out
+        }
+        $acf=""
+        $acflib=""
+        try {
+            foreach($lb in @(Ss3Jd)){
+                $c=Join-Path $lb ('steamapps\appmanifest_'+$appid+'.acf')
+                if(Test-Path -LiteralPath $c){ $acf=$c; $acflib=$lb; break }
+            }
+        } catch {}
+        if(-not $acf){ return $out }
+        $gd=""
+        try {
+            $tx=Get-Content -LiteralPath $acf -Raw -ErrorAction Stop
+            $mm=[regex]::Match($tx,'"installdir"\s+"([^"]+)"')
+            if($mm.Success){ $gd=$mm.Groups[1].Value }
+        } catch {}
+        if(-not $gd){ return $out }
+        $gdir=Join-Path $acflib ('steamapps\common\'+$gd)
+        if(-not (Test-Path -LiteralPath $gdir)){ return $out }
+        $pok=$false
+        try { if($sp){ $pok=[bool](Test-ParcheActual $sp) } } catch {}
+        if($pok){ $out.ok=$true }
+        return $out
+    } catch { return $out }
+}
+function Invoke-AiDiagnostico([string]$codigo,[object]$Sync) {
+    try {
+        $urls=@()
+        try { $urls=@($Sync.urls) } catch {}
+        $cid=""
+        try { $cid=[string]$Sync.cid } catch {}
+        Set-AiSync $Sync 'Revisando Steam...'
+        $sp=""
+        try { $sp=Get-SteamPath } catch {}
+        $steamOk=$false
+        try { if($sp -and (Test-Path -LiteralPath $sp)){ $steamOk=$true } } catch {}
+        Set-AiSync $Sync 'Revisando la activacion...'
+        $patchOk=$false
+        try { if($sp){ $patchOk=[bool](Test-ParcheActual $sp) } } catch {}
+        Set-AiSync $Sync 'Contando los juegos...'
+        $mans=0
+        try { foreach($lb in @(Ss3Jd)){ $mans+=@(Get-ChildItem -LiteralPath (Join-Path $lb 'steamapps') -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue).Count } } catch {}
+        $diskGB=0
+        $diskOk=$true
+        try {
+            $gi=Get-Item -LiteralPath $sp -ErrorAction Stop
+            $di=New-Object IO.DriveInfo($gi.PSDrive.Root)
+            $diskGB=[math]::Round($di.AvailableFreeSpace/1GB,1)
+            if($diskGB -lt 5){ $diskOk=$false }
+        } catch {}
+        $defOk=$true
+        try { if($sp){ $defOk=[bool](Test-DefExclFlag $sp) } } catch {}
+        Set-AiSync $Sync 'Probando la conexion...'
+        $srvOk=$false
+        foreach($u in $urls){
+            try {
+                Invoke-RestMethod -Uri ($u.TrimEnd('/')+'/') -Method Get -TimeoutSec 8 -ErrorAction Stop | Out-Null
+                $srvOk=$true
+                break
+            } catch {}
+        }
+        $phase=""
+        try { $ls=@(Get-Content (Join-Path $env:TEMP 'bsmap_phase.log') -Tail 3 -ErrorAction SilentlyContinue); if($ls){ $phase=($ls -join ' | ') } } catch {}
+        $c=([string]$codigo).ToUpper().Trim()
+        $codeState='vacio'
+        $vgames=0
+        if($c){
+            $codeState='sinconexion'
+            Set-AiSync $Sync 'Validando el codigo...'
+            try {
+                $bdy=(@{code=$c} | ConvertTo-Json -Compress)
+                foreach($u in $urls){
+                    try {
+                        $vr=Invoke-RestMethod -Uri ($u.TrimEnd('/')+'/api/validate-code') -Method Post -Body $bdy -ContentType 'application/json' -TimeoutSec 12 -ErrorAction Stop
+                        if($vr -and $vr.ok){ $codeState='valido'; try { $vgames=[int]$vr.games } catch {} }
+                        else { $codeState='invalido' }
+                        break
+                    } catch {}
+                }
+            } catch { $codeState='sinconexion' }
+        }
+        $verdict=''
+        if(-not $steamOk){ $verdict='No encuentro tu Steam instalado. Instalalo, abri la app de nuevo y avisame.' }
+        elseif($codeState -eq 'invalido'){ $verdict='Ese codigo no es valido. Revisa que lo hayas copiado completo, con mayusculas y guiones, y proba de nuevo.' }
+        elseif($codeState -eq 'valido' -and -not $patchOk){ $verdict='Tu codigo esta bien pero la activacion no llego a instalarse. Pedime que lo repare y lo arreglo en el momento.' }
+        elseif(-not $patchOk){ $verdict='La activacion no esta instalada. Si tenes tu codigo a mano pasamelo y lo reviso, o pedime que repare la activacion.' }
+        elseif($mans -eq 0){ $verdict='No veo juegos instalados. Canjea tu codigo en la pagina principal y avisame.' }
+        elseif(-not $diskOk){ $verdict='Te queda poco espacio en el disco ('+$diskGB+' GB libres). Libera espacio y volve a intentar.' }
+        elseif(-not $srvOk){ $verdict='No hay conexion con el servicio. Revisa tu internet y proba de nuevo.' }
+        else {
+            $verdict='Tu activacion esta bien: Steam, archivos y conexion en orden.'
+            if($codeState -eq 'valido'){ $verdict+=' Tu codigo trae '+$vgames+' juegos.' }
+            $verdict+=' Si un juego puntual no abre, decime cual y lo reparo.'
+        }
+        try {
+            $tech='steam='+$steamOk+';patch='+$patchOk+';juegos='+$mans+';discoGB='+$diskGB+';def='+$defOk+';srv='+$srvOk+';codigo='+$codeState
+            if($phase){ $tech+=';fases='+$phase }
+            if($tech.Length -gt 1400){ $tech=$tech.Substring(0,1400) }
+            $pb=(@{client_id=$cid;kind='diagnostico-ia';code=$c;game='';msg=$tech} | ConvertTo-Json -Compress)
+            foreach($u in $urls){
+                try { Invoke-RestMethod -Uri ($u.TrimEnd('/')+'/api/client-error') -Method Post -Body $pb -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop | Out-Null; break } catch {}
+            }
+        } catch {}
+        return $verdict
+    } catch { return 'No pude completar el diagnostico. Proba de nuevo o escribinos por WhatsApp.' }
+}
+function Send-AiTech([object]$Sync,[string]$kind,[string]$game,[string]$msg) {
+    try {
+        $tid=''; try { $tid=[string]$Sync.cid } catch {}
+        $tu=@(); try { $tu=@($Sync.urls) } catch {}
+        $m=[string]$msg; if($m.Length -gt 800){ $m=$m.Substring(0,800) }
+        $pb=(@{client_id=$tid;kind=$kind;game=$game;msg=$m} | ConvertTo-Json -Compress)
+        foreach($u in $tu){ try { Invoke-RestMethod -Uri ($u.TrimEnd('/')+'/api/client-error') -Method Post -Body $pb -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop | Out-Null; break } catch {} }
+    } catch {}
+}
+function Test-AiSteamBusy {
+    try {
+        foreach($lb in @(Ss3Jd)){
+            $dir=Join-Path $lb 'steamapps'
+            if(-not (Test-Path -LiteralPath $dir)){ continue }
+            foreach($f in @(Get-ChildItem -LiteralPath $dir -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)){
+                try {
+                    $tx=[IO.File]::ReadAllText($f.FullName)
+                    $sf=[int][regex]::Match($tx,'"StateFlags"\s+"(\d+)"').Groups[1].Value
+                    if(($sf -band 4) -eq 0 -and ($sf -band 2) -ne 0){
+                        $nm=[regex]::Match($tx,'"name"\s+"([^"]*)"').Groups[1].Value
+                        if($nm){ return $nm }
+                    }
+                } catch {}
+            }
+        }
+    } catch {}
+    return ''
+}
+function Get-AiPlayedSet {
+    $s=@{}
+    try {
+        $pf=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_played.json'
+        if(Test-Path -LiteralPath $pf){ foreach($a in @(Get-Content -LiteralPath $pf -ErrorAction SilentlyContinue)){ $s[$a.Trim()]=1 } }
+    } catch {}
+    return $s
+}
+
+function Add-AiTrace([string]$s) {
+    try {
+        if(-not $script:aiTraceLines){ $script:aiTraceLines=@() }
+        if(@($script:aiTraceLines).Count -ge 40){ return }
+        $m=[string]$s; if($m.Length -gt 160){ $m=$m.Substring(0,160) }
+        $script:aiTraceLines+=@((Get-Date -Format 'HH:mm:ss')+' '+$m)
+    } catch {}
+}
+function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[string]$LastQ,[object]$Sync) {
+    try {
+        $act=([string]$Action).ToLowerInvariant()
+        $script:aiTraceLines=@(); Add-AiTrace ('acc='+$act+' game='+$Game)
+                if($act -eq 'reparar'){
+            $gq=([string]$Game).Trim()
+            if(-not $gq){
+                            $busyG=''
+            if(-not ($LastQ -match 'igual|dale igual|igualmente')){ try { $busyG=Test-AiSteamBusy } catch {} }
+            if($busyG){ return 'Estas descargando '+$busyG+'. Mejor esperar a que termine. Si queres que lo haga igual, escribi dale igual.' }
+            Set-AiSync $Sync 'Arreglando la activacion general...'
+                $ok=$false; try { $ok=[bool](Xz9Qk -Silent); Add-AiTrace ('xz-global: '+$ok) } catch {}
+                
+                Set-AiSync $Sync 'Verificando la activacion...'; $vf=$null; try { $vf=Test-AiGameFixed '' } catch {}; if($vf -and $vf.ok){ return 'Todo listo: la activacion quedo funcionando perfectamente. Fijate que ya te aparecen los juegos.' }; if($ok){ return 'Reinstale la activacion general. Fijate si ya te aparecen los juegos y avisame.' }
+                Send-AiTech $Sync 'fallo-activacion' '' ('patch='+$ok)
+            return 'No pude completarlo ahora. Proba canjear tu codigo de nuevo o escribinos por WhatsApp.'
+            }
+            $res=$null; try { $res=Resolve-AiGame $gq } catch {}; Add-AiTrace ('resolve: q='+$gq+' -> '+$(if($res -and $res.ok){'appid '+$res.appid}else{'SIN-MATCH'}))
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Fijate el nombre exacto en tu Biblioteca y pedimelo de nuevo. Si no se te activa ninguno, pedime un diagnostico.' }
+            Set-AiSync $Sync ('Arreglando '+$res.name+'...')
+            $r=$null
+            try { $r=Repair-BiblioGame ([string]$res.appid); Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}
+            if(-not ($r -and $r.ok) -and $r -and [string]$r.fix -eq 'fallo'){
+                Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name+' motivo='+[string]$r.msg)
+                return 'No pude terminar el arreglo de '+$res.name+'. Es un arreglo grande y la conexion corto la descarga. Volve a pedirmelo en unos minutos y deberia quedar listo; si sigue igual, escribinos por WhatsApp.'
+            }
+            if(-not ($r -and $r.ok)){ try { Set-AiSync $Sync ('Probando otra forma con '+$res.name+'...'); $r=Repair-UnoApp ([string]$res.appid); Add-AiTrace ('repair-unoapp: ok='+$r.ok) } catch {} }
+            if(-not ($r -and $r.ok)){ try { Set-AiSync $Sync 'Reinstalando la activacion...'; $xzR=Xz9Qk -Silent; Add-AiTrace ('xz9qk: '+$xzR); $r=@{ok=$true} } catch {} }
+            
+            Set-AiSync $Sync ('Verificando '+$res.name+'...'); $vf=$null; try { $vf=Test-AiGameFixed ([string]$res.appid); Add-AiTrace ('verify: ok='+$vf.ok) } catch {}; if($vf -and $vf.ok){ return 'Todo listo: ya arregle '+$res.name+' y quedo funcionando perfectamente. Proba abrirlo de nuevo desde tu biblioteca y avisame.' }; if($r -and $r.ok){ return 'Lo arregle. Proba abrirlo de nuevo desde tu biblioteca y contame si anda bien.' }
+            Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name)
+            return 'No pude terminar el arreglo de '+$res.name+'. Escribinos por WhatsApp y lo vemos juntos.'
+        }
+elseif($act -eq 'online'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Instalalo primero desde la Biblioteca y volve a pedirme el online.' }
+                        $busyO=''
+            if(-not ($LastQ -match 'igual|dale igual|igualmente')){ try { $busyO=Test-AiSteamBusy } catch {} }
+            if($busyO){ return 'Estas descargando '+$busyO+'. Espera a que termine para no romper nada, o escribi dale igual si lo queres asi.' }
+            Set-AiSync $Sync ('Descargando online para '+$res.name+'...')
+            $r=$null; try { $r=Add-OnlineFix ([string]$res.appid); Add-AiTrace ('online: ok='+$r.ok+' msg='+$r.msg) } catch {}
+            if($r -and $r.ok){ return 'Listo, ya le agregue el online a '+$res.name+'. Cerra el juego si lo tenes abierto y volve a entrar.' }
+            return [string]$r.msg
+        }
+        elseif($act -eq 'reinstalar'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Fijate el nombre en tu Biblioteca y pedimelo de nuevo.' }
+            try { Start-Process ('steam://install/'+$res.appid) } catch {}
+            return 'Te abri la instalacion de '+$res.name+' en Steam. Segui los pasos que aparecen ahi.'
+        }
+        elseif($act -eq 'abrir'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Instalalo primero desde la Biblioteca.' }
+            try { Start-Process ('steam://rungameid/'+$res.appid) } catch {}
+            return 'Abriendo '+$res.name+'...'
+        }
+                elseif($act -eq 'diagnosticar'){
+            Set-AiSync $Sync 'Empezando el diagnostico...'
+            $dg=$null
+            try { $dg=Invoke-AiDiagnostico $Game $Sync; Add-AiTrace ('diag: '+$dg) } catch {}
+            if(-not $dg){ return 'No pude completar el diagnostico. Proba de nuevo o escribinos por WhatsApp.' }
+            return [string]$dg
+        }
+                elseif($act -eq 'canjear'){
+            Set-AiSync $Sync 'Validando el codigo...'
+            $cc=((([string]$Game).ToUpper()).Trim() -replace '\s',''); $gN2=0
+            if(-not $cc){ return 'Pasame tu codigo tal cual lo tenes y lo cargo.' }
+            $stt='invalido'
+            try {
+                $bdy=(@{code=$cc} | ConvertTo-Json -Compress)
+                foreach($u in @($Sync.urls)){
+                    try {
+                        $vr=Invoke-RestMethod -Uri ($u.TrimEnd('/')+'/api/validate-code') -Method Post -Body $bdy -ContentType 'application/json' -TimeoutSec 12 -ErrorAction Stop
+                        if($vr -and $vr.ok){ $stt='valido'; try { $gN2=[int]$vr.games } catch {} } else { $stt='invalido' }
+                        break
+                    } catch {}
+                }
+            } catch {}
+            if($stt -eq 'valido'){ Add-AiTrace ('canjear: VALIDO juegos='+$gN2); return 'CANJEAR_OK:'+$cc+'|'+$gN2 }
+            return 'CANJEAR_FAIL:Ese codigo no es valido. Revisa que lo hayas copiado completo, con mayusculas y guiones.'
+        }
+        elseif($act -eq 'ircanje'){ return 'IRCANJE_MARK' }
+        elseif($act -eq 'instalar'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Decime el nombre exacto como figura en tu Biblioteca.' }
+            $warn=''
+            try { $sr2=Get-SteamPath; if($sr2){ $di2=New-Object IO.DriveInfo((Get-Item -LiteralPath $sr2).PSDrive.Root); $gb2=[math]::Round($di2.AvailableFreeSpace/1GB,0); if($gb2 -lt 15){ $warn='Ojo: te quedan solo '+$gb2+' GB libres en el disco. ' } } } catch {}
+            try { Start-Process ('steam://install/'+$res.appid) } catch {}
+            return $warn+'Te abri la instalacion de '+$res.name+' en Steam. Segui los pasos de ahi.'
+        }
+        elseif($act -eq 'desinstalar'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado.' }
+            try { Start-Process ('steam://uninstall/'+$res.appid) } catch {}
+            return 'Te abri la desinstalacion de '+$res.name+' en Steam, confirmalo ahi si estas seguro.'
+        }
+        elseif($act -eq 'steam'){
+            $sp3=''
+            try { $sp3=Get-SteamPath } catch {}
+            if(-not $sp3){ return 'No encuentro Steam instalado en esta PC.' }
+            $rn3=$null; try { $rn3=@(Get-Process steam -ErrorAction SilentlyContinue) } catch {}
+            if(@($rn3).Count -gt 0){ return 'Steam ya esta abierto. Si no lo ves, mira la barra de tareas.' }
+            try { Start-Process (Join-Path $sp3 'steam.exe') } catch { return 'No pude abrir Steam, abrilo a mano y avisame.' }
+            return 'Abriendo Steam...'
+        }
+        elseif($act -eq 'progreso'){
+            $busyN=@()
+            try {
+                foreach($lb in @(Ss3Jd)){
+                    $dir=Join-Path $lb 'steamapps'
+                    if(-not (Test-Path -LiteralPath $dir)){ continue }
+                    foreach($f in @(Get-ChildItem -LiteralPath $dir -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)){
+                        try {
+                            $tx=[IO.File]::ReadAllText($f.FullName)
+                            $sf=[int][regex]::Match($tx,'"StateFlags"\s+"(\d+)"').Groups[1].Value
+                            if(($sf -band 4) -eq 0){
+                                $nm=[regex]::Match($tx,'"name"\s+"([^"]*)"').Groups[1].Value
+                                if($nm){ $busyN+=$nm }
+                            }
+                        } catch {}
+                    }
+                }
+            } catch {}
+            $pn=0; try { $pn=@($script:downloadPendingFixes).Count } catch {}
+            if($busyN.Count -eq 0 -and $pn -eq 0){ return 'No hay descargas en curso. Todo tranquilo.' }
+            $txt4=''
+            if($busyN.Count -gt 0){ $txt4+='Descargando o actualizando: '+($busyN -join ', ')+'.' }
+            if($pn -gt 0){ $txt4+=' Ademas tengo '+$pn+' arreglos esperando.' }
+            return $txt4+' Espera a que terminen o pedime lo que necesites.'
+        }
+        elseif($act -eq 'onlista'){
+            try { if(-not $script:olIdx){ $script:olIdx=Invoke-RestMethod -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/onlinefix/online-index.json' -UseBasicParsing -TimeoutSec 30 } } catch {}
+            $conLista=@()
+            try {
+                $gs=@(Get-AiInstalledGames)
+                foreach($g in $gs){ if($script:olIdx -and ($script:olIdx.PSObject.Properties.Name -contains [string]$g.appid)){ $conLista+=([string]$g.name) } }
+            } catch {}
+            if($conLista.Count -eq 0){ return 'Ninguno de tus juegos instalados tiene online disponible por ahora. Si queres, decime un juego y lo reviso.' }
+            return 'Podes agregarle online a: '+($conLista -join ', ')+'. Pedime agregale online a un juego y lo hago.'
+        }
+        elseif($act -eq 'ficha'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Decime el nombre como figura en tu Biblioteca.' }
+            $sz='?'
+            try {
+                $acfp=''
+                foreach($lb in @(Ss3Jd)){ $c2=Join-Path $lb ('steamapps\appmanifest_'+$res.appid+'.acf'); if(Test-Path -LiteralPath $c2){ $acfp=$c2; break } }
+                if($acfp){ $sz=[math]::Round(([double][regex]::Match((Get-Content -LiteralPath $acfp -Raw),'"SizeOnDisk"\s+"(\d+)"').Groups[1].Value)/1GB,1) }
+            } catch {}
+            $hasOn='no'
+            try { if(-not $script:olIdx){ $script:olIdx=Invoke-RestMethod -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/onlinefix/online-index.json' -UseBasicParsing -TimeoutSec 30 }; if($script:olIdx -and ($script:olIdx.PSObject.Properties.Name -contains [string]$res.appid)){ $hasOn='si' } } catch {}
+            $szT='desconocido'; if($sz -ne '?'){ $szT=[string]$sz+' GB' }
+            return $res.name+' - peso '+$szT+' - online disponible: '+$hasOn+'. Necesitas algo mas? Pedilo.'
+        }
+        elseif($act -eq 'revisar'){
+            $res=$null; try { $res=Resolve-AiGame $Game } catch {}
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Fijate el nombre en tu Biblioteca y pedimelo de nuevo.' }
+            Set-AiSync $Sync ('Revisando '+$res.name+'...')
+            $acfp=''; $sf5=-1; $tx5=''
+            try { foreach($lb in @(Ss3Jd)){ $c5=Join-Path $lb ('steamapps\appmanifest_'+$res.appid+'.acf'); if(Test-Path -LiteralPath $c5){ $acfp=$c5; break } } } catch {}
+            if($acfp){ try { $tx5=Get-Content -LiteralPath $acfp -Raw } catch {} }
+            if($tx5){ try { $sf5=[int][regex]::Match($tx5,'"StateFlags"\s+"(\d+)"').Groups[1].Value } catch {} }
+            if(($sf5 -band 4) -ne 0){
+                Set-AiSync $Sync ('Todo en orden con '+$res.name+'.')
+                return $res.name+' esta completo y en orden. Si igual no abre, pedime que lo repare.'
+            }
+            Send-AiTech $Sync 'revision-incompleta' ([string]$res.name) ('juego='+$res.name+' stateflags='+$sf5)
+            return $res.name+' esta a medias o incompleto. Pedime que lo repare y lo arreglo ahora mismo.'
+        }
+        elseif($act -eq 'pausar'){ return 'PAUSAR_MARK' }
+        elseif($act -eq 'reanudar'){ return 'REANUDAR_MARK' }
+        elseif($act -eq 'whatsapp'){
+            $tx='Hola, necesito ayuda con BastissSteam.'
+            try { if($LastQ){ $tx+=' Mi consulta: '+$LastQ } } catch {}
+            try { if($Extra){ $tx+=' Resumen: '+$Extra } } catch {}
+            if($tx.Length -gt 400){ $tx=$tx.Substring(0,400) }
+            try { Start-Process ('https://wa.me/message/6JFSK7YDC2TAA1?text='+[uri]::EscapeDataString($tx)) } catch {}
+            return 'Te abri WhatsApp con tu consulta lista para enviar. Ahi te ayudamos.'
+        }
+    } catch {}
+    return 'No pude completarlo. Proba de nuevo o escribinos por WhatsApp.'
+}
+function Start-AiActionBg([string]$Action,[string]$Game,[string]$Extra) {
+    try {
+        $st=$script:aiChatState
+        if(-not $st -or $st.closed){ return }
+        $lastQ=""; try { $lastQ=[string]$st.lastQuestion } catch {}
+        $st.actBusy=$true
+        try { if(-not ($script:bibRepairProgress -is [System.Collections.Hashtable])){ $script:bibRepairProgress=[hashtable]::Synchronized(@{text='Preparando...'}) } } catch {};
+        try { $st.status.Text="Preparando..."; $st.status.ForeColor=$script:Cyan } catch {}
+        $us=@(); try { if($script:serverUrl){$us+=[string]$script:serverUrl}; if($script:serverUrlCf){$us+=[string]$script:serverUrlCf} } catch {}
+        $cc=""; try { $cc=[string]$script:clientId } catch {}
+        $sync=[hashtable]::Synchronized(@{status='Preparando...';done=$false;result='';urls=$us;cid=$cc})
+        $iss=[System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+        try {
+            $fns=@(Get-ChildItem -Path 'function:')
+            foreach($fnBg in $fns){
+                try {
+                    $entry=New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry($fnBg.Name,$fnBg.ScriptBlock)
+                    $iss.Commands.Add($entry)
+                } catch {}
+            }
+        } catch {}
+                $aiVars=@{
+            WORKING_GAMES_FILE=$WORKING_GAMES_FILE
+            AUTO_FIXED_FILE=$AUTO_FIXED_FILE
+            FIX_MANIFEST_FILE=$FIX_MANIFEST_FILE
+            AUTO_FIX_EXCLUSIONS=@($AUTO_FIX_EXCLUSIONS)
+            WEBHOOK_URL=$WEBHOOK_URL
+            TIMERS_FILE=$TIMERS_FILE
+            GAME_NAME_DATA=$script:GAME_NAME_DATA
+            GAME_NAME_BY_APPID=$script:GAME_NAME_BY_APPID
+            GAME_APPID_BY_NAME=$script:GAME_APPID_BY_NAME
+            GAME_APPID_LIST=$script:GAME_APPID_LIST
+            INSTALL_FOLDER_MAP=$script:INSTALL_FOLDER_MAP
+            bibFixesCache=$script:bibFixesCache
+            bibFixesCacheTime=$script:bibFixesCacheTime
+            bibFixesCacheLoaded=$script:bibFixesCacheLoaded
+            bibRepairProgress=$script:bibRepairProgress
+            ParcheDllHash=$script:ParcheDllHash
+            utf8NoBom=$script:utf8NoBom
+            version=$script:version
+            phaseFile=$script:phaseFile
+            serverUrl=$script:serverUrl
+            serverUrlCf=$script:serverUrlCf
+            clientId=$script:clientId
+            lastUrlOk=$script:lastUrlOk
+            patchSilentOK=$script:patchSilentOK
+            defenderExclusionsDone=$script:defenderExclusionsDone
+            olIdx=$script:olIdx
+            downloadPendingFixes=$script:downloadPendingFixes
+            knownDownloading=$script:knownDownloading
+        }
+        foreach($vn in $aiVars.Keys){
+            try {
+                $ve=New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry -ArgumentList $vn,$aiVars[$vn],'AI worker state'
+                $iss.Variables.Add($ve)
+            } catch {}
+        }
+        $rs=[System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($iss)
+        $rs.Open()
+        $ps=[System.Management.Automation.PowerShell]::Create()
+        $ps.Runspace=$rs
+        [void]$ps.AddScript({
+            param($wAct,$wGame,$wExtra,$wLastQ,$wSync,$wVars)
+            try {
+                if($wVars -ne $null){
+                    foreach($kv in @($wVars.GetEnumerator())){
+                        try { Set-Variable -Name ([string]$kv.Key) -Value $kv.Value -Scope Script -Force } catch {}
+                    }
+                }
+            } catch {}
+            try {
+                $r=Invoke-AiActionCore -Action $wAct -Game $wGame -Extra $wExtra -LastQ $wLastQ -Sync $wSync
+                if(-not $r){ $r='No pude completarlo. Proba de nuevo o escribinos por WhatsApp.' }
+                try {
+                $trLines=@()
+                try { $trLines=@($script:aiTraceLines) } catch {}
+                if($trLines.Count -gt 0){
+                    $tb=(@{client_id=[string]$wSync.cid;code='';game=[string]$wGame;action=[string]$wAct;pasos=@($trLines | Select-Object -First 25)} | ConvertTo-Json -Compress -Depth 4)
+                    foreach($uT in @($wSync.urls)){
+                        try { Invoke-RestMethod -Uri ($uT.TrimEnd('/')+'/api/ia-traza') -Method Post -Body $tb -ContentType 'application/json' -TimeoutSec 10 -ErrorAction Stop | Out-Null; break } catch {}
+                    }
+                }
+            } catch {}
+            try { $wSync.result=$r } catch {}
+            } catch {
+                try { $wSync.result='No pude completarlo. Proba de nuevo o escribinos por WhatsApp.' } catch {}
+            } finally {
+                try { $wSync.done=$true } catch {}
+            }
+        }).AddArgument($Action).AddArgument($Game).AddArgument($Extra).AddArgument($lastQ).AddArgument($sync)
+        $handle=$ps.BeginInvoke()
+        $st.actJob=@{ps=$ps;rs=$rs;handle=$handle;sync=$sync;started=[DateTime]::UtcNow;act=[string]$Action}
+        try { $st.status.Text="Trabajando en eso..." } catch {}
+    } catch {
+        try { $st=$script:aiChatState; $st.actBusy=$false; $st.status.Text="No pude empezar el arreglo. Proba de nuevo." } catch {}
+    }
+}
+function Get-AiGamesCached {
+    try {
+        if(-not $script:aiGamesCache){ $script:aiGamesCache=@{t=[DateTime]::MinValue;games=@()} }
+        $age=((Get-Date)-[DateTime]$script:aiGamesCache.t).TotalSeconds
+        if($age -gt 120 -or @($script:aiGamesCache.games).Count -eq 0){
+            $g=@(Get-AiInstalledGames)
+            $script:aiGamesCache=@{t=(Get-Date);games=$g}
+        }
+        return @($script:aiGamesCache.games)
+    } catch { return @() }
+}
+function Add-AiChatMessage {
+    param([string]$Role,[string]$Message)
+    try {
+        $st=$script:aiChatState
+        $isUser=($Role -eq "Vos")
+        $bBg=$script:BG; $bFillU=[System.Drawing.Color]::FromArgb(15,42,58); $bFillA=$script:CardBG; $bBorU=[System.Drawing.Color]::FromArgb(0,105,145); $bBorA=$script:CardBorder; $bHeadU=$script:Cyan; $bHeadA=[System.Drawing.Color]::FromArgb(0,200,255); $bBodyU=[System.Drawing.Color]::FromArgb(220,238,247); $bBodyA=[System.Drawing.Color]::FromArgb(205,214,228)
+        try { if($script:aiLight){ $bBg=[System.Drawing.Color]::White; $bFillA=[System.Drawing.Color]::FromArgb(246,249,252); $bBorA=[System.Drawing.Color]::FromArgb(216,222,232); $bHeadA=[System.Drawing.Color]::FromArgb(0,90,140); $bBodyA=[System.Drawing.Color]::FromArgb(45,55,65) } } catch {}
+        $bubble=New-BufferedPanel
+        $bubble.Width=380
+        $bubble.AutoSize=$true
+        $bubble.MinimumSize=New-Object System.Drawing.Size(380,56)
+        $bubble.MaximumSize=New-Object System.Drawing.Size(380,0)
+        $bubble.Margin=New-Object System.Windows.Forms.Padding($(if($isUser){12}else{0}),0,0,8)
+        $bubble.Padding=New-Object System.Windows.Forms.Padding(12,8,12,10)
+        $bubble.BackColor=$bBg
+        $bubble.Tag=@{ user=$isUser; fill=if($isUser){$bFillU}else{$bFillA}; border=if($isUser){$bBorU}else{$bBorA}; msg=$Message }
+        $head=New-Object System.Windows.Forms.Label
+        $head.AutoSize=$true; $head.Location=New-Object System.Drawing.Point(12,7)
+        $head.Font=$script:FntSub
+        $head.ForeColor=if($isUser){$bHeadU}else{$bHeadA}
+        $head.Text=$Role
+        $body=New-Object System.Windows.Forms.Label
+        $body.AutoSize=$true; $body.Location=New-Object System.Drawing.Point(12,25)
+        $body.MaximumSize=New-Object System.Drawing.Size(352,0)
+        $body.Font=$script:FntSub
+        $body.ForeColor=if($isUser){$bBodyU}else{$bBodyA}
+        $body.Text=$Message
+        $bubble.Controls.Add($head); $bubble.Controls.Add($body)
+        if(-not $isUser){
+            $cp=New-Object System.Windows.Forms.Label
+            $cp.AutoSize=$true; $cp.Location=New-Object System.Drawing.Point(330,7)
+            $cp.Font=New-Object System.Drawing.Font("Segoe UI",7)
+            $cp.ForeColor=if($script:aiLight){[System.Drawing.Color]::FromArgb(150,155,165)}else{[System.Drawing.Color]::FromArgb(110,125,140)}
+            $cp.Text="copiar"; $cp.Cursor=[System.Windows.Forms.Cursors]::Hand
+            $cp.Tag=[string]$Message
+            $cp.Add_Click({ try { [System.Windows.Forms.Clipboard]::SetText([string]$this.Tag); $this.Text="copiado!" } catch {} })
+            $bubble.Controls.Add($cp)
+        }
+        $bubble.Height=[Math]::Max(56,$body.Bottom+13)
+        $bubble.Add_Paint({param($sender,$e)
+            try {
+                $e.Graphics.SmoothingMode='AntiAlias'
+                $path=New-RR 0 0 ($sender.Width-1) ($sender.Height-1) 12
+                $fill=New-Object System.Drawing.SolidBrush($sender.Tag.fill)
+                $pen=New-Object System.Drawing.Pen($sender.Tag.border,1)
+                $e.Graphics.FillPath($fill,$path);$e.Graphics.DrawPath($pen,$path)
+                $fill.Dispose();$pen.Dispose();$path.Dispose()
+            } catch {}
+        })
+[void]$st.flow.Controls.Add($bubble)
+        if(-not $isUser -and $script:aiTtsOn){ try { if(-not $script:aiTts){ Add-Type -AssemblyName System.Speech; $script:aiTts=New-Object System.Speech.Synthesis.SpeechSynthesizer }; $script:aiTts.SpeakAsync($Message) } catch {} }
+        try { $st2=$script:aiChatState; if($st2 -and $st2.clip -and $st2.flow -and $st2.flow.Controls.Count -gt 0){ $script:aiScrollOff=[int]::MaxValue; Update-AiScroll } } catch {}
+return $bubble
+    } catch { return $null }
+}
+
+function Normalize-AiReply {
+    param([string]$Text)
+    try {
+        if (-not $Text) { return "No pude preparar una respuesta. Probá de nuevo o escribinos por WhatsApp." }
+        $Text=$Text -replace "`r`n?","`n"
+        $Text=[regex]::Replace($Text,'[\u200B-\u200F\u2060\uFEFF\uFFFD]','')
+        $Text=[regex]::Replace($Text,'(?<=\s)[A-ZÁÉÍÓÚÜÑ](?=[¡¿])','')
+        $Text=[regex]::Replace($Text,'\*\*|__|`','')
+        $Text=[regex]::Replace($Text,'[ \t]{2,}',' ')
+        $Text=[regex]::Replace($Text,'\n{3,}',"`n`n").Trim()
+        if ($Text.Length -gt 900) { $Text=$Text.Substring(0,900).Trim() }
+        return $Text
+    } catch { return $Text }
+}
+
+function Start-AiChatSend {
+    try {
+        $st=$script:aiChatState
+        if (-not $st -or $st.busy -or $st.closed) { return }
+        $q=$st.input.Text.Trim()
+        if (-not $q) { return }
+        if ($q.Length -gt 800) { $q=$q.Substring(0,800) }
+        $st.input.Clear()
+        $st.lastQuestion=$q
+        [void](Add-AiChatMessage -Role "Vos" -Message $q)
+        $st.status.Text="Enviando tu consulta..."
+        $st.status.ForeColor=$script:Cyan
+        $st.send.Enabled=$false; $st.send.Tag.Text="Enviando..."; try{$st.send.Invalidate()}catch{}
+        $st.busy=$true
+        try{Set-QuickButtons 'default'}catch{}
+
+                $ctx="App " + $script:version
+        try {
+            $aig=Get-AiGamesCached
+            if($aig -and @($aig).Count -gt 0){
+                $nms=@(); foreach($gg in $aig){ $nms+=([string]$gg.name); if($nms.Count -ge 45){break} }
+                $ctx+=" | juegos instalados: "+($nms -join ', ')
+                try { if(-not $script:hwCtx){ $ram=0; try { $ram=[math]::Round((Get-CimInstance Win32_ComputerSystem -Property TotalPhysicalMemory).TotalPhysicalMemory/1GB,0) } catch {}; $script:hwCtx='PC: RAM '+$ram+'gb, nucleos '+[Environment]::ProcessorCount } } catch {}
+            if($script:hwCtx){ $ctx+=' | '+$script:hwCtx }
+            if($ctx.Length -gt 1500){ $ctx=$ctx.Substring(0,1500) }
+            }
+        } catch {}
+        $aic=""
+        $hlist=@()
+        try { foreach($hh in $script:aiHist){$hlist+=@{role=$hh.r;content=$hh.c}} } catch {}
+        $urls=@()
+        try { if($script:serverUrl){$urls+=[string]$script:serverUrl};if($script:serverUrlCf){$urls+=[string]$script:serverUrlCf} } catch {}
+        $payload=@{client_id=$script:clientId;code=$aic;message=$q;history=$hlist;ctx=$ctx}|ConvertTo-Json -Depth 5 -Compress
+        $st.typing=Add-AiChatMessage -Role "Bastiss IA" -Message "Estoy preparando una respuesta..."
+        $ps=[System.Management.Automation.PowerShell]::Create()
+        [void]$ps.AddScript({
+            param($urlList,$bodyJson)
+            $answer=$null
+            $deadline=[DateTime]::UtcNow.AddSeconds(32)
+            foreach($base in $urlList){
+                $remaining=[int][Math]::Floor(($deadline-[DateTime]::UtcNow).TotalSeconds)
+                if($remaining -le 0){break}
+                $attemptTimer=[System.Diagnostics.Stopwatch]::StartNew()
+                try {
+                    $requestBytes=[System.Text.Encoding]::UTF8.GetBytes([string]$bodyJson)
+                    $requestTimeout=[Math]::Min(16,$remaining)
+                    $answer=Invoke-RestMethod -Uri ($base.TrimEnd("/")+"/api/ai-chat") -Method Post -Body $requestBytes -ContentType "application/json; charset=utf-8" -TimeoutSec $requestTimeout -ErrorAction Stop
+                    if($answer -and $answer.ok -and $answer.reply){return @{ok=$true;reply=[string]$answer.reply;action=[string]$answer.action;game=[string]$answer.game;watext=[string]$answer.watext}}
+                    if($answer -and -not [bool]$answer.ok -and $answer.err){ return @{ok=$true;reply=[string]$answer.err;action='';game='';watext=''} }
+                } catch { if($attemptTimer.Elapsed.TotalSeconds -ge 3){break} }
+            }
+            return @{ok=$false;reply="No pude conectarme ahora. Probá de nuevo o escribinos por WhatsApp."}
+        }).AddArgument([string[]]$urls).AddArgument([string]$payload)
+        $handle=$ps.BeginInvoke()
+        $st.job=@{ ps=$ps; handle=$handle; question=$q }
+        $st.input.Focus()
+    } catch {
+        try { $st=$script:aiChatState; $st.busy=$false; $st.send.Enabled=$true; $st.send.Tag.Text="Enviar"; try{$st.send.Invalidate()}catch{}; $st.status.Text="No pude enviar la consulta. Probá de nuevo o escribinos por WhatsApp."; $st.status.ForeColor=[System.Drawing.Color]::FromArgb(255,170,120) } catch {}
+    }
+}
+
+function Update-AiScroll {
+    try {
+        $st=$script:aiChatState
+        if(-not $st -or -not $st.clip -or -not $st.flow){ return }
+        $contentHeight=8
+        foreach($item in $st.flow.Controls){ $contentHeight += [int]($item.Height+9) }
+        $contentHeight += 4
+        $max=[Math]::Max(0,($contentHeight-$st.flow.ClientSize.Height))
+        $script:aiScrollMax=$max
+        if($script:aiScrollOff -gt $max){ $script:aiScrollOff=$max }
+        if($script:aiScrollOff -lt 0){ $script:aiScrollOff=0 }
+        $y=8
+        foreach($item in $st.flow.Controls){
+            $x=8
+            try { if($item.Tag -and $item.Tag.user){ $x=[Math]::Max(8,($st.flow.ClientSize.Width-$item.Width-8)) } } catch {}
+            $item.Location=New-Object System.Drawing.Point([int]$x,[int]($y-$script:aiScrollOff))
+            $y += [int]($item.Height+9)
+        }
+        if($st.sbar){ $st.sbar.Invalidate() }
+    } catch {}
+}
+function Set-QuickButtons([string]$mode) {
+    try {
+        $p=$script:aiQuickPanel
+        if(-not $p){ return }
+        $p.SuspendLayout()
+        $p.Controls.Clear()
+        $defs=@()
+        if($mode -eq 'verify'){ $defs=@(@('Anduvo bien','anduvo, quedo perfecto'),@('Sigue igual','no, sigue igual')) }
+        else { $defs=@(@('No abre un juego','no me abre un juego'),@('No se activa nada','no se me activan los juegos'),@('Quiero el online','quiero agregarle online a un juego'),@('Explicame simple','explicamelo mas simple')) }
+        $x=0
+        foreach($d in $defs){
+            $b=New-Object System.Windows.Forms.Button
+            $b.Text=[string]$d[0]; $b.Tag=[string]$d[1]
+            $w=104; if($mode -eq 'verify'){ $w=200 }
+            $b.Size=New-Object System.Drawing.Size($w,28); $b.Location=New-Object System.Drawing.Point($x,1)
+            $b.FlatStyle='Flat'; $b.FlatAppearance.BorderSize=1; $b.FlatAppearance.BorderColor=$script:CardBorder; $b.FlatAppearance.MouseOverBackColor=$script:CardHover
+            if($script:aiLight){$b.BackColor=[System.Drawing.Color]::FromArgb(245,248,252);$b.ForeColor=[System.Drawing.Color]::FromArgb(0,105,160);$b.FlatAppearance.BorderColor=[System.Drawing.Color]::FromArgb(215,224,236);$b.FlatAppearance.MouseOverBackColor=[System.Drawing.Color]::FromArgb(230,242,250)}
+            else{$b.BackColor=$script:CardBG;$b.ForeColor=$script:Cyan}
+            $b.Font=New-Object System.Drawing.Font('Segoe UI Semibold',8)
+            $b.Cursor=[System.Windows.Forms.Cursors]::Hand; $b.TabStop=$false
+            $b.Add_Click({ try { $st=$script:aiChatState; $st.input.Text=[string]$this.Tag; Start-AiChatSend } catch {} })
+            $p.Controls.Add($b); $x+=$w+6
+        }
+        $p.ResumeLayout()
+    } catch {}
+}
+function Save-AiHist {
+    try {
+        $dirA=Join-Path $env:LOCALAPPDATA 'BastissSteam'
+        if(-not (Test-Path -LiteralPath $dirA)){ New-Item -ItemType Directory -Path $dirA -Force | Out-Null }
+        $hf=Join-Path $dirA 'ai_hist.json'
+        $arr=@(); foreach($h in @($script:aiHist)){ $arr+=@{r=[string]$h.r;c=[string]$h.c} }
+        ($arr | ConvertTo-Json -Depth 3) | Set-Content -LiteralPath $hf -Encoding UTF8
+    } catch {}
+}
+
+function Show-AiChat {
+    try {
+        if (-not $script:aiHist) { $script:aiHist=@() }
+        try { $thf=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_theme.txt'; if(Test-Path -LiteralPath $thf){ $script:aiLight=((Get-Content -LiteralPath $thf -Raw).Trim() -eq '1') } } catch {}
+        try { if(@($script:aiHist).Count -eq 0){
+            $hf=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_hist.json'
+            if(Test-Path -LiteralPath $hf){
+                $hlRaw=Get-Content -LiteralPath $hf -Raw -Encoding UTF8 | ConvertFrom-Json
+                $hlOut=@()
+                foreach($x in @($hlRaw)){
+                    if($x -is [System.Array]){ foreach($y in $x){ $hlOut+=$y } }
+                    else { $hlOut+=$x }
+                }
+                foreach($ho in $hlOut){ if($ho -and $ho.r -and $ho.c){ $script:aiHist+=@{r=[string]$ho.r;c=[string]$ho.c} } }
+            }
+        } } catch {}
+        $cf=New-Object System.Windows.Forms.Form
+        $cf.Text="Ayuda IA - BastissSteam"
+        $cf.ClientSize=New-Object System.Drawing.Size(480,610)
+        $cf.MinimumSize=New-Object System.Drawing.Size(480,610)
+
+        $cf.StartPosition="CenterParent"; $cf.FormBorderStyle="Sizable"
+        $cf.MaximizeBox=$true; $cf.MinimizeBox=$false; $cf.ShowInTaskbar=$false
+        $cf.BackColor=$script:BG; $cf.ForeColor=$script:White
+        try {$cf.Icon=$form.Icon} catch {}
+        $cf.Add_HandleCreated({param($s);$v=[int]1;try{[DwmHelper]::DwmSetWindowAttribute($s.Handle,20,[ref]$v,4)|Out-Null}catch{}})
+
+        $top=New-BufferedPanel; $top.Location=New-Object System.Drawing.Point(0,0); $top.Size=New-Object System.Drawing.Size(460,76); $top.Anchor="Top, Left, Right"; $top.BackColor=$script:CardBG
+        $top.Add_Paint({param($s,$e)
+            try {
+                $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+                if($script:logoBmp){$g.DrawImage($script:logoBmp,14,13,50,50)}
+                $big=New-Object System.Drawing.Font("Bahnschrift SemiBold",19,[System.Drawing.FontStyle]::Bold)
+                $small=New-Object System.Drawing.Font("Bahnschrift Light",8.5)
+                $cyan=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0,200,255))
+                $white=New-Object System.Drawing.SolidBrush($script:White)
+                $g.DrawString("Bastiss",$big,$cyan,74,15)
+                $w=$g.MeasureString("Bastiss",$big)
+                $g.DrawString("Steam",$big,$white,(74+$w.Width-7),15)
+                $muted=New-Object System.Drawing.SolidBrush($script:Gray)
+                $g.DrawString("ASISTENTE PARA TUS JUEGOS",$small,$muted,77,43)
+                $pill=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(24,45,60))
+                $p=New-RR 376 25 88 25 12
+                $g.FillPath($pill,$p)
+                $badge=New-Object System.Drawing.Font("Segoe UI Semibold",7.5)
+                $g.DrawString("AYUDA IA",$badge,$cyan,390,31)
+                $p.Dispose();$pill.Dispose();$badge.Dispose();$muted.Dispose();$cyan.Dispose();$white.Dispose();$big.Dispose();$small.Dispose()
+            } catch {}
+        })
+        $status=New-Object System.Windows.Forms.Label; $status.Text="Asistente listo · escribí tu consulta"; $status.AutoSize=$true; $status.Location=New-Object System.Drawing.Point(17,82); $status.Font=$script:FntSub; $status.ForeColor=$script:Gray
+        $clip=New-Object System.Windows.Forms.Panel
+        $clip.Location=New-Object System.Drawing.Point(14,140); $clip.Size=New-Object System.Drawing.Size(452,310); $clip.Anchor="Top, Bottom, Left, Right"; $clip.BackColor=$script:CardBorder
+        $cf.Controls.Add($clip)
+        $flow=New-Object System.Windows.Forms.Panel
+        $flow.Location=New-Object System.Drawing.Point(1,1); $flow.Size=New-Object System.Drawing.Size(436,308); $flow.BackColor=$script:BG
+        $flow.Add_Paint({param($s,$e)
+            try {
+                $rect2=New-Object System.Drawing.Rectangle(0,0,[Math]::Max(1,$s.Width),[Math]::Max(1,$s.Height))
+                $gr2=$null
+                if($script:aiLight){ $gr2=New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect2,[System.Drawing.Color]::FromArgb(247,249,252),[System.Drawing.Color]::FromArgb(237,242,248),90) }
+                else { $gr2=New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect2,[System.Drawing.Color]::FromArgb(17,26,39),[System.Drawing.Color]::FromArgb(13,20,31),90) }
+                $e.Graphics.FillRectangle($gr2,$rect2); $gr2.Dispose()
+            } catch {}
+        })
+        $clip.Controls.Add($flow)
+        $sbar=New-Object System.Windows.Forms.Panel
+        $sbar.Location=New-Object System.Drawing.Point(438,1); $sbar.Size=New-Object System.Drawing.Size(13,308); $sbar.Anchor="Top, Bottom, Right"; $sbar.BackColor=$script:BG; $sbar.Cursor=[System.Windows.Forms.Cursors]::Hand
+        $sbar.Add_Paint({param($s,$e)
+            try {
+                $g3=$e.Graphics;$g3.SmoothingMode='AntiAlias'
+                $max3=[int]$script:aiScrollMax
+                $trackH=[Math]::Max(1,$s.Height-12)
+                $trackColor=$script:CardBorder
+                if($script:aiLight){$trackColor=[System.Drawing.Color]::FromArgb(218,226,237)}
+                $trackBrush=New-Object System.Drawing.SolidBrush($trackColor)
+                $trackPath=New-RR 4 6 5 $trackH 3
+                $g3.FillPath($trackBrush,$trackPath)
+                $trackBrush.Dispose();$trackPath.Dispose()
+                if($max3 -le 0){ return }
+                $thumbH=[int][Math]::Max(38,($trackH*($s.Height/([double]($max3+$s.Height)))))
+                if($thumbH -gt $trackH){$thumbH=$trackH}
+                $ty3=6+(($trackH-$thumbH)*([double]$script:aiScrollOff/[double]$max3))
+                $thumbRect=New-Object System.Drawing.Rectangle(2,[int]$ty3,9,[int]$thumbH)
+                $thumbBrush=New-Object System.Drawing.Drawing2D.LinearGradientBrush($thumbRect,[System.Drawing.Color]::FromArgb(0,205,255),[System.Drawing.Color]::FromArgb(0,125,205),90)
+                $thumbPath=New-RR 2 $ty3 9 $thumbH 5
+                $g3.FillPath($thumbBrush,$thumbPath)
+                $thumbBrush.Dispose();$thumbPath.Dispose()
+            } catch {}
+        })
+        $sbar.Add_MouseDown({param($s,$e); try { if($e.Button -eq 'Left'){ $script:aiSbDrag=$true; $s.Capture=$true } } catch {} })
+        $sbar.Add_MouseMove({param($s,$e)
+            try {
+                if($script:aiSbDrag -and $script:aiScrollMax -gt 0){
+                    $trackH=[Math]::Max(1,$s.Height-12)
+                    $th3=[int][Math]::Max(38,($trackH*($s.Height/([double]$script:aiScrollMax+$s.Height))))
+                    if($th3 -gt $trackH){$th3=$trackH}
+                    $ty3=$e.Y-($th3/2)
+                    $range=[Math]::Max(1,($trackH-$th3))
+                    $script:aiScrollOff=[int][Math]::Max(0,[Math]::Min($script:aiScrollMax,(($ty3-6)/[double]$range)*$script:aiScrollMax))
+                    Update-AiScroll
+                }
+            } catch {}
+        })
+        $sbar.Add_MouseUp({param($s,$e); try { $script:aiSbDrag=$false; $s.Capture=$false; $s.Invalidate() } catch {} })
+        $clip.Controls.Add($sbar)
+        $clip.Add_Resize({ try { $st4=$script:aiChatState; if($st4 -and $st4.flow){ $st4.flow.Width=[Math]::Max(300,($st4.clip.Width-16)); $st4.flow.Height=[Math]::Max(1,$st4.clip.Height-2); $st4.sbar.Left=$st4.clip.Width-14; $st4.sbar.Height=[Math]::Max(1,$st4.clip.Height-2); Update-AiScroll } } catch {} })
+        $cf.Add_MouseWheel({param($s,$e)
+            try {
+                $max3=[int]$script:aiScrollMax
+                if($max3 -le 0){ return }
+                $script:aiScrollOff=[Math]::Max(0,[Math]::Min($max3,($script:aiScrollOff - [int]([double]$e.Delta/120*44))))
+                Update-AiScroll
+            } catch {}
+        })
+        $flow.Add_MouseWheel({param($s,$e)
+            try {
+                $max3=[int]$script:aiScrollMax
+                if($max3 -le 0){ return }
+                $script:aiScrollOff=[Math]::Max(0,[Math]::Min($max3,($script:aiScrollOff - [int]([double]$e.Delta/120*44))))
+                Update-AiScroll
+            } catch {}
+        })
+        $ttsB=New-Object System.Windows.Forms.Button
+        $ttsB.Size=New-Object System.Drawing.Size(44,20); $ttsB.Location=New-Object System.Drawing.Point(330,78); $ttsB.Anchor="Top,Right"
+        $ttsB.FlatStyle="Flat"; $ttsB.FlatAppearance.BorderSize=0; $ttsB.BackColor=$script:CardBG; $ttsB.ForeColor=$script:Gray; $ttsB.Font=New-Object System.Drawing.Font("Segoe UI",7); $ttsB.Cursor=[System.Windows.Forms.Cursors]::Hand; $ttsB.TabStop=$false
+        try { $tfB=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_tts.txt'; if(Test-Path -LiteralPath $tfB){ $script:aiTtsOn=((Get-Content -LiteralPath $tfB -Raw).Trim() -eq '1') } } catch {}
+        if($script:aiTtsOn){ $ttsB.Text="VOZ ON" } else { $ttsB.Text="VOZ" }
+        $ttsB.Add_Click({ try { $script:aiTtsOn=(-not $script:aiTtsOn); if($script:aiTtsOn){$this.Text="VOZ ON"}else{$this.Text="VOZ"}; $tfB2=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_tts.txt'; ([string]([int]$script:aiTtsOn)) | Set-Content -LiteralPath $tfB2 -Encoding UTF8 } catch {} })
+        $cf.Controls.Add($ttsB)
+        $themeB=New-Object System.Windows.Forms.Button
+        $themeB.Size=New-Object System.Drawing.Size(48,20); $themeB.Location=New-Object System.Drawing.Point(378,78); $themeB.Anchor="Top,Right"
+        $themeB.FlatStyle="Flat"; $themeB.FlatAppearance.BorderSize=0; $themeB.BackColor=$script:CardBG; $themeB.ForeColor=$script:Gray; $themeB.Font=New-Object System.Drawing.Font("Segoe UI",7); $themeB.Cursor=[System.Windows.Forms.Cursors]::Hand; $themeB.TabStop=$false
+        $themeB.Text="TEMA"
+        $themeB.Add_Click({ try { $script:aiLight=(-not $script:aiLight); $tfT=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_theme.txt'; ([string]([int]$script:aiLight)) | Set-Content -LiteralPath $tfT -Encoding UTF8; $sT=$script:aiChatState; if($sT -and $sT.form -and -not $sT.form.IsDisposed){ if($script:aiLight){ $sT.form.BackColor=[System.Drawing.Color]::White; $sT.clip.BackColor=[System.Drawing.Color]::FromArgb(218,226,237); $sT.flow.BackColor=[System.Drawing.Color]::White; $sT.status.ForeColor=[System.Drawing.Color]::FromArgb(60,70,80); $sT.input.BackColor=[System.Drawing.Color]::White; $sT.input.ForeColor=[System.Drawing.Color]::Black } else { $sT.form.BackColor=$script:BG; $sT.clip.BackColor=$script:CardBorder; $sT.flow.BackColor=$script:BG; $sT.status.ForeColor=$script:Gray; $sT.input.BackColor=$script:InputBG; $sT.input.ForeColor=$script:White }; $sT.sbar.Invalidate(); $sT.flow.Invalidate() } ; Set-QuickButtons 'default' } catch {} })
+        $cf.Controls.Add($themeB)
+        if($script:aiLight){ try { $cf.BackColor=[System.Drawing.Color]::White; $flow.BackColor=[System.Drawing.Color]::White; $status.ForeColor=[System.Drawing.Color]::FromArgb(60,70,80) } catch {} }
+        $quickP=New-Object System.Windows.Forms.Panel
+        $quickP.Location=New-Object System.Drawing.Point(14,104); $quickP.Size=New-Object System.Drawing.Size(452,30); $quickP.Anchor="Top,Left,Right"; $quickP.BackColor=$cf.BackColor
+        $cf.Controls.Add($quickP)
+        $script:aiQuickPanel=$quickP
+        Set-QuickButtons 'default'
+        $entry=New-BufferedPanel; $entry.Location=New-Object System.Drawing.Point(14,462); $entry.Size=New-Object System.Drawing.Size(432,74); $entry.Anchor="Bottom, Left, Right"; $entry.BackColor=$script:BG
+        $entry.Add_Paint({param($s,$e)
+            try {$e.Graphics.SmoothingMode='AntiAlias';$p=New-RR 0 0 ($s.Width-1) ($s.Height-1) 12;$fill=New-Object System.Drawing.SolidBrush($script:CardBG);$br=New-Object System.Drawing.Pen($script:CardBorder,1);$e.Graphics.FillPath($fill,$p);$e.Graphics.DrawPath($br,$p);$fill.Dispose();$br.Dispose();$p.Dispose()} catch {}
+        })
+        $inputBox=New-Object System.Windows.Forms.TextBox; $inputBox.Multiline=$true; $inputBox.AcceptsReturn=$true; $inputBox.ScrollBars="Vertical"; $inputBox.MaxLength=800; $inputBox.WordWrap=$true; $inputBox.BorderStyle="None"; $inputBox.BackColor=$script:InputBG; $inputBox.ForeColor=$script:White; $inputBox.Font=New-Object System.Drawing.Font("Segoe UI",9.5); $inputBox.Location=New-Object System.Drawing.Point(11,11); $inputBox.Size=New-Object System.Drawing.Size(320,52); $inputBox.Anchor="Top, Bottom, Left, Right"; $inputBox.TabStop=$true
+        $send=New-Object System.Windows.Forms.Panel; $send.Location=New-Object System.Drawing.Point(342,11); $send.Size=New-Object System.Drawing.Size(78,52); $send.Anchor="Top, Bottom, Right"; $send.Cursor=[System.Windows.Forms.Cursors]::Hand; $send.Tag=@{Hover=$false;Text='Enviar'}
+        $send.Add_MouseEnter({param($s); try{$s.Tag.Hover=$true; $s.Invalidate()}catch{}})
+        $send.Add_MouseLeave({param($s); try{$s.Tag.Hover=$false; $s.Invalidate()}catch{}})
+        $send.Add_Paint({param($s,$e)
+            try {
+                $g4=$e.Graphics;$g4.SmoothingMode='AntiAlias';$g4.TextRenderingHint='ClearTypeGridFit'
+                $txt4=[string]$s.Tag.Text
+                $p4=New-RR 0 0 ($s.Width-1) ($s.Height-1) 11
+                $gr4=$null
+                if($s.Enabled){ $gr4=New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Rectangle(0,0,$s.Width,$s.Height)),[System.Drawing.Color]::FromArgb(0,198,245),[System.Drawing.Color]::FromArgb(0,130,195),90) }
+                else { $gr4=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(95,110,125)) }
+                $g4.FillPath($gr4,$p4); $gr4.Dispose()
+                if($s.Tag.Hover -and $s.Enabled){ $pn4=New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(170,240,255),1.6); $g4.DrawPath($pn4,$p4); $pn4.Dispose() }
+                $fnt4=New-Object System.Drawing.Font("Bahnschrift SemiBold",10,[System.Drawing.FontStyle]::Bold)
+                $sf4=New-Object System.Drawing.StringFormat; $sf4.Alignment='Center'; $sf4.LineAlignment='Center'
+                $sb4=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(5,20,30))
+                $g4.DrawString($txt4,$fnt4,$sb4,(New-Object System.Drawing.RectangleF(0,0,$s.Width,$s.Height)),$sf4)
+                $sb4.Dispose();$sf4.Dispose();$fnt4.Dispose();$p4.Dispose()
+            } catch {}
+        })
+        $hint=New-Object System.Windows.Forms.Label; $hint.Text="Escribí tu consulta · Ctrl + Enter para enviar"; $hint.AutoSize=$true; $hint.Location=New-Object System.Drawing.Point(16,548); $hint.Anchor="Bottom, Left"; $hint.Font=$script:FntSub; $hint.ForeColor=$script:Gray
+        $wa=New-Object System.Windows.Forms.Button; $wa.Text="Soporte por WhatsApp"; $wa.Location=New-Object System.Drawing.Point(292,544); $wa.Size=New-Object System.Drawing.Size(152,32); $wa.Anchor="Bottom, Right"; $wa.FlatStyle="Flat"; $wa.FlatAppearance.BorderColor=$script:CardBorder; $wa.FlatAppearance.MouseOverBackColor=$script:CardHover; $wa.BackColor=$script:CardBG; $wa.ForeColor=$script:White; $wa.Font=$script:FntSub; $wa.Cursor=[System.Windows.Forms.Cursors]::Hand
+        $entry.Controls.Add($inputBox); $entry.Controls.Add($send)
+        $cf.Controls.Add($top); $cf.Controls.Add($status)
+        $cf.Controls.Add($entry); $cf.Controls.Add($hint); $cf.Controls.Add($wa)
+        $script:aiChatState=@{form=$cf;flow=$flow;clip=$clip;sbar=$sbar;input=$inputBox;send=$send;status=$status;busy=$false;closed=$false;job=$null;typing=$null;timer=$null;lastQuestion=""}
+        $flow.SuspendLayout()
+        if(@($script:aiHist).Count -eq 0){
+            [void](Add-AiChatMessage -Role "Bastiss IA" -Message "Hola! Soy la IA de BastissSteam. Contame que necesitas y te ayudo con tus juegos o con la app.")
+        }
+        foreach($old in @($script:aiHist)){ if($old.r -eq "user"){[void](Add-AiChatMessage -Role "Vos" -Message ([string]$old.c))} elseif($old.r -eq "assistant"){[void](Add-AiChatMessage -Role "Bastiss IA" -Message ([string]$old.c))} }
+        $flow.ResumeLayout()
+        Update-AiScroll
+        $timer=New-Object System.Windows.Forms.Timer; $timer.Interval=300
+        $script:aiChatState.timer=$timer
+        $timer.Add_Tick({
+            try {
+                $st=$script:aiChatState
+                if(-not $st){return}
+                if($st.actJob){
+                    if($st.actJob.handle.IsCompleted){
+                        $aj=$st.actJob; $st.actJob=$null
+                        $amsg="No pude completarlo. Proba de nuevo o escribinos por WhatsApp."
+                        try {
+                            $ao=$aj.ps.EndInvoke($aj.handle)
+                            if($aj.sync -ne $null -and [string]$aj.sync.result){ $amsg=[string]$aj.sync.result }
+                        } catch {}
+                        if($amsg -eq 'IRCANJE_MARK'){
+                            try { $aj.ps.Dispose() } catch {}
+                            try { if($aj.rs -ne $null){ $aj.rs.Close(); $aj.rs.Dispose() } } catch {}
+                            try { $st.actBusy=$false } catch {}
+                            try {
+                                $script:aiHist+=@(@{r="assistant";c="Vamos a canjear tu codigo."})
+                                try { Save-AiHist } catch {}
+                                $st.form.Close()
+                                Switch-ToRedeem
+                                $bx2=$null
+                                try { foreach($cc3 in @($script:rp.Controls)){ if($cc3 -is [System.Windows.Forms.TextBox]){ $bx2=$cc3; break } } } catch {}
+                                if($bx2){ try { $bx2.Focus() } catch {} }
+                            } catch {}
+                            return
+                        }
+                        if($amsg -eq 'PAUSAR_MARK' -or $amsg -eq 'REANUDAR_MARK'){
+                            try { $aj.ps.Dispose() } catch {}
+                            try { if($aj.rs -ne $null){ $aj.rs.Close(); $aj.rs.Dispose() } } catch {}
+                            try { $st.actBusy=$false } catch {}
+                            $m8=''
+                            if($amsg -eq 'PAUSAR_MARK'){
+                                $n8=0
+                                try { $script:aiPausedFixes=$script:downloadPendingFixes; $script:downloadPendingFixes=@{}; $n8=@($script:aiPausedFixes).Count } catch {}
+                                $m8='Pause '+$n8+' descargas de arreglos. Pedime retomarlas cuando quieras.'
+                            } else {
+                                $n8=0
+                                try { if($script:aiPausedFixes){ foreach($k8 in @($script:aiPausedFixes.Keys)){ $script:downloadPendingFixes[$k8]=$script:aiPausedFixes[$k8]; $n8++ }; $script:aiPausedFixes=@{} } } catch {}
+                                $m8='Retome '+$n8+' descargas de arreglos. Van a seguir solas.'
+                            }
+                            try {
+                                [void](Add-AiChatMessage -Role "Bastiss IA" -Message $m8)
+                                $script:aiHist+=@(@{r="assistant";c=$m8})
+                                try { Save-AiHist } catch {}
+                                $st.status.Text="Listo"; $st.status.ForeColor=$script:Cyan
+                            } catch {}
+                            return
+                        }
+                        if($amsg -like 'CANJEAR_OK:*'){
+                            $ccParts=($amsg.Substring(11) -split '\|'); $ccode=$ccParts[0]
+                            $bx=$null
+                            try { foreach($cc2 in @($script:rp.Controls)){ if($cc2 -is [System.Windows.Forms.TextBox]){ $bx=$cc2; break } } } catch {}
+                            try { $aj.ps.Dispose() } catch {}
+                            try { if($aj.rs -ne $null){ $aj.rs.Close(); $aj.rs.Dispose() } } catch {}
+                            try { $st.actBusy=$false } catch {}
+                            if($bx){
+                                try { $bx.Text=$ccode } catch {}
+                                $script:aiHist+=@(@{r="assistant";c="Te cargue el codigo para activar."})
+                                if(@($script:aiHist).Count -gt 8){$script:aiHist=@($script:aiHist|Select-Object -Last 8)}; try { Save-AiHist } catch {}
+                                                                try { $lblR.ForeColor=[System.Drawing.Color]::FromArgb(126,255,176); $lblR.Text="Tu codigo trae "+$ccParts[1]+" juegos. Toca Activar para empezar." } catch {}
+                                try {
+                                    $st.form.Close()
+                                    Switch-ToRedeem
+                                    try { $bx.Focus() } catch {}
+                                    try { $bx.SelectAll() } catch {}
+                                } catch {}
+                                return
+                            } else {
+                                $amsg="Tu codigo es "+$ccode+". Abri la pantalla de canje, escribilo y toca Activar."
+                            }
+                        }
+                        try { $aj.ps.Dispose() } catch {}
+                        try { if($aj.rs -ne $null){ $aj.rs.Close(); $aj.rs.Dispose() } } catch {}
+                        try { $st.actBusy=$false } catch {}
+                        try {
+                            [void](Add-AiChatMessage -Role "Bastiss IA" -Message $amsg)
+                            $script:aiHist+=@(@{r="assistant";c=$amsg})
+                            if(@($script:aiHist).Count -gt 8){$script:aiHist=@($script:aiHist|Select-Object -Last 8)}; try { Save-AiHist } catch {}
+                            $st.status.Text="Listo"; $st.status.ForeColor=$script:Cyan;try{if($st.form.ContainsFocus){$st.input.Focus()}}catch{};try{ if(@('reparar','online') -contains [string]$aj.act){ Set-QuickButtons 'verify' } }catch{}
+                        } catch {}
+                    } else {
+                        try {
+                            $ns=""; try { $ns=[string]$script:bibRepairProgress['text'] } catch {}; if(-not $ns){ try { $ns=[string]$st.actJob.sync.status } catch {} }
+                            if($ns -and $st.status.Text -ne $ns){ $st.status.Text=$ns }
+                            $mins=([DateTime]::UtcNow-[DateTime]$st.actJob.started).TotalMinutes
+                            if($mins -gt 25){ try { $st.actJob.ps.BeginStop() } catch {} }
+                        } catch {}
+                    }
+                }
+;if(-not $st.job -or -not $st.job.handle.IsCompleted){return}
+                $job=$st.job; $st.job=$null
+                $result=$null
+                try { $out=$job.ps.EndInvoke($job.handle); if($out -and $out.Count -gt 0){$result=$out[0]} } catch {}
+                try {$job.ps.Dispose()} catch {}
+                if($st.typing){try{$st.flow.Controls.Remove($st.typing);$st.typing.Dispose()}catch{};$st.typing=$null}
+                if($result -and $result.ok -and $result.reply){
+                    $reply=Normalize-AiReply ([string]$result.reply)
+                    [void](Add-AiChatMessage -Role "Bastiss IA" -Message $reply)
+                    $script:aiHist+=@(@{r="user";c=$job.question},@{r="assistant";c=$reply})
+                    if(@($script:aiHist).Count -gt 8){$script:aiHist=@($script:aiHist|Select-Object -Last 8)}; try { Save-AiHist } catch {}
+                    $st.status.Text="Respuesta recibida"; $st.status.ForeColor=$script:Cyan; try {
+                                                $okActs=@('reparar','online','reinstalar','abrir','whatsapp','diagnosticar','canjear','ircanje','instalar','desinstalar','steam','revisar','progreso','ficha','onlista','pausar','reanudar')
+                        $ra=[string]$result.action
+                        if($ra -and ($okActs -contains $ra.ToLowerInvariant())){
+                            if($st.actBusy -or $st.actJob){
+                                [void](Add-AiChatMessage -Role "Bastiss IA" -Message "Todavia estoy terminando el arreglo anterior, dame un momento y despues pedimelo de nuevo.")
+                            } else {
+                                $startMsg=''
+                                if($ra -eq 'reparar'){ $gn6=[string]$result.game; if($gn6){ $startMsg='Empiezo a arreglar '+$gn6+' ahora. Te aviso aca abajo en cuanto termine.' } else { $startMsg='Empiezo a reparar la activacion general. Te aviso aca abajo cuando termine.' } }
+                                elseif($ra -eq 'online'){ $gn6=[string]$result.game; $startMsg='Empiezo a agregarle el online a '+$gn6+'. Te aviso aca abajo cuando quede listo.' }
+                                elseif($ra -eq 'diagnosticar'){ $startMsg='Empiezo el diagnostico completo de tu activacion. El resultado aparece aca abajo en un momento.' }
+                                if($startMsg){ [void](Add-AiChatMessage -Role "Bastiss IA" -Message $startMsg) }
+                                Start-AiActionBg -Action $ra -Game ([string]$result.game) -Extra ([string]$result.watext)
+                            }
+                        }
+                    } catch {}
+                } else {
+            $msg="No pude conectarme ahora. Probá de nuevo o escribinos por WhatsApp."
+                    [void](Add-AiChatMessage -Role "Bastiss IA" -Message $msg)
+                    $st.status.Text="No pude conectar · WhatsApp está disponible"; $st.status.ForeColor=[System.Drawing.Color]::FromArgb(255,170,120)
+                }
+                $st.busy=$false; $st.send.Enabled=$true; $st.send.Tag.Text="Enviar"; try{$st.send.Invalidate()}catch{}; $st.input.Focus()
+            } catch {}
+        })
+        $send.Add_Click({Start-AiChatSend})
+        $inputBox.Add_KeyDown({param($sender,$e);if($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and -not $e.Shift -and -not $e.Control){$e.SuppressKeyPress=$true;Start-AiChatSend}})
+        $wa.Add_Click({
+            try {
+                $tx="Hola, necesito ayuda con BastissSteam."
+                $st=$script:aiChatState
+                if($st.lastQuestion){$tx+=" Mi consulta: "+$st.lastQuestion}
+                elseif($script:aiHist -and @($script:aiHist).Count -gt 0){$last=@($script:aiHist)[-1];if($last.r -eq "assistant"){$tx+=" La IA me dijo: "+$last.c}else{$tx+=" Mi consulta: "+$last.c}}
+                if($tx.Length -gt 400){$tx=$tx.Substring(0,400)}
+                Start-Process ("https://wa.me/message/6JFSK7YDC2TAA1?text="+[uri]::EscapeDataString($tx))
+            } catch {}
+        })
+        $cf.Add_Shown({$timer.Start();$inputBox.Focus()})
+        $cf.Add_FormClosing({
+            param($sender,$ev)
+            try {
+                $st2=$script:aiChatState
+                if($st2 -and ($st2.actBusy -or $st2.actJob)){
+                    $ans=[System.Windows.Forms.MessageBox]::Show($st2.form,"Hay un arreglo en curso. Si cerras el chat ahora, se cancela. Cerrar igual?","Ayuda IA","YesNo","Warning")
+                    if($ans -ne "Yes"){ $ev.Cancel=$true }
+                }
+            } catch {}
+        })
+        $cf.Add_FormClosed({
+            try { $st=$script:aiChatState; $st.closed=$true;try{$script:chatOpen=$false}catch{}; $st.timer.Stop(); $st.timer.Dispose(); if($st.job -and -not $st.job.handle.IsCompleted){try{$st.job.ps.BeginStop()}catch{}};if($st.actJob){try{$st.actJob.ps.BeginStop()}catch{};try{$st.actJob.ps.Dispose()}catch{};try{if($st.actJob.rs -ne $null){$st.actJob.rs.Close();$st.actJob.rs.Dispose()}}catch{};$st.actJob=$null;try{$st.actBusy=$false}catch{}} } catch {}
+        })
+        try{$script:chatOpen=$true}catch{};if($form){[void]$cf.ShowDialog($form)}else{[void]$cf.ShowDialog()}
+        try {$cf.Dispose()} catch {}
+    } catch { try { WEL "AI chat UI error" $_ } catch {} }
+}
 function Switch-ToRedeem{$script:mp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:rp.Visible=$true;RfC}
 function Switch-ToMain{$script:rp.Visible=$false;$script:sp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false;$script:mp.Visible=$true}
 function Switch-ToConfig{$script:mp.Visible=$false;$script:rp.Visible=$false;if($script:cdp){$script:cdp.Visible=$false};$script:bibp.Visible=$false;$script:sp.Visible=$true;$script:sWatcher.Invalidate()}
@@ -4612,7 +5735,7 @@ $script:mp.Controls.Add($script:cTikTok)
 
 
 $script:c5=New-Card -X $PAD -Y $DISC_Y -W $CW -H $FCH -Title (T "discord") -Sub (T (S("ZGlzY29yZFN1Yg=="))) -Icon "discord" -Click {Start-Process (D "aHR0cHM6Ly9kaXNjb3JkLmdnL3czbmhHZVd1dlQ=")}
-$script:mp.Controls.Add($script:c5)
+$script:mp.Controls.Add($script:c5); $script:cAI=New-Card -X $PAD -Y $AI_Y -W $CW -H $FCH -Title "Ayuda IA" -Sub "Te ayudo con tus juegos" -Icon "chat" -Click { Show-AiChat }; $script:mp.Controls.Add($script:cAI)
 
 
 $script:salBtn=New-BufferedPanel
@@ -6694,6 +7817,7 @@ $script:sLogBox2.Visible=$false
 $script:watcherLogTimer=New-Object System.Windows.Forms.Timer
 $script:watcherLogTimer.Interval=2000
 $script:watcherLogTimer.Add_Tick({
+    if($script:chatOpen){return}
     try {
         $logPath = Join-Path $env:TEMP (S("YnNtYXBfd2F0Y2hlci5sb2c="))
         $src=(S("YnNtYXBfd2F0Y2hlci5sb2c="))
@@ -6714,6 +7838,7 @@ $script:watcherLogTimer.Add_Tick({
 $script:luatoolsLogTimer=New-Object System.Windows.Forms.Timer
 $script:luatoolsLogTimer.Interval=2000
 $script:luatoolsLogTimer.Add_Tick({
+    if($script:chatOpen){return}
     try {
         $logPath2 = Join-Path $env:TEMP (S("YnNtYXBfbHVhdG9vbHMubG9n"))
         if (Test-Path $logPath2) {
@@ -7240,7 +8365,7 @@ function Set-BiblioGridScroll {
             $viewH=[Math]::Max(1,[int]$script:bibViewport.ClientSize.Height);$scrollOffset=[int](-$s.Top)
             $base=$null;$lightPath=$null;$lightBrush=$null;$bluePath=$null;$blueBrush=$null;$dots=$null;$rail=$null;$ring=$null;$shelf=$null;$curvePath=$null;$curvePen=$null
             try{
-                $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
                 $backRect=New-Object System.Drawing.Rectangle(0,$scrollOffset,$w,$viewH)
                 $base=New-Object System.Drawing.Drawing2D.LinearGradientBrush($backRect,[System.Drawing.Color]::FromArgb(16,27,44),[System.Drawing.Color]::FromArgb(9,14,24),90)
                 $g.FillRectangle($base,$clip)
@@ -7366,8 +8491,8 @@ function Set-BiblioMode([bool]$downloadedOnly) {
     if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
 }
 function Switch-BiblioView{
-    if($script:bibView -eq 'grande'){ $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande'; $script:bibPageSize=288 }
-    else { $script:bibView='grande'; $script:bibViewBtn.Tag.Text='Vista compacta'; $script:bibPageSize=96 }
+    if($script:bibView -eq 'grande'){ $script:bibView='compact'; $script:bibViewBtn.Tag.Text='Vista grande'; $script:bibPageSize=72 }
+    else { $script:bibView='grande'; $script:bibViewBtn.Tag.Text='Vista compacta'; $script:bibPageSize=48 }
     $script:bibViewBtn.Invalidate()
     $script:bibPage=0;$script:bibFilterKey=$null
     if($script:bibSearch){Refresh-BiblioGrid $script:bibSearch.Text}
@@ -7592,6 +8717,7 @@ $script:bibNameCacheFrom=0
 $script:bibNameTimer=New-Object System.Windows.Forms.Timer
 $script:bibNameTimer.Interval=3000
 $script:bibNameTimer.Add_Tick({
+    if($script:chatOpen){return}
     try {
         Update-BiblioNamesFromCache
         $bj=$script:bibBulkJob
@@ -7766,7 +8892,7 @@ function Show-Biblio {
         }
         $script:bibFilterKey = $null
         $script:bibPage = 0
-        $script:bibView='grande'; $script:bibPageSize=96
+        $script:bibView='grande'; $script:bibPageSize=48
         try{ $script:bibViewBtn.Tag.Text='Vista compacta'; $script:bibViewBtn.Invalidate() }catch{}
         $script:bibSuppressSearch=$true
         $script:bibSearch.Text = ''
@@ -7811,7 +8937,7 @@ $script:bibView='grande'
 $script:bibViewBtn=New-BibNavButton 'Vista compacta' {Switch-BiblioView}
 $script:bibTopRank=@{'271590'=1;'1091500'=2;'1174180'=3;'1245620'=4;'1086940'=5;'1593500'=6;'292030'=7;'489830'=8;'377160'=9;'1716740'=10;'990080'=11;'1817070'=12;'2651280'=13;'2215430'=14;'1016730'=15;'2420110'=16;'553850'=17;'730'=18;'570'=19;'578080'=20;'1172470'=21;'252490'=22;'381210'=23;'739630'=24;'1966720'=25;'3241660'=26;'413150'=27;'105600'=28;'367520'=29;'1030300'=30;'1145360'=31;'588650'=32;'646570'=33;'2379780'=34;'1794680'=35;'374320'=36;'814380'=37;'2519060'=38;'1938090'=39;'2933620'=40;'311210'=41;'1517290'=42;'1238860'=43;'1237970'=44;'2665430'=45;'2195250'=46;'1551360'=47;'1293830'=48;'244210'=49;'805550'=50;'284160'=51;'227300'=52;'270880'=53;'289070'=54;'8930'=55;'1295660'=56;'813780'=57;'1466860'=58;'1142710'=59;'281990'=60;'1158310'=61;'255710'=62;'949230'=63;'294100'=64;'427520'=65;'526870'=66;'457140'=67;'323190'=68;'1609400'=69;'916440'=70;'268500'=71;'435150'=72;'632470'=73;'620'=74;'400'=75;'220'=76;'546560'=77;'550'=78;'440'=79;'4000'=80;'2357570'=81;'1085660'=82;'230410'=83;'238960'=84;'2694490'=85;'2344520'=86;'1599340'=87;'1063730'=88;'582010'=89;'2246340'=90;'1446780'=91;'1627720'=92;'2358720'=93;'883710'=94;'952060'=95;'2050650'=96;'418370'=97;'1196590'=98;'2124490'=99;'1693980'=100;'870780'=101;'208650'=102;'209000'=103;'976310'=104;'1971550'=105;'1364780'=106;'1778820'=107;'1687950'=108;'2161700'=109;'1235140'=110;'2072450'=111;'638970'=112;'2058180'=113;'1426210'=114;'1222700'=115;'264710'=116;'848450'=117;'242760'=118;'1326470'=119;'648800'=120;'892970'=121;'1604030'=122;'1623730'=123;'1203620'=124;'962130'=125;'1172620'=126;'275850'=127;'945360'=128;'1097150'=129;'252950'=130;'268910'=131;'1057090'=132;'261570'=133;'504230'=134;'39210'=135;'1462040'=136;'2909400'=137;'524220'=138;'20920'=139;'12200'=140;'12210'=141}
 $script:bibp.Controls.Add($script:bibViewBtn)
-$script:bibPageSize=96
+$script:bibPageSize=48
 $script:bibPage=0
 $script:bibPageGames=@()
 $script:bibFilteredGames=@()
@@ -7883,6 +9009,7 @@ $script:bibViewport.Controls.Add($script:bibEmptyState)
 $script:bibLoadingTimer=New-Object System.Windows.Forms.Timer
 $script:bibLoadingTimer.Interval=85
 $script:bibLoadingTimer.Add_Tick({
+    if($script:chatOpen){return}
     $loading=[bool]$script:bibLoadingCard.Visible
     if($loading){$script:bibLoadingCard.Tag.Angle=([int]$script:bibLoadingCard.Tag.Angle+38)%360;$script:bibLoadingCard.Invalidate()}
     $fade=$script:bibFadeOverlay
@@ -7908,12 +9035,13 @@ $script:bibLoadingTimer.Add_Tick({
     if(-not $loading -and $missing -eq 0 -and -not $script:bibFadeOverlay){$script:bibLoadingTimer.Stop()}
 })
 $script:bibRenderTimer=New-Object System.Windows.Forms.Timer
-$script:bibRenderTimer.Interval=20
+$script:bibRenderTimer.Interval=35
 $script:bibRenderTimer.Add_Tick({
+    if($script:chatOpen){return}
     try{
         $script:bibFlow.SuspendLayout()
         $added=0
-        while($script:bibRenderIndex -lt $script:bibRenderQueue.Count -and $added -lt 12){
+        while($script:bibRenderIndex -lt $script:bibRenderQueue.Count -and $added -lt 18){
             $game=$script:bibRenderQueue[$script:bibRenderIndex]
             $tile=New-BiblioTile $game
             $script:bibFlow.Controls.Add($tile)
@@ -8082,6 +9210,7 @@ function Reset-BiblioBadCover([string]$appid,[object]$box) {
 $script:bibTimer=New-Object System.Windows.Forms.Timer
 $script:bibTimer.Interval=450
 $script:bibTimer.Add_Tick({
+    if($script:chatOpen){return}
     try {
         if (-not $script:bibp.Visible) { return }
         $alive = @()
@@ -8141,32 +9270,107 @@ $form.Controls.Add($script:bibp)
 Set-BiblioLayout
 $script:updateNotified=$false
 $script:updTimer=New-Object System.Windows.Forms.Timer
-$script:updTimer.Interval=60000
+$script:updTimer.Interval=3000
 $script:updTimer.Add_Tick({
     try{ Check-AppUpdate }catch{}
 })
 $script:updTimer.Start()
-function Check-AppUpdate {
-    if($script:updateNotified){return}
-    try{
-        $rv=([string](Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/version.txt' -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop)).Trim()
-        $m1=[regex]::Match($script:version,'V(\d+)\.(\d+)'); $m2=[regex]::Match($rv,'V(\d+)\.(\d+)')
-        if(-not $m1.Success -or -not $m2.Success){return}
-        $cur=[int]$m1.Groups[1].Value*1000+[int]$m1.Groups[2].Value
-        $new=[int]$m2.Groups[1].Value*1000+[int]$m2.Groups[2].Value
-        if($new -le $cur){return}
-        $script:updateNotified=$true
-        Start-SelfUpdate $rv
-    }catch{}
+$script:weeklyTimer=New-Object System.Windows.Forms.Timer
+$script:weeklyTimer.Interval=90000
+$script:weeklyTimer.Add_Tick({
+    try {
+        $script:weeklyTimer.Stop()
+        $wf2=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_weekly.txt'
+        $doW=$false
+        try { if(Test-Path -LiteralPath $wf2){ $doW=((Get-Date)-[datetime]((Get-Content -LiteralPath $wf2 -Raw).Trim())).TotalDays -ge 7 } else { $doW=$true } } catch { $doW=$true }
+        if(-not $doW){ return }
+        try { (Get-Date -Format 'o') | Set-Content -LiteralPath $wf2 -Encoding UTF8 } catch {}
+        $usW=@(); try { if($script:serverUrl){$usW+=[string]$script:serverUrl}; if($script:serverUrlCf){$usW+=[string]$script:serverUrlCf} } catch {}
+        try {
+            $issW=[System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            foreach($fnW in @(Get-ChildItem -Path 'function:')){ try { $issW.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry($fnW.Name,$fnW.ScriptBlock))) } catch {} }
+            try {
+                $veW=New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry -ArgumentList 'ParcheDllHash',$script:ParcheDllHash,''
+                $issW.Variables.Add($veW)
+            } catch {}
+            $rsW=[System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($issW)
+            $rsW.Open()
+            $psW=[System.Management.Automation.PowerShell]::Create()
+            $psW.Runspace=$rsW
+            [void]$psW.AddScript({
+                param($uL,$cidW)
+                $okP=$false; $mnW=0
+                try { $spW=Get-SteamPath; if($spW){ $okP=[bool](Test-ParcheActual $spW) } } catch {}
+                try { foreach($lbW in @(Ss3Jd)){ $mnW+=@(Get-ChildItem -LiteralPath (Join-Path $lbW 'steamapps') -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue).Count } } catch {}
+                $msgW='semanal: activacion='+$okP+' juegos='+$mnW
+                $pbW=(@{client_id=$cidW;kind='semanal';msg=$msgW} | ConvertTo-Json -Compress)
+                foreach($uW in $uL){ try { Invoke-RestMethod -Uri ($uW.TrimEnd('/')+'/api/client-error') -Method Post -Body $pbW -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop | Out-Null; break } catch {} }
+            }).AddArgument($usW).AddArgument([string]$script:clientId)
+            $script:weeklyJob=@{ps=$psW;rs=$rsW;h=$psW.BeginInvoke()}
+        } catch {}
+    } catch {}
+})
+$script:weeklyTimer.Start()
+function Start-AppUpdateWorker {
+    param([string]$Stage,[string]$TargetFile)
+    try {
+        $psU=[PowerShell]::Create()
+        if($Stage -eq 'check'){
+            [void]$psU.AddScript({
+                try { return ([string](Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/bastisayes/BastissSteamV18/main/version.txt' -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop)).Trim() } catch { return '' }
+            })
+        }else{
+            [void]$psU.AddScript({
+                param($target)
+                try {
+                    if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue}
+                    Invoke-WebRequest -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator4.exe' -OutFile $target -UseBasicParsing -TimeoutSec 90 -ErrorAction Stop
+                    return @{ok=((Test-Path -LiteralPath $target) -and (Get-Item -LiteralPath $target).Length -gt 100000)}
+                } catch { try{Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue}catch{}; return @{ok=$false} }
+            }).AddArgument($TargetFile)
+        }
+        $hU=$psU.BeginInvoke()
+        $script:updateJob=@{ps=$psU;handle=$hU;stage=$Stage;file=$TargetFile;version=''}
+    } catch { try{if($psU){$psU.Dispose()}}catch{} }
 }
-function Start-SelfUpdate([string]$newVer) {
+function Check-AppUpdate {
+    try {
+        $job=$script:updateJob
+        if($job){
+            if(-not $job.handle.IsCompleted){return}
+            $out=$null
+            try{$items=@($job.ps.EndInvoke($job.handle));if($items.Count -gt 0){$out=$items[$items.Count-1]}}catch{}
+            try{$job.ps.Dispose()}catch{}
+            $script:updateJob=$null
+            if($job.stage -eq 'check'){
+                $rv=[string]$out
+                $m1=[regex]::Match($script:version,'V(\d+)\.(\d+)');$m2=[regex]::Match($rv,'V(\d+)\.(\d+)')
+                if(-not $m1.Success -or -not $m2.Success){return}
+                $cur=[int]$m1.Groups[1].Value*1000+[int]$m1.Groups[2].Value
+                $new=[int]$m2.Groups[1].Value*1000+[int]$m2.Groups[2].Value
+                if($new -le $cur){return}
+                $self=[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+                $newFile=$self+'.new'
+                Start-AppUpdateWorker -Stage 'download' -TargetFile $newFile
+                if($script:updateJob){$script:updateJob.version=$rv}
+                return
+            }
+            if($job.stage -eq 'download' -and $out -and $out.ok){Start-SelfUpdate -newVer $job.version -PreparedFile $job.file}
+            return
+        }
+        if($script:updateNotified){return}
+        if($script:updateCheckAt -and ((Get-Date)-$script:updateCheckAt).TotalMinutes -lt 10){return}
+        $script:updateCheckAt=Get-Date
+        Start-AppUpdateWorker -Stage 'check'
+    } catch {}
+}
+function Start-SelfUpdate([string]$newVer,[string]$PreparedFile) { if($script:chatOpen){return}
     try{
         $self=[System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-        $newFile=$self + ".new"
-        try{ Remove-Item -LiteralPath $newFile -Force -ErrorAction SilentlyContinue }catch{}
-        (New-Object System.Net.WebClient).DownloadFile("https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator4.exe",$newFile)
+        $newFile=$PreparedFile
         if(-not ((Test-Path -LiteralPath $newFile) -and ((Get-Item -LiteralPath $newFile).Length -gt 100000))){return}
         $r=[System.Windows.Forms.MessageBox]::Show(("Hay una nueva version disponible ("+$newVer+"). Reiniciar ahora para actualizar?"),"Actualizacion","YesNo","Information")
+        $script:updateNotified=$true
         if($r -ne "Yes"){return}
         $helper=Join-Path $env:TEMP ("bsmap_upd_"+[System.IO.Path]::GetRandomFileName()+".ps1")
         Set-Content -LiteralPath $helper ("param(`$p,`$s,`$n)`nwhile(Get-Process -Id `$p -ErrorAction SilentlyContinue){Start-Sleep -Milliseconds 500}`nMove-Item -LiteralPath `$n -Destination `$s -Force`nStart-Process -FilePath `$s") -Encoding ASCII
@@ -8188,6 +9392,7 @@ $script:bdtDlWatch=$null
 $script:bdtDlTimer=New-Object System.Windows.Forms.Timer
 $script:bdtDlTimer.Interval=2000
 $script:bdtDlTimer.Add_Tick({
+    if($script:chatOpen){return}
     try {
         if(-not $script:bdtDlSync){return}
         if($script:bdtDlSync.done){
@@ -8260,12 +9465,12 @@ function Repair-BiblioGame([string]$appid) {
         $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
         $fn,$fu = $null,$null
         if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
-        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
+        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Aplicando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $fx=Apply-FixAutomatically $gfolder $gpath $fixes
-        if($fx[0]){ $out.ok=$true;$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
-        $out.msg="Este juego no requiere reparacion."
-    } catch { $out.msg="Este juego no requiere reparacion." }
+        if($fx[0]){ $out.ok=$true;$out.fix="si";$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
+        $out.msg="No se pudo completar el arreglo."; $out.fix="fallo"
+    } catch { $out.msg="No se pudo completar el arreglo."; $out.fix="fallo" }
     return $out
 }
 function Activate-BiblioGame([string]$appid) {
@@ -8450,6 +9655,7 @@ function Start-BiblioDetailJobs([string]$appid) {
             $script:bibDetailTimer=New-Object System.Windows.Forms.Timer
             $script:bibDetailTimer.Interval=250
             $script:bibDetailTimer.Add_Tick({
+                if($script:chatOpen){return}
                 $alive=@()
                 foreach($job in @($script:bibDetailJobs)){
                     if(-not $job.h.IsCompleted){$alive+=$job;continue}
@@ -8652,7 +9858,7 @@ function New-BdtBtn($x,$y,$w,$h,$bg,$hbg,$fg,$bd,$fnt){
 $script:bdtPlay=New-BdtBtn $PAD 452 240 50 ([System.Drawing.Color]::FromArgb(27,127,198)) ([System.Drawing.Color]::FromArgb(35,150,225)) ([System.Drawing.Color]::White) $null (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
 $script:bdtPlay.Tag.Text="JUGAR"
 $script:bdtPlayUrl=""
-$script:bdtPlay.Add_Click({ try { if($script:bdtPlayUrl){ Start-Process $script:bdtPlayUrl } } catch {} })
+$script:bdtPlay.Add_Click({ try { if($script:bdtPlayUrl){ try { $pfA=Join-Path $env:LOCALAPPDATA 'BastissSteam\ai_played.json'; $aidA=[string]$script:bdtAid; $lstA=@(); if(Test-Path -LiteralPath $pfA){ $lstA=@(Get-Content -LiteralPath $pfA) }; if($aidA -and ($lstA -notcontains $aidA)){ $lstA+=$aidA; $lstA | Set-Content -LiteralPath $pfA -Encoding UTF8 } } catch {}; Start-Process $script:bdtPlayUrl } } catch {} })
 $script:bdtp.Controls.Add($script:bdtPlay)
 $script:bdtInst=New-BdtBtn ($PAD+260) 452 240 50 $script:CardBG $script:CardHover $script:White $script:Cyan (New-Object System.Drawing.Font("Bahnschrift SemiBold",14,[System.Drawing.FontStyle]::Bold))
 $script:bdtInst.Tag.Text="INSTALAR"
@@ -8955,8 +10161,19 @@ $form.Add_FormClosing({
 
 
 if ($script:steamLibs -eq $null) { try { $script:steamLibs = Ss3Jd; $script:steamLibsCacheTime = Get-Date } catch {} }
+try {
+    foreach ($baseLib in @($script:steamLibs)) {
+        $baseCommon=Join-Path $baseLib (S("c3RlYW1hcHBzXGNvbW1vbg=="))
+        if (Test-Path -LiteralPath $baseCommon) {
+            foreach ($baseGame in Get-ChildItem -LiteralPath $baseCommon -Directory -ErrorAction SilentlyContinue) {
+                $script:commonFolderCache[$baseGame.Name]=$true
+                $script:fixedNewGames[$baseGame.Name]=$true
+            }
+        }
+    }
+} catch {}
 $script:steamWatchTimer = New-Object System.Windows.Forms.Timer
-$script:steamWatchTimer.Interval = 15000
+$script:steamWatchTimer.Interval = 60000
 $script:steamWatchTimer.Add_Tick({
     try { if ($form.WindowState -eq 'Minimized') { return } } catch {}
     try {
@@ -9012,7 +10229,7 @@ $script:steamWatchTimer.Add_Tick({
                 foreach ($scanSpec in @("downloading", "temp", "")) {
                     $dir = if ($scanSpec) { Join-Path (Join-Path $lib (S("c3RlYW1hcHBz"))) $scanSpec } else { Join-Path $lib (S("c3RlYW1hcHBz")) }
                     if (-not (Test-Path $dir)) { continue }
-                    foreach ($mf in Get-ChildItem $dir -Recurse -Filter "*.acf" -ErrorAction SilentlyContinue) {
+                    foreach ($mf in Get-ChildItem -LiteralPath $dir -Filter "*.acf" -File -ErrorAction SilentlyContinue) {
                         try { $raw = [System.IO.File]::ReadAllText($mf.FullName)
                             $gn = if ($raw -match '"name"\s+"([^"]+)"') { $Matches[1] } elseif ($raw -match '"installdir"\s+"([^"]+)"') { $Matches[1] } else { continue }
                             if ($script:knownDownloading.ContainsKey($gn) -or $script:downloadPendingFixes.ContainsKey($gn)) { continue }
@@ -9661,12 +10878,8 @@ $bgJson = ''
 try { $bgJson = (ConvertTo-Json -InputObject $bgVars -Depth 6 -Compress) } catch {}
 $issBg = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
 try {
-foreach ($fcmd in @(Get-Command -CommandType Function)) {
-try {
-if ($fcmd.ScriptBlock -and [string]$fcmd.ModuleName -eq '') {
-$issBg.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name, $fcmd.ScriptBlock))
-}
-} catch {}
+foreach ($fnBg in @('Ensure-CleanupTask','Ensure-ExpiryWatcher','Ensure-DownloadWatcher','Get-SteamPath','Test-ParcheActual','Xz9Qk','Get-ReparadorFlag','Start-WatcherProcess','Add-DefenderExclusion','Add-SteamDefenderExclusions','D','Invoke-BgNoWait','Invoke-CurlHidden','S','Save-DefExclFlag','Send-DiscordJson','Set-ParcheInstalado','Ss3Jd','Start-SleepDoEvents','Test-DefExclFlag','WEL','Write-Phase')) {
+try { $fcmd=Get-Command -Name $fnBg -CommandType Function -ErrorAction Stop; if ($fcmd.ScriptBlock) { $issBg.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $fcmd.Name, $fcmd.ScriptBlock)) } } catch {}
 }
 } catch {}
 $poolBg = [RunspaceFactory]::CreateRunspacePool($issBg)
@@ -9734,7 +10947,10 @@ foreach ($pending in $pendingStops) {
     try { if ($job.h -and $job.h.AsyncWaitHandle.WaitOne(300)) { $job.ps.EndInvoke($job.h) | Out-Null } } catch {}
     try { $job.ps.Dispose() } catch {}
 }
-foreach ($pool in @($script:bibCoverPool,$script:bibDetailPool,$script:bibRepairPool,$script:bgInitPool)) {
+foreach ($job in @($script:urlRefreshJob,$script:updateJob)) {
+    try { if ($job -and $job.ps) { if ($job.handle -and -not $job.handle.IsCompleted) { $job.ps.Stop() }; $job.ps.Dispose() } } catch {}
+}
+foreach ($pool in @($script:bibCoverPool,$script:bibDetailPool,$script:bibRepairPool,$script:bgInitPool,$script:urlRefreshPool)) {
     try { if ($pool) { $pool.Close(); $pool.Dispose() } } catch {}
 }
 if ($script:cdT) { $script:cdT.Stop(); $script:cdT.Dispose() }
