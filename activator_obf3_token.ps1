@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.49"
+$script:version = "V2.50"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2936,6 +2936,132 @@ function Invoke-AiDownload([string]$url,[string]$outFile,[object]$prog,[int]$bas
     } catch { return $false }
     finally { try { if($dst){$dst.Close()} } catch {}; try { if($src){$src.Close()} } catch {}; try { if($rp){$rp.Dispose()} } catch {}; try { if($hc){$hc.Dispose()} } catch {} }
 }
+function Get-AiFixParts([string]$fixName,[string]$fixUrl) {
+    try {
+        if([string]::IsNullOrWhiteSpace($fixName) -or [string]::IsNullOrWhiteSpace($fixUrl)){ return $null }
+        if($fixName -notmatch '\.parte(\d+)$'){ return $null }
+        $stem=$fixName -replace '\.parte\d+$',''
+        $ck='aiparts|'+$stem
+        $n=0
+        try { if($script:bibPartsN -and $script:bibPartsN.ContainsKey($ck)){ $n=[int]$script:bibPartsN[$ck] } } catch {}
+        $base=$fixUrl.Substring(0,$fixUrl.LastIndexOf('/')+1)
+        if($n -le 1){
+            $n=0
+            for($i=1;$i -le 8;$i++){
+                $u=$base+[uri]::EscapeDataString($stem+'.parte'+$i+'.zip')
+                $okU=$false
+                try { $hw=Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop; if([int]$hw.StatusCode -eq 200){ $okU=$true } } catch {}
+                if($okU){ $n=$i } else { break }
+            }
+            if($n -gt 1){ try { if(-not $script:bibPartsN){ $script:bibPartsN=@{} }; $script:bibPartsN[$ck]=$n } catch {} }
+        }
+        if($n -le 1){ return $null }
+        $out=@()
+        for($i=1;$i -le $n;$i++){ $out+=@($base+[uri]::EscapeDataString($stem+'.parte'+$i+'.zip')) }
+        return $out
+    } catch { return $null }
+}
+function Join-AiPartChunks([string]$gamePath) {
+    $based=@()
+    try {
+        $jobs=@{}
+        foreach($cf in (Get-ChildItem -LiteralPath $gamePath -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '__p\d\d\d$' })){
+            $bk=$cf.FullName.Substring(0,$cf.FullName.Length-7)
+            if(-not $jobs.ContainsKey($bk)){ $jobs[$bk]=@() }
+            $jobs[$bk]+=@($cf.FullName)
+        }
+        foreach($bk in @($jobs.Keys)){
+            $parts=@($jobs[$bk] | Sort-Object)
+            $okJ=$true
+            try {
+                $od=[IO.File]::Open($bk,[IO.FileMode]::Create)
+                foreach($pf in $parts){ $id=[IO.File]::OpenRead($pf); $id.CopyTo($od); $id.Close() }
+                $od.Close()
+            } catch { $okJ=$false }
+            if($okJ){
+                foreach($pf in $parts){ Remove-Item -LiteralPath $pf -Force -ErrorAction SilentlyContinue }
+                $based+=@($bk)
+            }
+        }
+    } catch {}
+    return $based
+}
+function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$partUrls,[object]$prog) {
+    $N=$partUrls.Count
+    $allRel=@()
+    try {
+        if(-not (Test-Path -LiteralPath $gamePath)){ New-Item -ItemType Directory -Path $gamePath -Force | Out-Null }
+        for($i=0;$i -lt $N;$i++){
+            $pn=$i+1
+            try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+": descargando...") } catch {}
+            try { if($prog -ne $null){ $prog.pct=5+[int](65*$i/$N) } } catch {}
+            $zp=Join-Path ([IO.Path]::GetTempPath()) ('aip_'+$pn+'_'+[Guid]::NewGuid().ToString('N')+'.zip')
+            $dlOk=$false
+            try {
+                $bb=5+[int](65*$i/$N); $ss=[int](65/$N)
+                if(Invoke-AiDownload $partUrls[$i] $zp $prog $bb $ss){ $dlOk=$true }
+            } catch {}
+            if(-not $dlOk){ return @($false,("Se corto en el paso "+$pn+" de "+$N+". Volve a pedirmelo; si sigue igual, escribinos por WhatsApp.")) }
+            try {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $za=[System.IO.Compression.ZipFile]::OpenRead($zp)
+                $en=@($za.Entries); $ec=$en.Count
+                if($ec -eq 0){ $za.Dispose(); return @($false,("La parte "+$pn+" llego vacia. Volve a pedirmelo.")) }
+                try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+": aplicando...") } catch {}
+                $ei=0
+                foreach($entry in $en){
+                    if(-not $entry.Name){ continue }
+                    $ei++
+                    try { if($prog -ne $null -and $ec -gt 0){ $prog.pct=70+[int](25*($i+([double]$ei/$ec))/$N) } } catch {}
+                    $rel=$entry.FullName -replace "/","\"
+                    $allRel+=@($rel)
+                    $dest=Join-Path $gamePath $rel
+                    $dd=Split-Path $dest -Parent
+                    if(-not (Test-Path -LiteralPath $dd)){ New-Item -ItemType Directory -Path $dd -Force | Out-Null }
+                    try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$dest,$true) } catch {}
+                }
+                $za.Dispose()
+            } catch { return @($false,("No pude abrir la parte "+$pn+". Volve a pedirmelo.")) }
+            Remove-Item -LiteralPath $zp -Force -ErrorAction SilentlyContinue
+        }
+        try { Set-BibRepairProgress ("Paso "+$N+" de "+$N+": uniendo archivos...") } catch {}
+        try { if($prog -ne $null){ $prog.pct=96 } } catch {}
+        $jb=@()
+        try { $jb=@(Join-AiPartChunks $gamePath) } catch {}
+        $fin=@()
+        foreach($r in $allRel){ if($r -notmatch '__p\d\d\d$'){ $fin+=@($r) } }
+        foreach($b in $jb){
+            $br=$b
+            try { $br=$b.Substring($gamePath.Length).TrimStart('\','/') } catch {}
+            $fin+=@($br)
+        }
+        try { if($prog -ne $null){ $prog.pct=98 } } catch {}
+        return @($true,("Fix completo aplicado en "+$N+" pasos."),$fin)
+    } catch { return @($false,("No se pudo completar el fix por partes.")) }
+}
+function Invoke-AiPartsInstall([string]$query,[object]$Sync) {
+    try {
+        $fxs=@{}; try { $fxs=Qw7Rt } catch {}
+        if(-not $fxs -or $fxs.Count -eq 0){ return $null }
+        $fn,$fu=$null,$null
+        try { $fn,$fu = Ff2Xa $query $fxs } catch {}
+        if(-not $fu){ return $null }
+        if($fn -notmatch '\.parte\d+$'){ return $null }
+        $clean=$fn -replace '\.parte\d+$',''
+        $clean=$clean -replace '\.COMPLETO$',''
+        $clean=($clean -replace '\.',' ').Trim()
+        if(-not $clean){ return $null }
+        $libs=@(); try { $libs=@(Ss3Jd) } catch {}
+        if(-not $libs -or $libs.Count -eq 0){ return $null }
+        $gp=Join-Path (Join-Path $libs[0] 'steamapps\common') $clean
+        try { if(-not (Test-Path -LiteralPath $gp)){ New-Item -ItemType Directory -Path $gp -Force | Out-Null } } catch { return $null }
+        try { Set-AiSync $Sync ('Instalando '+$clean+'...') } catch {}
+        $pr=$null
+        try { $pr=Apply-FixAutomatically $clean $gp $fxs $Sync } catch { $pr=@($false,'Error instalando.') }
+        if($pr -and $pr[0]){ return ('Listo: instale '+$clean+' completo en tu PC. Abrilo desde la carpeta del juego.') }
+        return $null
+    } catch { return $null }
+}
 function Download-FixArchive {
     param([string]$url,[string]$outFile,[string]$gameName,[object]$prog=$null)
     $part=$outFile+'.part'
@@ -2980,6 +3106,8 @@ function Apply-FixAutomatically {
     param([string]$gameFolderName, [string]$gamePath, [hashtable]$fixes, [object]$prog=$null)
     $fixName, $fixUrl = Ff2Xa $gameFolderName $fixes
     if (-not $fixUrl) { return $false, "No hay reparacion disponible para $gameFolderName" }
+    $aiParts=$null; try { $aiParts=Get-AiFixParts $fixName $fixUrl } catch {}
+    if($fixName -match '\.parte\d+$'){ if($aiParts -and $aiParts.Count -gt 1){ $prx=$null; try { $prx=Invoke-AiPartsFix $gameFolderName $gamePath $aiParts $prog } catch { $prx=@($false,'Error interno en fix por partes.') }; if($prx -and $prx[0]){ try { if($prx.Count -gt 2 -and @($prx[2]).Count -gt 0){ Am3Fs $gameFolderName $gamePath @($prx[2]) } } catch {}; try { Aw8Nq $gameFolderName } catch {}; try { Add-AutoFixedGame $gameFolderName } catch {}; try { if($prog -ne $null){ $prog.pct=100 } } catch {}; return $true,('Reparacion en '+$aiParts.Count+' pasos aplicada correctamente a '+$gameFolderName) } else { $emx='No se pudo completar el fix por partes.'; try { if($prx -and $prx[1]){ $emx=[string]$prx[1] } } catch {}; return $false,$emx } } else { return $false,'El fix viene en partes y todavia no estan todas disponibles. Avisame en un rato.' } }
     $zip = Join-Path $env:TEMP "auto_$(Get-Random).zip"
     try {
         Set-BibRepairProgress "Buscando reparacion..."
@@ -4875,7 +5003,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             return 'No pude completarlo ahora. Proba canjear tu codigo de nuevo o escribinos por WhatsApp.'
             }
             $res=$null; try { $res=Resolve-AiGame $gq } catch {}; Add-AiTrace ('resolve: q='+$gq+' -> '+$(if($res -and $res.ok){'appid '+$res.appid}else{'SIN-MATCH'}))
-            if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Fijate el nombre exacto en tu Biblioteca y pedimelo de nuevo. Si no se te activa ninguno, pedime un diagnostico.' }
+            if(-not ($res -and $res.ok)){ $piMsg=$null; try { $piMsg=Invoke-AiPartsInstall $gq $Sync } catch {}; if($piMsg){ return $piMsg }; return 'No encontre ese juego instalado. Fijate el nombre exacto en tu Biblioteca y pedimelo de nuevo. Si no se te activa ninguno, pedime un diagnostico.' }
             Set-AiSync $Sync ('Arreglando '+$res.name+'...')
             $r=$null
             try { $r=Repair-BiblioGame ([string]$res.appid) $Sync; Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}; $noFix=$false; try { if($r -and [string]$r.fix -eq 'no'){ $noFix=$true } } catch {}
