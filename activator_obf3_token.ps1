@@ -1,4 +1,4 @@
-function S([string]$b) {
+﻿function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
 }
 $script:obfKey = [Convert]::FromBase64String("QmFzdGlzc1N0ZWFt")
@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.47"
+$script:version = "V2.48"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2911,16 +2911,54 @@ function Set-BibRepairProgress([string]$t) {
     } catch {}
     try { [System.Windows.Forms.Application]::DoEvents() } catch {}
 }
+function Invoke-AiDownload([string]$url,[string]$outFile,[object]$prog,[int]$base,[int]$span) {
+    $hc=$null; $rp=$null; $src=$null; $dst=$null
+    try {
+        Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+        $hc=New-Object Net.Http.HttpClient
+        $hc.Timeout=[TimeSpan]::FromMinutes(10)
+        try { $hc.DefaultRequestHeaders.Add('User-Agent','Mozilla/5.0 (Windows NT 10.0; Win64; x64) BastissSteam') } catch {}
+        $rq=New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]::Get,$url)
+        $rp=$hc.SendAsync($rq,[Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+        if(-not $rp.IsSuccessStatusCode){ return $false }
+        $total=$rp.Content.Headers.ContentLength
+        if(-not $total -or $total -le 0){ $total=0 }
+        try { if($prog -ne $null){ $prog.pct=$base } } catch {}
+        $src=$rp.Content.ReadAsStreamAsync().Result
+        $dst=[IO.File]::OpenWrite($outFile)
+        $buf=New-Object byte[] 262144
+        $read=[long]0
+        while(($n=$src.Read($buf,0,$buf.Length)) -gt 0){
+            $dst.Write($buf,0,$n); $read+=$n
+            if($total -gt 0 -and $prog -ne $null){ try { $prog.pct=$base+[int]($span*$read/$total) } catch {} }
+        }
+        return $true
+    } catch { return $false }
+    finally { try { if($dst){$dst.Close()} } catch {}; try { if($src){$src.Close()} } catch {}; try { if($rp){$rp.Dispose()} } catch {}; try { if($hc){$hc.Dispose()} } catch {} }
+}
 function Download-FixArchive {
-    param([string]$url,[string]$outFile,[string]$gameName)
+    param([string]$url,[string]$outFile,[string]$gameName,[object]$prog=$null)
     $part=$outFile+'.part'
     $lastError='Descarga no valida'
     $ProgressPreference='SilentlyContinue'
     for($attempt=1;$attempt -le 3;$attempt++){
         try {
             Set-BibRepairProgress "Descargando el arreglo, puede tardar unos minutos..."
-            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
-            $requestUrl=$url
+            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue$0if($prog){
+                try {
+                    Set-BibRepairProgress "Descargando el arreglo..."
+                    if(Invoke-AiDownload $requestUrl $part $prog 5 65){
+                        $okP=$false
+                        try { if((Test-Path -LiteralPath $part) -and ((Get-Item -LiteralPath $part).Length -gt 64)){ $okP=$true } } catch {}
+                        if($okP){
+                            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                            $aP=[System.IO.Compression.ZipFile]::OpenRead($part)
+                            try { if($aP.Entries.Count -eq 0){ $okP=$false } } finally { $aP.Dispose() }
+                        }
+                        if($okP){ Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue; Move-Item -LiteralPath $part -Destination $outFile -Force; return $true }
+                    }
+                } catch {}
+            }
             if($attempt -eq 2 -and $requestUrl -notmatch '[?]'){ $requestUrl+='?download=1' }
             Invoke-WebRequest -Uri $requestUrl -OutFile $part -UseBasicParsing -TimeoutSec 600 -MaximumRedirection 8 -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) BastissSteam'} -ErrorAction Stop
             if(-not(Test-Path -LiteralPath $part) -or (Get-Item -LiteralPath $part).Length -lt 64){ throw 'El archivo descargado esta vacio o incompleto' }
@@ -2939,22 +2977,22 @@ function Download-FixArchive {
     throw "No se pudo descargar un ZIP valido tras 3 intentos: $lastError"
 }
 function Apply-FixAutomatically {
-    param([string]$gameFolderName, [string]$gamePath, [hashtable]$fixes)
+    param([string]$gameFolderName, [string]$gamePath, [hashtable]$fixes, [object]$prog=$null)
     $fixName, $fixUrl = Ff2Xa $gameFolderName $fixes
     if (-not $fixUrl) { return $false, "No hay reparacion disponible para $gameFolderName" }
     $zip = Join-Path $env:TEMP "auto_$(Get-Random).zip"
     try {
         Set-BibRepairProgress "Buscando reparacion..."
-        [void](Download-FixArchive -url $fixUrl -outFile $zip -gameName $gameFolderName)
+        [void](Download-FixArchive -url $fixUrl -outFile $zip -gameName $gameFolderName -prog $prog)
         $extractedRelative = @()
         try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
             $z = [System.IO.Compression.ZipFile]::OpenRead($zip)
-            foreach ($entry in $z.Entries) { if ($entry.Name) { $extractedRelative += $entry.FullName } }
+            $aiEI=0; $aiETot=0; try { $aiETot=[int]$z.Entries.Count; if($prog){ $prog.pct=70 } } catch {}; foreach ($entry in $z.Entries) { if ($entry.Name) { $extractedRelative += $entry.FullName; try { $aiEI++; if($prog -and $aiETot -gt 0){ $prog.pct=70+[int](25*$aiEI/($aiETot+1)) } } catch {}; $rel=$entry.FullName -replace "/","\"; $dest=Join-Path $gamePath $rel; $dd=Split-Path $dest -Parent; if(-not (Test-Path -LiteralPath $dd)){ New-Item -ItemType Directory -Path $dd -Force | Out-Null }; try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$dest,$true) } catch {} } }
             $z.Dispose()
         } catch {}
         Set-BibRepairProgress "Aplicando reparacion..."
-        Expand-Archive -Path $zip -DestinationPath $gamePath -Force
+        if(@($extractedRelative).Count -eq 0){ Expand-Archive -Path $zip -DestinationPath $gamePath -Force }; try { if($prog){ $prog.pct=97 } } catch {}
         if ($extractedRelative.Count -gt 0) { Am3Fs $gameFolderName $gamePath $extractedRelative }
         Aw8Nq $gameFolderName
         Add-AutoFixedGame $gameFolderName
@@ -4597,7 +4635,7 @@ function Resolve-AiGame([string]$nombre) {
         return $out
     } catch { return $out }
 }
-function Add-OnlineFix([string]$appid) {
+function Add-OnlineFix([string]$appid, [object]$prog=$null) {
     $out=@{ok=$false;msg='No se pudo agregar el online.'}
     try {
         if(-not $appid){ $out.msg='Falta el juego.'; return $out }
@@ -4630,14 +4668,14 @@ function Add-OnlineFix([string]$appid) {
             New-Item -ItemType Directory -Path $tmp -Force | Out-Null
             $zip=Join-Path $tmp 'online.zip'
             $wc=New-Object System.Net.WebClient; $wc.Proxy=$null
-            $wc.DownloadFile($url,$zip)
+            $aiDlOk=$false; try { if($prog){ Set-BibRepairProgress "Descargando el online..."; if(Invoke-AiDownload $url ($zip+'.ai') $prog 5 80){ $aiDlOk=$true } } } catch {}; if($aiDlOk -and (Test-Path -LiteralPath ($zip+'.ai'))){ Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Move-Item -LiteralPath ($zip+'.ai') -Destination $zip -Force } else { $wc.DownloadFile($url,$zip) }
             if((Get-Item $zip).Length -gt 1000){
                 Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
                 $ex=Join-Path $tmp 'ex'; New-Item -ItemType Directory -Path $ex -Force | Out-Null
                 [System.IO.Compression.ZipFile]::ExtractToDirectory($zip,$ex)
-                $items=@(Get-ChildItem -LiteralPath $ex -Force)
+                $items=@(Get-ChildItem -LiteralPath $ex -Force); $aiON=0; try { $aiON=@($items).Count } catch {}; $aiOI=0; try { if($prog){ $prog.pct=90 } } catch {}
                 if($items.Count -eq 1 -and $items[0].PSIsContainer){ $src=$items[0].FullName } else { $src=$ex }
-                foreach($e2 in (Get-ChildItem -LiteralPath $src -Force)){
+                foreach($e2 in (Get-ChildItem -LiteralPath $src -Force)){ $aiOI++; try { if($prog -and $aiON -gt 0){ $prog.pct=90+[int](10*$aiOI/($aiON+1)) } } catch {}
                     $dst=Join-Path $gdir $e2.Name
                     if($e2.PSIsContainer){
                         if(-not (Test-Path -LiteralPath $dst)){ New-Item -ItemType Directory -Path $dst -Force | Out-Null }
@@ -4832,7 +4870,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             Set-AiSync $Sync 'Arreglando la activacion general...'
                 $ok=$false; try { $ok=[bool](Xz9Qk -Silent); Add-AiTrace ('xz-global: '+$ok) } catch {}
                 
-                Set-AiSync $Sync 'Verificando la activacion...'; $vf=$null; try { $vf=Test-AiGameFixed '' } catch {}; if($vf -and $vf.ok){ return 'Todo listo: la activacion quedo funcionando perfectamente. Fijate que ya te aparecen los juegos.' }; if($ok){ return 'Reinstale la activacion general. Fijate si ya te aparecen los juegos y avisame.' }
+                Set-AiSync $Sync 'Verificando la activacion...'; $vf=$null; try { $vf=Test-AiGameFixed '' } catch {}; if($vf -and $vf.ok){ return 'Todo listo: la activacion quedo reparada y funcionando. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?' }; if($ok){ return 'Reinstale la activacion general. Fijate si ya te aparecen los juegos y avisame.' }
                 Send-AiTech $Sync 'fallo-activacion' '' ('patch='+$ok)
             return 'No pude completarlo ahora. Proba canjear tu codigo de nuevo o escribinos por WhatsApp.'
             }
@@ -4840,7 +4878,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Fijate el nombre exacto en tu Biblioteca y pedimelo de nuevo. Si no se te activa ninguno, pedime un diagnostico.' }
             Set-AiSync $Sync ('Arreglando '+$res.name+'...')
             $r=$null
-            try { $r=Repair-BiblioGame ([string]$res.appid); Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}
+            try { $r=Repair-BiblioGame ([string]$res.appid) $Sync; Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}
             if(-not ($r -and $r.ok) -and $r -and [string]$r.fix -eq 'fallo'){
                 Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name+' motivo='+[string]$r.msg)
                 return 'No pude terminar el arreglo de '+$res.name+'. Es un arreglo grande y la conexion corto la descarga. Volve a pedirmelo en unos minutos y deberia quedar listo; si sigue igual, escribinos por WhatsApp.'
@@ -4848,7 +4886,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             if(-not ($r -and $r.ok)){ try { Set-AiSync $Sync ('Probando otra forma con '+$res.name+'...'); $r=Repair-UnoApp ([string]$res.appid); Add-AiTrace ('repair-unoapp: ok='+$r.ok) } catch {} }
             if(-not ($r -and $r.ok)){ try { Set-AiSync $Sync 'Reinstalando la activacion...'; $xzR=Xz9Qk -Silent; Add-AiTrace ('xz9qk: '+$xzR); $r=@{ok=$true} } catch {} }
             
-            Set-AiSync $Sync ('Verificando '+$res.name+'...'); $vf=$null; try { $vf=Test-AiGameFixed ([string]$res.appid); Add-AiTrace ('verify: ok='+$vf.ok) } catch {}; if($vf -and $vf.ok){ return 'Todo listo: ya arregle '+$res.name+' y quedo funcionando perfectamente. Proba abrirlo de nuevo desde tu biblioteca y avisame.' }; if($r -and $r.ok){ return 'Lo arregle. Proba abrirlo de nuevo desde tu biblioteca y contame si anda bien.' }
+            Set-AiSync $Sync ('Verificando '+$res.name+'...'); $vf=$null; try { $vf=Test-AiGameFixed ([string]$res.appid); Add-AiTrace ('verify: ok='+$vf.ok) } catch {}; if($vf -and $vf.ok){ return 'Todo listo: '+$res.name+' quedo reparado y funcionando. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?' }; if($r -and $r.ok){ return 'Listo: le pase todos los archivos. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?' }
             Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name)
             return 'No pude terminar el arreglo de '+$res.name+'. Escribinos por WhatsApp y lo vemos juntos.'
         }
@@ -4859,7 +4897,7 @@ elseif($act -eq 'online'){
             if(-not ($LastQ -match 'igual|dale igual|igualmente')){ try { $busyO=Test-AiSteamBusy } catch {} }
             if($busyO){ return 'Estas descargando '+$busyO+'. Espera a que termine para no romper nada, o escribi dale igual si lo queres asi.' }
             Set-AiSync $Sync ('Descargando online para '+$res.name+'...')
-            $r=$null; try { $r=Add-OnlineFix ([string]$res.appid); Add-AiTrace ('online: ok='+$r.ok+' msg='+$r.msg) } catch {}
+            $r=$null; try { $r=Add-OnlineFix ([string]$res.appid) $Sync; Add-AiTrace ('online: ok='+$r.ok+' msg='+$r.msg) } catch {}
             if($r -and $r.ok){ return 'Listo, ya le agregue el online a '+$res.name+'. Cerra el juego si lo tenes abierto y volve a entrar.' }
             return [string]$r.msg
         }
@@ -5241,6 +5279,39 @@ function Start-AiChatSend {
     }
 }
 
+function Show-AiProgressDialog {
+    try {
+        Close-AiProgressDialog
+        $st=$script:aiChatState
+        if(-not $st -or -not $st.form -or $st.form.IsDisposed){ return }
+        $pf=New-Object System.Windows.Forms.Form
+        $pf.FormBorderStyle='None'
+        $pf.StartPosition='Manual'
+        $pf.Size=New-Object System.Drawing.Size(320,46)
+        try {
+            $fx=$st.form.Location.X+[int](($st.form.Width-320)/2)
+            $fy=$st.form.Location.Y+[int](($st.form.Height-46)/2)
+            $pf.Location=New-Object System.Drawing.Point($fx,$fy)
+        } catch {}
+        $pf.BackColor=[System.Drawing.Color]::FromArgb(11,15,25)
+        $pf.TopMost=$true
+        $pf.ShowInTaskbar=$false
+        $bar=New-Object System.Windows.Forms.ProgressBar
+        $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0; $bar.Style='Continuous'
+        $bar.Location=New-Object System.Drawing.Point(10,9)
+        $bar.Size=New-Object System.Drawing.Size(300,28)
+        $pf.Controls.Add($bar)
+        $st.progForm=$pf; $st.progBar=$bar
+        $pf.Show()
+    } catch {}
+}
+function Close-AiProgressDialog {
+    try {
+        $st=$script:aiChatState
+        if($st -and $st.progForm -and -not $st.progForm.IsDisposed){ try { $st.progForm.Close() } catch {} }
+        if($st){ try { $st.progForm=$null; $st.progBar=$null } catch {} }
+    } catch {}
+}
 function Update-AiScroll {
     try {
         $st=$script:aiChatState
@@ -5464,7 +5535,7 @@ function Show-AiChat {
                 $sb4.Dispose();$sf4.Dispose();$fnt4.Dispose();$p4.Dispose()
             } catch {}
         })
-        $hint=New-Object System.Windows.Forms.Label; $hint.Text="Escribí tu consulta · Ctrl + Enter para enviar"; $hint.AutoSize=$true; $hint.Location=New-Object System.Drawing.Point(16,548); $hint.Anchor="Bottom, Left"; $hint.Font=$script:FntSub; $hint.ForeColor=$script:Gray
+        $hint=New-Object System.Windows.Forms.Label; $hint.Text="Escribí tu consulta · Enter para enviar"; $hint.AutoSize=$true; $hint.Location=New-Object System.Drawing.Point(16,548); $hint.Anchor="Bottom, Left"; $hint.Font=$script:FntSub; $hint.ForeColor=$script:Gray
         $wa=New-Object System.Windows.Forms.Button; $wa.Text="Soporte por WhatsApp"; $wa.Location=New-Object System.Drawing.Point(292,544); $wa.Size=New-Object System.Drawing.Size(152,32); $wa.Anchor="Bottom, Right"; $wa.FlatStyle="Flat"; $wa.FlatAppearance.BorderColor=$script:CardBorder; $wa.FlatAppearance.MouseOverBackColor=$script:CardHover; $wa.BackColor=$script:CardBG; $wa.ForeColor=$script:White; $wa.Font=$script:FntSub; $wa.Cursor=[System.Windows.Forms.Cursors]::Hand
         $entry.Controls.Add($inputBox); $entry.Controls.Add($send)
         $cf.Controls.Add($top); $cf.Controls.Add($status)
@@ -5558,12 +5629,12 @@ function Show-AiChat {
                             [void](Add-AiChatMessage -Role "Bastiss IA" -Message $amsg)
                             $script:aiHist+=@(@{r="assistant";c=$amsg})
                             if(@($script:aiHist).Count -gt 8){$script:aiHist=@($script:aiHist|Select-Object -Last 8)}; try { Save-AiHist } catch {}
-                            $st.status.Text="Listo"; $st.status.ForeColor=$script:Cyan;try{if($st.form.ContainsFocus){$st.input.Focus()}}catch{};try{ if(@('reparar','online') -contains [string]$aj.act){ Set-QuickButtons 'verify' } }catch{}
+                            $st.status.Text="Listo"; $st.status.ForeColor=$script:Cyan;try{Close-AiProgressDialog}catch{};try{if($st.form.ContainsFocus){$st.input.Focus()}}catch{};try{ if(@('reparar','online') -contains [string]$aj.act){ Set-QuickButtons 'verify' } }catch{}
                         } catch {}
                     } else {
                         try {
                             $ns=""; try { $ns=[string]$script:bibRepairProgress['text'] } catch {}; if(-not $ns){ try { $ns=[string]$st.actJob.sync.status } catch {} }
-                            if($ns -and $st.status.Text -ne $ns){ $st.status.Text=$ns }
+                            if($ns -and $st.status.Text -ne $ns){ $st.status.Text=$ns }; try { if($st.progBar -and -not $st.progBar.IsDisposed){ $v=0; try { $v=[int]$st.actJob.sync.pct } catch {}; if($v -lt 0){$v=0}; if($v -gt 100){$v=100}; try { if($v -ne $st.progBar.Value){ $st.progBar.Value=$v } } catch {} } } catch {}
                             $mins=([DateTime]::UtcNow-[DateTime]$st.actJob.started).TotalMinutes
                             if($mins -gt 25){ try { $st.actJob.ps.BeginStop() } catch {} }
                         } catch {}
@@ -5593,6 +5664,7 @@ function Show-AiChat {
                                 elseif($ra -eq 'diagnosticar'){ $startMsg='Empiezo el diagnostico completo de tu activacion. El resultado aparece aca abajo en un momento.' }
                                 if($startMsg){ [void](Add-AiChatMessage -Role "Bastiss IA" -Message $startMsg) }
                                 Start-AiActionBg -Action $ra -Game ([string]$result.game) -Extra ([string]$result.watext)
+                            try { if($ra -eq 'reparar' -or $ra -eq 'online'){ Show-AiProgressDialog } } catch {}
                             }
                         }
                     } catch {}
@@ -5628,7 +5700,7 @@ function Show-AiChat {
             } catch {}
         })
         $cf.Add_FormClosed({
-            try { $st=$script:aiChatState; $st.closed=$true;try{$script:chatOpen=$false}catch{}; $st.timer.Stop(); $st.timer.Dispose(); if($st.job -and -not $st.job.handle.IsCompleted){try{$st.job.ps.BeginStop()}catch{}};if($st.actJob){try{$st.actJob.ps.BeginStop()}catch{};try{$st.actJob.ps.Dispose()}catch{};try{if($st.actJob.rs -ne $null){$st.actJob.rs.Close();$st.actJob.rs.Dispose()}}catch{};$st.actJob=$null;try{$st.actBusy=$false}catch{}} } catch {}
+            try { $st=$script:aiChatState; $st.closed=$true;try{$script:chatOpen=$false}catch{}; $st.timer.Stop(); $st.timer.Dispose(); if($st.job -and -not $st.job.handle.IsCompleted){try{$st.job.ps.BeginStop()}catch{}};if($st.actJob){try{$st.actJob.ps.BeginStop()}catch{};try{$st.actJob.ps.Dispose()}catch{};try{if($st.actJob.rs -ne $null){$st.actJob.rs.Close();$st.actJob.rs.Dispose()}}catch{};$st.actJob=$null;try{$st.actBusy=$false}catch{};try{Close-AiProgressDialog}catch{}} } catch {}
         })
         try{$script:chatOpen=$true}catch{};if($form){[void]$cf.ShowDialog($form)}else{[void]$cf.ShowDialog()}
         try {$cf.Dispose()} catch {}
@@ -9446,7 +9518,7 @@ function Start-BiblioDlWatch([string]$appid) {
         $script:bdtDlTimer.Start()
     } catch {}
 }
-function Repair-BiblioGame([string]$appid) {
+function Repair-BiblioGame([string]$appid, [object]$prog=$null) {
     $out=@{ok=$false;msg='';method=''}
     try { Write-RepairLog "Reparar $appid iniciado" } catch {}
     try {
@@ -9467,7 +9539,7 @@ function Repair-BiblioGame([string]$appid) {
         if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
         if(-not $fu){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Aplicando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
-        $fx=Apply-FixAutomatically $gfolder $gpath $fixes
+        $fx=Apply-FixAutomatically $gfolder $gpath $fixes $prog
         if($fx[0]){ $out.ok=$true;$out.fix="si";$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
         $out.msg="No se pudo completar el arreglo."; $out.fix="fallo"
     } catch { $out.msg="No se pudo completar el arreglo."; $out.fix="fallo" }
