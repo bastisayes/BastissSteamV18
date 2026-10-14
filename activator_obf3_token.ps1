@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.50"
+$script:version = "V2.51"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2990,7 +2990,7 @@ function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$
     $N=$partUrls.Count
     $allRel=@()
     try {
-        if(-not (Test-Path -LiteralPath $gamePath)){ New-Item -ItemType Directory -Path $gamePath -Force | Out-Null }
+        try { Get-ChildItem -Path ([IO.Path]::GetTempPath()) -Filter 'aip_msg_*' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue } catch {}; if(-not (Test-Path -LiteralPath $gamePath)){ New-Item -ItemType Directory -Path $gamePath -Force | Out-Null }
         for($i=0;$i -lt $N;$i++){
             $pn=$i+1
             try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+": descargando...") } catch {}
@@ -3022,7 +3022,7 @@ function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$
                 }
                 $za.Dispose()
             } catch { return @($false,("No pude abrir la parte "+$pn+". Volve a pedirmelo.")) }
-            Remove-Item -LiteralPath $zp -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $zp -Force -ErrorAction SilentlyContinue; try { [IO.File]::WriteAllText((Join-Path ([IO.Path]::GetTempPath()) ('aip_msg_'+$pn)),('Paso '+$pn+' de '+$N+' completado.')) } catch {}
         }
         try { Set-BibRepairProgress ("Paso "+$N+" de "+$N+": uniendo archivos...") } catch {}
         try { if($prog -ne $null){ $prog.pct=96 } } catch {}
@@ -3058,7 +3058,7 @@ function Invoke-AiPartsInstall([string]$query,[object]$Sync) {
         try { Set-AiSync $Sync ('Instalando '+$clean+'...') } catch {}
         $pr=$null
         try { $pr=Apply-FixAutomatically $clean $gp $fxs $Sync } catch { $pr=@($false,'Error instalando.') }
-        if($pr -and $pr[0]){ return ('Listo: instale '+$clean+' completo en tu PC. Abrilo desde la carpeta del juego.') }
+        if($pr -and $pr[0]){ $aiAppId=''; try { $aiAppId=[string](Find-AppIdByName $clean) } catch {}; if($aiAppId){ try { $aiMf=Join-Path (Join-Path $libs[0] 'steamapps') ('appmanifest_'+$aiAppId+'.acf'); if(-not (Test-Path -LiteralPath $aiMf)){ $aiLines=@('"AppState"','{','"appid"  "'+$aiAppId+'"','"Universe"  "1"','"name"  "'+$clean+'"','"StateFlags"  "4"','"installdir"  "'+$clean+'"','}'); [IO.File]::WriteAllText($aiMf,($aiLines -join "`n")) } } catch {} }; return ('Listo: instale '+$clean+' completo en tu biblioteca. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?') }
         return $null
     } catch { return $null }
 }
@@ -5409,35 +5409,28 @@ function Start-AiChatSend {
 
 function Show-AiProgressDialog {
     try {
-        Close-AiProgressDialog
-        $st=$script:aiChatState
-        if(-not $st -or -not $st.form -or $st.form.IsDisposed){ return }
-        $pf=New-Object System.Windows.Forms.Form
-        $pf.FormBorderStyle='None'
-        $pf.StartPosition='Manual'
-        $pf.Size=New-Object System.Drawing.Size(320,46)
-        try {
-            $fx=$st.form.Location.X+[int](($st.form.Width-320)/2)
-            $fy=$st.form.Location.Y+[int](($st.form.Height-46)/2)
-            $pf.Location=New-Object System.Drawing.Point($fx,$fy)
-        } catch {}
-        $pf.BackColor=[System.Drawing.Color]::FromArgb(11,15,25)
-        $pf.TopMost=$true
-        $pf.ShowInTaskbar=$false
-        $bar=New-Object System.Windows.Forms.ProgressBar
-        $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0; $bar.Style='Continuous'
-        $bar.Location=New-Object System.Drawing.Point(10,9)
-        $bar.Size=New-Object System.Drawing.Size(300,28)
-        $pf.Controls.Add($bar)
-        $st.progForm=$pf; $st.progBar=$bar
-        $pf.Show()
+        $S=$script:aiChatState
+        if(-not $S -or -not $S.form -or $S.form.IsDisposed){ return }
+        $b=$null; try { $b=$S.progBarTop } catch {}
+        if(-not $b -or $b.IsDisposed){
+            $b=New-Object System.Windows.Forms.ProgressBar
+            $b.Minimum=0; $b.Maximum=100; $b.Value=0
+            $b.Location=New-Object System.Drawing.Point(14,112)
+            $b.Size=New-Object System.Drawing.Size(452,12)
+            $b.Anchor='Top, Left, Right'
+            $b.Visible=$false
+            try { $S.form.Controls.Add($b) } catch {}
+            try { $S.progBarTop=$b } catch {}
+        }
+        try { $b.Value=0; $b.Visible=$true; $b.BringToFront() } catch {}
     } catch {}
 }
 function Close-AiProgressDialog {
     try {
-        $st=$script:aiChatState
-        if($st -and $st.progForm -and -not $st.progForm.IsDisposed){ try { $st.progForm.Close() } catch {} }
-        if($st){ try { $st.progForm=$null; $st.progBar=$null } catch {} }
+        $S=$script:aiChatState
+        if($S -and $S.progBarTop -and -not $S.progBarTop.IsDisposed){ try { $S.progBarTop.Visible=$false } catch {} }
+        if($S -and $S.progForm -and -not $S.progForm.IsDisposed){ try { $S.progForm.Close() } catch {} }
+        if($S){ try { $S.progForm=$null; $S.progBar=$null } catch {} }
     } catch {}
 }
 function Update-AiScroll {
@@ -5762,8 +5755,8 @@ function Show-AiChat {
                     } else {
                         try {
                             $ns=""; try { $ns=[string]$script:bibRepairProgress['text'] } catch {}; if(-not $ns){ try { $ns=[string]$st.actJob.sync.status } catch {} }
-                            if($ns -and $st.status.Text -ne $ns){ $st.status.Text=$ns }; try { if($st.progBar -and -not $st.progBar.IsDisposed){ $v=0; try { $v=[int]$st.actJob.sync.pct } catch {}; if($v -lt 0){$v=0}; if($v -gt 100){$v=100}; try { if($v -ne $st.progBar.Value){ $st.progBar.Value=$v } } catch {} } } catch {}
-                            $mins=([DateTime]::UtcNow-[DateTime]$st.actJob.started).TotalMinutes
+                            if($ns -and $st.status.Text -ne $ns){ $st.status.Text=$ns }; try { if($st.progBarTop -and -not $st.progBarTop.IsDisposed){ $v=0; try { $v=[int]$st.actJob.sync.pct } catch {}; if($v -lt 0){$v=0}; if($v -gt 100){$v=100}; try { if($v -ne $st.progBarTop.Value){ $st.progBarTop.Value=$v } } catch {} } } catch {}
+                            try { $mq=@(Get-ChildItem -Path ([IO.Path]::GetTempPath()) -Filter 'aip_msg_*' -File -ErrorAction SilentlyContinue | Sort-Object Name); foreach($mf in $mq){ $mt=''; try { $mt=[IO.File]::ReadAllText($mf.FullName).Trim() } catch {}; Remove-Item -LiteralPath $mf.FullName -Force -ErrorAction SilentlyContinue; if($mt){ try { [void](Add-AiChatMessage -Role 'Bastiss IA' -Message $mt) } catch {}; try { $script:aiHist+=@(@{r='assistant';c=$mt}); Save-AiHist } catch {} } } } catch {}; $mins=([DateTime]::UtcNow-[DateTime]$st.actJob.started).TotalMinutes
                             if($mins -gt 25){ try { $st.actJob.ps.BeginStop() } catch {} }
                         } catch {}
                     }
