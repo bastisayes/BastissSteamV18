@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.52"
+$script:version = "V2.53"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -9660,7 +9660,7 @@ function Repair-BiblioGame([string]$appid, [object]$prog=$null) {
         $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
         $fn,$fu = $null,$null
         if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
-        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
+        if(-not $fu -or $fn -match '\.parte\d+$'){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Aplicando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $fx=Apply-FixAutomatically $gfolder $gpath $fixes $prog
         if($fx[0]){ $out.ok=$true;$out.fix="si";$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
