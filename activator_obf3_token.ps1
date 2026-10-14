@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.51"
+$script:version = "V2.52"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2999,7 +2999,7 @@ function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$
             $dlOk=$false
             try {
                 $bb=5+[int](65*$i/$N); $ss=[int](65/$N)
-                if(Invoke-AiDownload $partUrls[$i] $zp $prog $bb $ss){ $dlOk=$true }
+                try { [void](Download-FixArchive -url $partUrls[$i] -outFile $zp -gameName $gameFolderName -prog $prog -base $bb -span $ss) } catch {}; $zz=$null; try { $zz=[System.IO.Compression.ZipFile]::OpenRead($zp); if($zz.Entries.Count -gt 0){ $dlOk=$true } } catch {} finally { try { $zz.Dispose() } catch {} }
             } catch {}
             if(-not $dlOk){ return @($false,("Se corto en el paso "+$pn+" de "+$N+". Volve a pedirmelo; si sigue igual, escribinos por WhatsApp.")) }
             try {
@@ -3063,17 +3063,19 @@ function Invoke-AiPartsInstall([string]$query,[object]$Sync) {
     } catch { return $null }
 }
 function Download-FixArchive {
-    param([string]$url,[string]$outFile,[string]$gameName,[object]$prog=$null)
+    param([string]$url,[string]$outFile,[string]$gameName,[object]$prog=$null,[int]$base=5,[int]$span=65)
     $part=$outFile+'.part'
     $lastError='Descarga no valida'
     $ProgressPreference='SilentlyContinue'
     for($attempt=1;$attempt -le 3;$attempt++){
         try {
             Set-BibRepairProgress "Descargando el arreglo, puede tardar unos minutos..."
-            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue$0if($prog){
+            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
+            $requestUrl=$url;
+            if($prog){
                 try {
                     Set-BibRepairProgress "Descargando el arreglo..."
-                    if(Invoke-AiDownload $requestUrl $part $prog 5 65){
+                    if(Invoke-AiDownload $requestUrl $part $prog $base $span){
                         $okP=$false
                         try { if((Test-Path -LiteralPath $part) -and ((Get-Item -LiteralPath $part).Length -gt 64)){ $okP=$true } } catch {}
                         if($okP){
