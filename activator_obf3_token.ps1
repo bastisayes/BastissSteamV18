@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.48"
+$script:version = "V2.49"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4878,7 +4878,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Fijate el nombre exacto en tu Biblioteca y pedimelo de nuevo. Si no se te activa ninguno, pedime un diagnostico.' }
             Set-AiSync $Sync ('Arreglando '+$res.name+'...')
             $r=$null
-            try { $r=Repair-BiblioGame ([string]$res.appid) $Sync; Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}
+            try { $r=Repair-BiblioGame ([string]$res.appid) $Sync; Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}; $noFix=$false; try { if($r -and [string]$r.fix -eq 'no'){ $noFix=$true } } catch {}
             if(-not ($r -and $r.ok) -and $r -and [string]$r.fix -eq 'fallo'){
                 Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name+' motivo='+[string]$r.msg)
                 return 'No pude terminar el arreglo de '+$res.name+'. Es un arreglo grande y la conexion corto la descarga. Volve a pedirmelo en unos minutos y deberia quedar listo; si sigue igual, escribinos por WhatsApp.'
@@ -4888,7 +4888,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             
             Set-AiSync $Sync ('Verificando '+$res.name+'...'); $vf=$null; try { $vf=Test-AiGameFixed ([string]$res.appid); Add-AiTrace ('verify: ok='+$vf.ok) } catch {}; if($vf -and $vf.ok){ return 'Todo listo: '+$res.name+' quedo reparado y funcionando. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?' }; if($r -and $r.ok){ return 'Listo: le pase todos los archivos. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?' }
             Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name)
-            return 'No pude terminar el arreglo de '+$res.name+'. Escribinos por WhatsApp y lo vemos juntos.'
+            if($noFix){ return 'Che, no encuentro la reparacion de '+$res.name+'. Si sigue sin abrir, pedime ayuda por WhatsApp y lo vemos juntos.' }; return 'No pude terminar el arreglo de '+$res.name+'. Escribinos por WhatsApp y lo vemos juntos.'
         }
 elseif($act -eq 'online'){
             $res=$null; try { $res=Resolve-AiGame $Game } catch {}
