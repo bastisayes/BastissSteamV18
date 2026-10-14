@@ -58,6 +58,15 @@ function Test-ArUsed {
 $script:pubUrl = "http://127.0.0.1:$srvPort"
 $script:pubUrlCf = ""
 $script:fixedPublicUrl = "https://bastii.tailbe072e.ts.net"
+$script:paypalClientId = ""
+try {
+    $ppCidFile = Join-Path $PSScriptRoot "paypal_client_id.txt"
+    if (Test-Path -LiteralPath $ppCidFile) { $script:paypalClientId = (Get-Content -LiteralPath $ppCidFile -Raw -Encoding UTF8).Trim() }
+} catch {}
+$script:paypalSecretFile = Join-Path $PSScriptRoot "paypal_secret.txt"
+$script:paypalPrice = "12.00"
+$script:paypalCurrency = "USD"
+$script:paypalTokenCache = @{token = ""; exp = [datetime]::MinValue }
 $script:urlCache = Join-Path $env:TEMP "bsmap_current_url.txt"
 $script:ghKey = ""
 try {
@@ -219,6 +228,484 @@ function Ensure-CodeActivation($info) {
         }
     } catch {}
 }
+# --- PayPal auto-entrega (PC local + funnel) --------------------------------
+function Fix-UtfMoji([string]$s) {
+    try {
+        if (-not $s) { return $s }
+        if ($s -notmatch "[\u00C2-\u00DF][\u0080-\u00BF]") { return $s }
+        $bs = New-Object Collections.Generic.List[byte]
+        foreach ($ch in $s.ToCharArray()) { $o = [int]$ch; if ($o -gt 255) { return $s }; $bs.Add([byte]$o) }
+        $dec = [Text.Encoding]::UTF8.GetString($bs.ToArray())
+        if ($dec -match "ï¿½") { return $s }
+        return $dec
+    } catch { return $s }
+}
+function Test-SalesTalk([string]$s) { try { return ([string]$s -match '(?i)preci|usd|\$|garant|\bcompr\w*|\bpag[oa]s?\b|entrega|cuanto (sale|cuesta|vale|es)|por la web|tarjeta|mercadopago|paypal|mail|correo|bandeja|llego por|llega por|llegan') } catch { return $false } }
+function Send-AiErrorWebhook([string]$cid,[string]$code,[string]$q,[string]$det) {
+    try {
+        $wu=$null; try { $wu=$wh } catch {}
+        if(-not $wu){ $wu='https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnpruie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM' }
+        $qq=[string]$q; if($qq.Length -gt 200){ $qq=$qq.Substring(0,200) }
+        $dd=[string]$det; if($dd.Length -gt 300){ $dd=$dd.Substring(0,300) }
+        $m=@{content=('**ERROR IA-BOT** '+$cid+' '+$code+': '+$qq+' -> '+$dd)} | ConvertTo-Json
+        try { Invoke-RestMethod -Uri $wu -Method Post -Body $m -ContentType "application/json" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null } catch {}
+    } catch {}
+}
+function AiChat-Handle {
+param($bd)
+try {
+$wh='https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnpruie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM'
+$qcid = ""
+try { $qcid = ([string]$bd.client_id).Trim() } catch {}
+$qmsg = ""
+try { $qmsg = [string]$bd.message } catch {}
+$qcode = ""
+try { $qcode = ([string]$bd.code).Trim() } catch {}
+if (-not $qcid -or -not $qmsg) { return (@{ok=$false;err="Falta cliente o mensaje"} | ConvertTo-Json) }
+if ($qmsg.Length -gt 800) { try { Send-AiErrorWebhook $qcid $qcode $qmsg "mensaje de mas de 800 caracteres" } catch {}; return (@{ok=$false;err="Mensaje muy largo"} | ConvertTo-Json) }
+$uf = Join-Path $PSScriptRoot "ai_usage_token.json"
+$ud = @{}
+if (Test-Path -LiteralPath $uf) { try { $uj = Get-Content -LiteralPath $uf -Raw -Encoding UTF8 | ConvertFrom-Json; foreach ($pp in $uj.PSObject.Properties) { $ud[$pp.Name] = $pp.Value } } catch {} }
+$today = (Get-Date -Format "yyyy-MM-dd")
+if (-not $ud.ContainsKey($qcid)) { $ud[$qcid] = @{date=$today;count=0} }
+if ([string]$ud[$qcid].date -ne $today) { $ud[$qcid] = @{date=$today;count=0} }
+if ([int]$ud[$qcid].count -ge 25) { try { if(-not $script:aiLimitNt){ $script:aiLimitNt=@{} }; if([string]$script:aiLimitNt[$qcid] -ne $today){ $script:aiLimitNt[$qcid]=$today; Send-AiErrorWebhook $qcid $qcode $qmsg "llego al limite diario de 25" } } catch {}; return (@{ok=$false;err="Limite diario alcanzado, escribinos por WhatsApp"} | ConvertTo-Json) }
+$ud[$qcid].count = [int]$ud[$qcid].count + 1
+($ud | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $uf -Encoding UTF8
+try {
+  $faqKey=([regex]::Replace(($qmsg.ToLowerInvariant() -replace '[^a-z0-9 ]',' '),'\s+',' ')).Trim()
+  if($faqKey.Length -lt 4 -or $faqKey.Length -gt 120 -or $faqKey -match '[a-z0-9]{4}-[a-z0-9]{4}'){ $faqKey='' }
+  try { $cxRaw=[string]$bd.ctx; $cxK=([regex]::Replace(($cxRaw.ToLowerInvariant() -replace '[^a-z0-9 ]',' '),'\s+',' ')).Trim(); if($cxK.Length -gt 120){ $cxK=$cxK.Substring(0,120) }; if($cxK){ $faqKey+=' || '+$cxK } } catch {}
+  $faqHit=$null
+  if($faqKey){
+    if(-not $script:aiFaq){
+      $script:aiFaq=@{}
+      try { $fq=Join-Path $PSScriptRoot 'ai_faq_token.json'; if(Test-Path -LiteralPath $fq){ $fj=Get-Content -LiteralPath $fq -Raw -Encoding UTF8 | ConvertFrom-Json; foreach($pp2 in $fj.PSObject.Properties){ $script:aiFaq[$pp2.Name]=$pp2.Value } } } catch {}
+    }
+    if($script:aiFaq.ContainsKey($faqKey)){
+      $fe2=$script:aiFaq[$faqKey]
+      try { if(((Get-Date)-[datetime]$fe2.t).TotalDays -lt 30){ $faqHit=[string]$fe2.a } } catch {}
+    }
+  }
+} catch {}
+$qh = @()
+try {
+foreach ($h in @($bd.history)) {
+$qr = [string]$h.role
+$qc = [string]$h.content
+if (($qr -eq "user" -or $qr -eq "assistant") -and $qc) {
+if ($qc.Length -gt 600) { $qc = $qc.Substring(0, 600) }
+$qh += @{role=$qr;content=$qc}
+}
+}
+if ($qh.Count -gt 8) { $qh = $qh[($qh.Count-8)..($qh.Count-1)] }
+} catch {}
+$qctx = ""
+try { $qctx = [string]$bd.ctx; if ($qctx.Length -gt 1500) { $qctx = $qctx.Substring(0, 1500) } } catch {}
+$sysAi = 'Sos el asistente de ayuda de BastissSteam, la app que activa miles de juegos en la propia cuenta de Steam del cliente. Requisitos: PC con Windows, Steam instalado e internet. Soporte por WhatsApp.
+FUNCIONES DE LA APP (guia al cliente con estos pasos):
+- Canjear codigo: pagina principal de la app, escribir el codigo tal cual lo tenes, respetando mayusculas y guiones, y tocar Activar. Steam se reinicia solo, no hay que cerrarlo a mano.
+- Biblioteca: estan todos los juegos con su foto. JUGAR abre el juego directo. INSTALAR lo descarga en Steam. AGREGAR ONLINE le suma el modo multijugador a ese juego (solo algunos juegos lo tienen).
+- Mis codigos: muestra los codigos canjeados en esa PC y su estado.
+- Reparar juego: repara un juego que no abre o tira error, sin borrar nada.
+- Configuracion: sirve para cambiar la carpeta donde esta instalado Steam.
+PROBLEMAS COMUNES:
+- El juego no abre, se cierra solo, tira error o queda en negro: usa reparar_juego con el nombre del juego.
+- Quiere jugar online, multijugador o con amigos: usa agregar_online con el nombre del juego. Si ese juego no tiene online, la app le avisa al cliente.
+- Nada funciona, no se activan los juegos o estan en gris: usa diagnosticar_activacion (con el codigo si el cliente te lo da, si no vacio). La app revisa todo e intenta validar el codigo.
+- El juego no aparece en la biblioteca: que canjee el codigo de nuevo en la pagina principal.
+- El codigo dice invalido: que revise mayusculas, guiones y que no haya espacios de mas. Si sigue igual, WhatsApp.
+- Error de archivo bloqueado o falta un archivo: reparar_juego.
+- La descarga es lenta o tarda: es normal, los juegos pesan mucho. Hay que esperar a que termine.
+- El antivirus borra archivos: la app ya agrega las protecciones sola, solo hay que dejarla terminar.
+- Si no sabes que le pasa a un juego puntual, tambien podes usar diagnosticar_activacion.
+REGLAS:
+- Responde en espanol rioplatense, claro y amable, 2 a 4 frases cortas. Sin Markdown ni listas largas.
+- LIMITES (obligatorios): solo existis dentro de ESTA app y solo sabes lo que esta en estas instrucciones. Si no sabes algo de ESTA app, decilo y deriva a WhatsApp. Nunca inventes pasos, botones, pantallas ni funciones. Nunca mandes a: reinstalar Steam o Windows, verificar la integridad de los archivos, actualizar drivers, usar el modo offline de Steam, contactar al soporte de Steam, ejecutar comandos, editar el registro, descargar programas de internet, ni usar otras aplicaciones. No hables de mails, entrega, compras, precios, pagos ni garantia. Cuando uses una herramienta, usa el nombre EXACTO del juego como aparece en la lista de instalados del contexto. Si el cliente te pasa un codigo para canjear, usa canjear_codigo con ese codigo.
+- Nunca uses estas palabras: parche, fix, lua, manifest, keys, licencias, API, webhook, servidor, token, codigo interno. En su lugar deci: activacion, arreglo, archivos del juego, aplicacion, conexion.
+- Nunca hables de precios, pagos, garantia, compras ni entrega. Si el cliente pregunta por eso, responde que por WhatsApp lo ayudan con eso y usa pasame_whatsapp. No inventes funciones ni pasos. No pidas contrasenas.
+- Si el cliente pide que arregles, instales, agregues el online, abras un juego, hagas un diagnostico o canjees un codigo, usa la herramienta correspondiente en vez de explicar pasos. Si el cliente no dice un juego concreto, no uses las herramientas de juegos.
+- Si el problema es de cuenta, o no lo podes resolver en 2 intentos, usa pasame_whatsapp.
+- El contexto del cliente incluye la version de la app y la lista de juegos instalados. Usa esos nombres exactos en las herramientas.
+- Despues de reparar, la app te avisa si quedo funcionando. Confirmalo y pedile al cliente que lo pruebe de nuevo.
+- Si ofreciste abrirle el juego al cliente y acepta con si/dale/abrilo, usa abrir_juego con ese mismo juego.
+- Si el contexto trae ERRORES RECIENTES del cliente, usalos para diagnosticar sin pedirle que repita todo.
+- FORMATO: si das pasos, escribilos cortos y numerados asi: 1) paso. 2) paso. Sin Markdown.
+- Si el cliente no entiende, reexplicaselo todavia mas simple, como para alguien que nunca uso una PC.
+- RECOMENDACIONES: si pide sugerencias de juegos, usa el CATALOGO y recomenda parecidos a los que ya tiene.
+- Si el cliente dice que le anduvo o agradece, contestale corto y alegre, sin repetir pasos.
+- Si dice que sigue igual despues de un arreglo, usas pasame_whatsapp.
+- NOVEDADES de la app (mencionalas solo si pregunta por novedades): __AINEWS__
+- El contexto puede incluir "PC: RAM Xgb, nucleos Y". Usalo para opinar si un juego le va a correr, sin inventar requisitos exactos.
+- Respondeme en el idioma principal del mensaje del cliente (espanol por defecto).'
+try {
+  $newsAi='ninguna por ahora'
+  try { $nf2=Join-Path $PSScriptRoot 'ai_news_token.txt'; if(Test-Path -LiteralPath $nf2){ $nl2=@(Get-Content -LiteralPath $nf2 -Encoding UTF8 | Where-Object { $_.Trim() } | Select-Object -First 3); if($nl2.Count -gt 0){ $newsAi=($nl2 -join ' ') } } } catch {}
+  $sysAi=$sysAi -replace '__AINEWS__',$newsAi
+} catch {}
+try {
+  if(-not $script:aiCatalog -or ((Get-Date)-$script:aiCatTime).TotalHours -gt 1){
+    $catN=@()
+    foreach($cu in @('https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/fixes_list.json','https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/fixes_list.json')){
+      try { $ci=Invoke-RestMethod -Uri $cu -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop; foreach($it in @($ci)){ if($it.game){ $catN+=([string]$it.game) } }; if($catN.Count -gt 0){ break } } catch {}
+    }
+    if($catN.Count -gt 0){ $script:aiCatalog=@($catN | Sort-Object -Unique); $script:aiCatTime=Get-Date }
+  }
+  if($script:aiCatalog -and @($script:aiCatalog).Count -gt 0){ $sysAi+=' CATALOGO DISPONIBLE (para buscar o recomendar): '+($script:aiCatalog -join ', ') }
+} catch {}
+try {
+  $errN=0
+  try {
+    $elfE=Join-Path $PSScriptRoot "client_errors_token.txt"
+    if(Test-Path -LiteralPath $elfE){
+      $allE=@(Get-Content -LiteralPath $elfE -Tail 120 -Encoding UTF8)
+      $mineE=@($allE | Where-Object { $_ -match ('cid='+[regex]::Escape($qcid)+' ') })
+      if($mineE.Count -gt 3){ $mineE=$mineE[($mineE.Count-3)..($mineE.Count-1)] }
+      $errN=$mineE.Count
+      if($errN -gt 0){
+        $parts=@()
+        foreach($ln in $mineE){
+          $km=[regex]::Match($ln,'kind=(\S+)')
+          $gm=[regex]::Match($ln,'game=(.*?) msg=')
+          $mm=[regex]::Match($ln,'msg=(.*)$')
+          $kk=''; if($km.Success){ $kk=[string]$km.Groups[1].Value }
+          $gg2=''; if($gm.Success){ $gg2=[string]$gm.Groups[1].Value }
+          $mg2=''; if($mm.Success){ $mg2=[string]$mm.Groups[1].Value; if($mg2.Length -gt 120){ $mg2=$mg2.Substring(0,120) } }
+          $parts+=('['+$kk+'/'+$gg2+'] '+$mg2)
+        }
+        $sysAi+=' ERRORES RECIENTES DE ESTE CLIENTE (tenelos en cuenta para diagnosticar sin pedirle que repita todo; mencionalos solo si sirven para resolver): '+($parts -join ' | ')
+      }
+    }
+  } catch {}
+} catch {}
+$msgs = @(@{role="system";content=$sysAi})
+foreach ($hm in $qh) { $msgs += $hm }
+$umsg = $qmsg
+if ($qctx) { $umsg = $qmsg + " [contexto del cliente: " + $qctx + "]" }
+$msgs += @{role="user";content=$umsg}
+try { if($qmsg -match '(?i)\b(hello|please|thanks|help me|my game)\b'){ $msgs += @{role="system";content='Responde en ingles, breve y simple.'} } elseif($qmsg -match '(?i)(nao funciona|nao abre|obrigado|meu jogo|ajuda)'){ $msgs += @{role="system";content='Responde en portugues, breve y simple.'} } } catch {}
+$gkey = ""
+try { $gkey = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "groq_key.txt") -Raw -Encoding UTF8).Trim() } catch {}
+if (-not $gkey) { try { Send-AiErrorWebhook $qcid $qcode $qmsg "sin llave Groq en el server" } catch {}; return (@{ok=$false;err="IA no configurada"} | ConvertTo-Json) }
+$gmodel = "qwen/qwen3.8-27b"
+try { $gm = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "groq_model.txt") -Raw -Encoding UTF8).Trim(); if ($gm) { $gmodel = $gm } } catch {}
+$swAi=[System.Diagnostics.Stopwatch]::StartNew(); $dbgModel='?'; $dbgHow='?'; $dbgArgs=''; $lastGroqErr=""; $trymodels = @($gmodel)
+if ($gmodel -ne "openai/gpt-oss-20b") { $trymodels += "openai/gpt-oss-20b" }
+$toolsAi = @(
+@{type="function";function=@{name="reparar_juego";description="Repara UN juego concreto que no abre, se cierra o tira error. Solo usala si el cliente nombro el juego. Usa el nombre exacto de la lista de instalados.";parameters=@{type="object";properties=@{nombre=@{type="string";description="Nombre del juego, por ejemplo GTA V"}}}}},
+@{type="function";function=@{name="agregar_online";description="Agrega el modo online o multijugador a UN juego concreto que el cliente nombro. Usa el nombre exacto de la lista de instalados.";parameters=@{type="object";properties=@{nombre=@{type="string";description="Nombre del juego"}};required=@("nombre")}}},
+@{type="function";function=@{name="reinstalar_juego";description="Abre en Steam la instalacion de un juego desde cero.";parameters=@{type="object";properties=@{nombre=@{type="string";description="Nombre del juego"}};required=@("nombre")}}},
+@{type="function";function=@{name="abrir_juego";description="Abre un juego que ya esta instalado.";parameters=@{type="object";properties=@{nombre=@{type="string";description="Nombre del juego"}};required=@("nombre")}}},
+@{type="function";function=@{name="canjear_codigo";description="El cliente quiere canjear un codigo. Valida el codigo y dejaselo cargado en la pantalla de canje para que solo tenga que tocar Activar.";parameters=@{type="object";properties=@{codigo=@{type="string";description="El codigo tal cual lo paso el cliente"}};required=@("codigo")}}},@{type="function";function=@{name="abrir_canje";description="Lleva al cliente directo a la pantalla de canje cuando quiere canjear o activar un codigo y todavia no lo escribio.";parameters=@{type="object";properties=@{}}}},
+@{type="function";function=@{name="instalar_juego";description="Instala un juego en Steam. Solo si el cliente nombro un juego concreto.";parameters=@{type="object";properties=@{nombre=@{type="string"}};required=@("nombre")}}},
+@{type="function";function=@{name="desinstalar_juego";description="Abre la desinstalacion de un juego en Steam.";parameters=@{type="object";properties=@{nombre=@{type="string"}};required=@("nombre")}}},
+@{type="function";function=@{name="abrir_steam";description="Abre Steam si esta cerrado o no arranca.";parameters=@{type="object";properties=@{}}}},
+@{type="function";function=@{name="revisar_juego";description="Revisa si un juego esta completo y bien instalado, sin borrar nada.";parameters=@{type="object";properties=@{nombre=@{type="string"}};required=@("nombre")}}},
+@{type="function";function=@{name="estado_descarga";description="Mira si hay descargas en curso y cuanto queda pendiente.";parameters=@{type="object";properties=@{}}}},
+@{type="function";function=@{name="ficha_juego";description="Da la ficha de un juego: peso, si tiene online disponible y estado.";parameters=@{type="object";properties=@{nombre=@{type="string"}};required=@("nombre")}}},
+@{type="function";function=@{name="lista_online";description="Lista los juegos instalados que pueden recibir online.";parameters=@{type="object";properties=@{}}}},
+@{type="function";function=@{name="pausar_descargas";description="Pausa las descargas de arreglos que hace la app.";parameters=@{type="object";properties=@{}}}},
+@{type="function";function=@{name="reanudar_descargas";description="Retoma las descargas de arreglos pausadas.";parameters=@{type="object";properties=@{}}}},
+@{type="function";function=@{name="diagnosticar_activacion";description="Diagnostica por que no se activan los juegos: revisa Steam, la activacion y los archivos, e intenta validar el codigo. Pasa el codigo solo si el cliente te lo dio.";parameters=@{type="object";properties=@{codigo=@{type="string";description="Codigo del cliente, si lo dio"}}}}},@{type="function";function=@{name="pasame_whatsapp";description="Abre WhatsApp para hablar con soporte humano cuando no podes resolver el problema.";parameters=@{type="object";properties=@{resumen=@{type="string";description="Resumen corto del problema"}};required=@("resumen")}}}
+)
+$reply = ""
+$actName = ""
+$actGame = ""
+$actExtra = ""
+if($faqHit){ $reply=$faqHit } else {
+foreach ($mdl in $trymodels) {
+try {
+$gb = @{model=$mdl;messages=$msgs;temperature=0.2;max_tokens=350;tools=$toolsAi;tool_choice="auto"} | ConvertTo-Json -Depth 9 -Compress
+$gbBytes = [System.Text.Encoding]::UTF8.GetBytes($gb)
+$gr = Invoke-RestMethod -Uri "https://api.groq.com/openai/v1/chat/completions" -Method Post -Headers @{Authorization=("Bearer " + $gkey)} -Body $gbBytes -ContentType "application/json; charset=utf-8" -TimeoutSec 20 -ErrorAction Stop
+$reply = Fix-UtfMoji ([string]$gr.choices[0].message.content)
+try {
+$tcs = @($gr.choices[0].message.tool_calls)
+if ($tcs.Count -gt 0) {
+$actName = [string]$tcs[0].function.name
+$ag = $null
+try { $ag = ([string]$tcs[0].function.arguments | ConvertFrom-Json) } catch {}
+if ($ag -and $ag.nombre) { $actGame = Fix-UtfMoji ([string]$ag.nombre) }
+if ($ag -and $ag.resumen) { $actExtra = Fix-UtfMoji ([string]$ag.resumen) }
+if ($ag -and $ag.codigo) { $actGame = Fix-UtfMoji ([string]$ag.codigo) }
+$dbgHow='tool:'+$actName; try { $dbgArgs=([string]$tcs[0].function.arguments); if($dbgArgs.Length -gt 120){ $dbgArgs=$dbgArgs.Substring(0,120) } } catch {}
+}
+} catch {}
+$dbgModel=$mdl; if ($reply -or $actName) { break }
+} catch { try { $lastGroqErr=[string]$_.Exception.Message; if($lastGroqErr.Length -gt 200){ $lastGroqErr=$lastGroqErr.Substring(0,200) } } catch {}; $reply = "" }
+}
+}
+if (-not $actName) {
+try {
+$qm = $qmsg.ToLowerInvariant()
+$qm = $qm -replace '[áàäâ]','a' -replace '[éèëê]','e' -replace '[íìïî]','i' -replace '[óòöô]','o' -replace '[úùüû]','u'
+$g = ""
+try {
+$glist = @()
+if ($qctx -match 'juegos instalados: (.+)$') { $glist = @(([string]$Matches[1]) -split '\s*,\s*') }
+foreach ($gn in $glist) {
+$gnn = ([string]$gn).ToLowerInvariant() -replace '[áàäâ]','a' -replace '[éèëê]','e' -replace '[íìïî]','i' -replace '[óòöô]','o' -replace '[úùüû]','u' -replace '[^a-z0-9 ]',' '
+$qn = $qm -replace '[^a-z0-9 ]',' '
+$toks = @($qn -split '\s+' | Where-Object { $_.Length -gt 2 })
+$hit = $false
+foreach ($tk in $toks) { if ($tk -and $gnn -like ('*'+$tk+'*')) { $hit = $true; break } }
+if ($hit) { $g = [string]$gn; break }
+}
+} catch {}
+if ($qm -match 'diagnostic|no se activ|nada funciona|ningun juego|todo en gris|no tengo ningun') { $actName = "diagnosticar_activacion"; $actGame = "" }
+elseif ((($qm -match '(^| )(repara|arregla)\w*') -or ($qm -match 'no (puedo|puede)? ?abrir|no me abre|no abre|se cierra|tira error|no funciona|no anda|pantalla negra')) -and $g) { $actName = "reparar_juego"; $actGame = $g }
+elseif ($qm -match '[a-z0-9][a-z0-9][a-z0-9][a-z0-9]-[a-z0-9][a-z0-9][a-z0-9][a-z0-9]-[a-z0-9][a-z0-9][a-z0-9][a-z0-9]-[a-z0-9][a-z0-9][a-z0-9][a-z0-9]') { $actName = "canjear_codigo"; $actGame = $Matches[0].ToUpper() }
+elseif (($qm.Length -le 24) -and ($qm -match '^(si|dale|ok|bueno|abrilo|abrila|abrime|abrelo|abri lo)\b')) {
+  $lg2=''
+  try { $lg2=[string]$script:aiLastGame[$qcid] } catch {}
+  $offOk=$false
+  try { $la2=@($qh | Where-Object { $_.role -eq 'assistant' } | Select-Object -Last 1); if($la2 -and ([string]$la2.content -match 'abr')){ $offOk=$true } } catch {}
+  if($lg2 -and $offOk){ $actName='abrir_juego'; $actGame=$lg2 }
+}
+elseif (($qm -match 'instala|instalame|poneme|bajame|descargame') -and $g) { $actName = "instalar_juego"; $actGame = $g }
+elseif (($qm -match 'desinstala|sacame|borra (el|ese|un) juego') -and $g) { $actName = "desinstalar_juego"; $actGame = $g }
+elseif (($qm -match 'revisa(r)?(me)?|esta completo') -and $g) { $actName = "revisar_juego"; $actGame = $g }
+elseif ($qm -match 'cuanto falta|progreso|esta descargando|como va la descarga') { $actName = "estado_descarga" }
+elseif ($qm -match 'que juegos (tienen|con) online|lista de online|cuales tienen online') { $actName = "lista_online" }
+elseif ($qm -match 'steam no (abre|funciona|arranca)|abri(r)? steam|abre steam|abrir steam') { $actName = "abrir_steam" }
+elseif ($qm -match 'quiero canjear|como canjeo|donde canjeo|donde activo|activar (el|mi|un) codigo|donde pongo el codigo') { $actName = "abrir_canje" }
+elseif ($qm -match 'pausa(r)? (las )?descarga') { $actName = "pausar_descargas" }
+elseif ($qm -match 'reanuda(r)?|seguir descargando') { $actName = "reanudar_descargas" }
+elseif (($qm -match 'online|multijugador|jugar con|con amigos') -and $g) { $actName = "agregar_online"; $actGame = $g }
+} catch {}
+}
+$frHit=$false
+try { $frHit=($qm -match 'sigue igual|no anda|ya probe|otra vez|no funciona|nada me funciona|igual esta') } catch {}
+try {
+  if(-not $script:aiFrust){ $script:aiFrust=@{} }
+  if($frHit){ $script:aiFrust[$qcid]=[int]$script:aiFrust[$qcid]+1 } else { $script:aiFrust[$qcid]=0 }
+  if(([int]$script:aiFrust[$qcid]) -ge 2 -and -not $actName){ $actName='pasame_whatsapp'; $reply='Probe un par de veces y no lo pude resolver. Te abro WhatsApp para que te ayuden ahora mismo.' }
+  if($actName){ $script:aiFrust[$qcid]=0 }
+  if($actName -and $actGame){ try { if(-not $script:aiLastGame){ $script:aiLastGame=@{} }; $script:aiLastGame[$qcid]=[string]$actGame } catch {} }
+} catch {}
+if($dbgHow -eq '?'){ if($actName){ $dbgHow='fb' } else { $dbgHow='-' } }
+if ($actName -eq "reparar_juego") { $actName = "reparar" }
+elseif ($actName -eq "agregar_online") { $actName = "online" }
+elseif ($actName -eq "reinstalar_juego") { $actName = "reinstalar" }
+elseif ($actName -eq "abrir_juego") { $actName = "abrir" }
+elseif ($actName -eq "diagnosticar_activacion") { $actName = "diagnosticar" }
+elseif ($actName -eq "canjear_codigo") { $actName = "canjear" }
+elseif ($actName -eq "abrir_canje") { $actName = "ircanje" }
+elseif ($actName -eq "instalar_juego") { $actName = "instalar" }
+elseif ($actName -eq "desinstalar_juego") { $actName = "desinstalar" }
+elseif ($actName -eq "abrir_steam") { $actName = "steam" }
+elseif ($actName -eq "revisar_juego") { $actName = "revisar" }
+elseif ($actName -eq "estado_descarga") { $actName = "progreso" }
+elseif ($actName -eq "ficha_juego") { $actName = "ficha" }
+elseif ($actName -eq "lista_online") { $actName = "onlista" }
+elseif ($actName -eq "pausar_descargas") { $actName = "pausar" }
+elseif ($actName -eq "reanudar_descargas") { $actName = "reanudar" }
+elseif ($actName -eq "pasame_whatsapp") { $actName = "whatsapp" }
+else { $actName = "" }
+try {
+  $dayN2=(Get-Date -Format 'yyyy-MM-dd')
+  if(($actName -eq 'reparar' -or $actName -eq 'online' -or $actName -eq 'revisar') -and $actGame){
+    $pk2=([string]$actGame).ToLowerInvariant()
+    if(-not $script:aiPat){
+      $script:aiPat=@{}
+      try { $pjf=Join-Path $PSScriptRoot 'ai_patterns_token.json'; if(Test-Path -LiteralPath $pjf){ $pj2=Get-Content -LiteralPath $pjf -Raw -Encoding UTF8 | ConvertFrom-Json; foreach($pp3 in $pj2.PSObject.Properties){ $script:aiPat[$pp3.Name]=$pp3.Value } } } catch {}
+    }
+    $pe2=$script:aiPat[$pk2]
+    if(-not $pe2 -or [string]$pe2.d -ne $dayN2){ $pe2=@{d=$dayN2;n=0;a=$false} }
+    $pe2.n=[int]$pe2.n+1
+    if([int]$pe2.n -ge 3 -and -not [bool]$pe2.a){
+      $pe2.a=$true
+      try { $al2='**PATRON IA**: hoy 3+ problemas con "'+[string]$actGame+'"'; Invoke-RestMethod -Uri $wh -Method Post -Body (@{content=$al2}|ConvertTo-Json) -ContentType "application/json" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null } catch {}
+    }
+    $script:aiPat[$pk2]=$pe2
+    ($script:aiPat | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'ai_patterns_token.json') -Encoding UTF8
+  }
+} catch {}
+if (-not $reply) {
+if ($actName -eq "reparar") { $reply = "Dale, ya lo estoy arreglando. Esperame un momento y te aviso en cuanto este listo." }
+elseif ($actName -eq "online") { $reply = "Perfecto, le agrego el online ahora. Te aviso cuando termine." }
+elseif ($actName -eq "reinstalar") { $reply = "Te abro la instalacion en Steam, segui los pasos que aparecen ahi." }
+elseif ($actName -eq "abrir") { $reply = "Abriendo el juego..." }
+elseif ($actName -eq "diagnosticar") { $reply = "Dale, hago un diagnostico completo de tu activacion ahora. Te muestro el resultado en cuanto termine." }
+elseif ($actName -eq "canjear") { $reply = "Dale, te cargo el codigo ahora y te lo dejo listo." }
+elseif ($actName -eq "ircanje") { $reply = "Vamos, te llevo a la pantalla de canje ahora mismo." }
+elseif ($actName -eq "instalar") { $reply = "Abriendo la instalacion en Steam..." }
+elseif ($actName -eq "desinstalar") { $reply = "Te abro la desinstalacion en Steam, confirmalo ahi." }
+elseif ($actName -eq "steam") { $reply = "Abriendo Steam..." }
+elseif ($actName -eq "revisar") { $reply = "Dale, reviso que este todo completo." }
+elseif ($actName -eq "progreso") { $reply = "Chequeando tus descargas..." }
+elseif ($actName -eq "ficha") { $reply = "Buscando los datos del juego..." }
+elseif ($actName -eq "onlista") { $reply = "Armando la lista de juegos con online..." }
+elseif ($actName -eq "pausar") { $reply = "Pausando las descargas de arreglos..." }
+elseif ($actName -eq "reanudar") { $reply = "Retomando las descargas..." }
+elseif ($actName -eq "whatsapp") { $reply = "Te abro WhatsApp con tu consulta lista, ahi te ayudamos." }
+else { try { Send-AiErrorWebhook $qcid $qcode $qmsg ("Groq fallo en ambos modelos: "+$lastGroqErr) } catch {}; return (@{ok=$false;err="No pude responder ahora. Proba de nuevo o escribinos por WhatsApp."} | ConvertTo-Json) }
+}
+try {
+  if(-not $faqHit -and -not $actName -and $faqKey -and $reply.Length -ge 20 -and $reply.Length -le 500){
+    $script:aiFaq[$faqKey]=@{a=$reply;t=(Get-Date).ToString('o')}
+    if(@($script:aiFaq.Keys).Count -gt 200){
+      $old=@($script:aiFaq.GetEnumerator() | Sort-Object {[datetime]$_.Value.t} | Select-Object -First 20)
+      foreach($oo in $old){ try { $script:aiFaq.Remove($oo.Key) } catch {} }
+    }
+    ($script:aiFaq | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'ai_faq_token.json') -Encoding UTF8
+  }
+} catch {}
+if ($reply.Length -gt 900) { $reply = $reply.Substring(0, 900) }; try { if ((-not $actName -or $actName -eq 'whatsapp') -and (Test-SalesTalk $reply)) { $reply = "Eso te lo confirman por WhatsApp en un momento, escribinos por ahi y te ayudan."; if (-not $actName) { $actName = "whatsapp" } } } catch {}
+try {
+$dq = $qmsg
+if ($dq.Length -gt 300) { $dq = $dq.Substring(0, 300) }
+$da = $reply
+if ($da.Length -gt 500) { $da = $da.Substring(0, 500) }
+$ax = ""
+if ($actName) { $ax = " [accion:" + $actName + " " + $actGame + "]" }
+$eTag=''
+try { if($reply -match 'No pude|no se pudo|invalido|error'){ $eTag='**ERROR IA** ' } } catch {}
+$dm = @{content=($eTag+"**IA AYUDA** " + $qcid + " " + $qcode + ": " + $dq + " -> " + $da + $ax)} | ConvertTo-Json
+try { Invoke-RestMethod -Uri $wh -Method Post -Body $dm -ContentType "application/json" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null } catch {}
+try {
+  $clf=Join-Path $PSScriptRoot 'ai_chats_token.txt'
+  try { if((Test-Path -LiteralPath $clf) -and ((Get-Item -LiteralPath $clf).Length -gt 1048576)){ Copy-Item -LiteralPath $clf -Destination ($clf+'.bak') -Force; Remove-Item -LiteralPath $clf -Force } } catch {}
+  $ts2=(Get-Date -Format 'MM-dd HH:mm')
+  $q2=[string]$qmsg; if($q2.Length -gt 150){ $q2=$q2.Substring(0,150) }
+  $r2=[string]$reply; if($r2.Length -gt 200){ $r2=$r2.Substring(0,200) }
+  $ac2=''
+  if($actName){ $ac2=' [act:'+$actName+']' }
+  Add-Content -LiteralPath $clf -Value ('['+$ts2+'] cid='+$qcid+' | u | '+($q2 -replace "(\r?\n)+",' ')) -Encoding UTF8
+  Add-Content -LiteralPath $clf -Value ('['+$ts2+'] cid='+$qcid+' | a | '+($r2 -replace "(\r?\n)+",' ')+$ac2) -Encoding UTF8
+try {
+  $swAi.Stop()
+  $cgN=0
+  try { if($qctx -match 'juegos instalados:(.+)$'){ $cgN=@(([string]$Matches[1]) -split '\s*,\s*' | Where-Object { $_ }).Count } } catch {}
+  $hn2=0; try { $hn2=@($qh).Count } catch {}
+  $sl='[model:'+$dbgModel+'|how:'+$dbgHow+'|args:'+$dbgArgs+'|ctxgames:'+$cgN+'|hist:'+$hn2+'|ms:'+[int]$swAi.Elapsed.TotalMilliseconds+'|errs:'+$errN+']'
+  Add-Content -LiteralPath $clf -Value ('['+$ts2+'] cid='+$qcid+' | s | '+$sl) -Encoding UTF8
+} catch {}
+} catch {}
+try {
+  $dayNow=(Get-Date -Format 'yyyy-MM-dd')
+  $dfp=Join-Path $PSScriptRoot 'ai_daily_token.json'
+  if(-not $script:aiDaily){ try { $script:aiDaily=(Get-Content -LiteralPath $dfp -Raw -Encoding UTF8 | ConvertFrom-Json) } catch {} }
+  if(-not $script:aiDaily -or [string]$script:aiDaily.date -ne $dayNow){
+    try {
+      if($script:aiDaily -and [int]$script:aiDaily.chats -gt 0){
+        $rp2='**REPORTE IA** '+[string]$script:aiDaily.date+': '+[int]$script:aiDaily.chats+' chats, '+[int]$script:aiDaily.actions+' acciones, '+[int]$script:aiDaily.errors+' errores'
+        Invoke-RestMethod -Uri $wh -Method Post -Body (@{content=$rp2}|ConvertTo-Json) -ContentType "application/json" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
+      }
+    } catch {}
+    $script:aiDaily=@{date=$dayNow;chats=0;actions=0;errors=0}
+  }
+  $script:aiDaily.chats=[int]$script:aiDaily.chats+1
+  if($actName){ $script:aiDaily.actions=[int]$script:aiDaily.actions+1 }
+  if($eTag){ $script:aiDaily.errors=[int]$script:aiDaily.errors+1 }
+  @{date=[string]$script:aiDaily.date;chats=[int]$script:aiDaily.chats;actions=[int]$script:aiDaily.actions;errors=[int]$script:aiDaily.errors} | ConvertTo-Json | Set-Content -LiteralPath $dfp -Encoding UTF8
+} catch {}
+} catch {}
+return (@{ok=$true;reply=$reply;action=$actName;game=$actGame;watext=$actExtra} | ConvertTo-Json)
+} catch { try { Send-AiErrorWebhook $qcid $qcode $qmsg ("error interno: "+[string]$_.Exception.Message) } catch {}; return (@{ok=$false;err="Error interno"} | ConvertTo-Json) }
+}
+function Get-PaypalSecret {
+    try {
+        if (Test-Path -LiteralPath $script:paypalSecretFile) { return (Get-Content -LiteralPath $script:paypalSecretFile -Raw -Encoding UTF8).Trim() }
+    } catch {}
+    return ""
+}
+function Get-PaypalAccessToken {
+    try {
+        if ($script:paypalTokenCache.token -and [datetime]::UtcNow -lt $script:paypalTokenCache.exp) { return [string]$script:paypalTokenCache.token }
+    } catch {}
+    $cid = [string]$script:paypalClientId
+    $sec = Get-PaypalSecret
+    if (-not $cid -or -not $sec) { return "" }
+    try {
+        $pair = "$cid`:$sec"
+        $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
+        $r = Invoke-RestMethod -Uri "https://api-m.paypal.com/v1/oauth2/token" -Method Post `
+            -Headers @{Authorization = "Basic $b64"} -Body "grant_type=client_credentials" `
+            -ContentType "application/x-www-form-urlencoded" -TimeoutSec 20 -ErrorAction Stop
+        $expIn = 30000
+        try { $expIn = [int]$r.expires_in - 300 } catch {}
+        if ($expIn -lt 60) { $expIn = 60 }
+        $script:paypalTokenCache.token = [string]$r.access_token
+        $script:paypalTokenCache.exp = [datetime]::UtcNow.AddSeconds($expIn)
+        return [string]$r.access_token
+    } catch { return "" }
+}
+function New-PaypalOrder([string]$token) {
+    try {
+        $body = @{intent = "CAPTURE"; purchase_units = @(@{amount = @{currency_code = $script:paypalCurrency; value = $script:paypalPrice}}); application_context = @{return_url = "https://bastisssteam.netlify.app/?pago=ok"; cancel_url = "https://bastisssteam.netlify.app/?pago=cancelado"; user_action = "PAY_NOW"}} | ConvertTo-Json -Depth 10
+        $r = Invoke-RestMethod -Uri "https://api-m.paypal.com/v2/checkout/orders" -Method Post `
+            -Headers @{Authorization = "Bearer $token"; "Content-Type" = "application/json"} -Body $body -TimeoutSec 20 -ErrorAction Stop
+        return $r
+    } catch { return "" }
+}
+function Capture-PaypalOrder([string]$token, [string]$orderId) {
+    try {
+        $r = Invoke-RestMethod -Uri "https://api-m.paypal.com/v2/checkout/orders/$orderId/capture" -Method Post `
+            -Headers @{Authorization = "Bearer $token"; "Content-Type" = "application/json"} -Body "{}" -TimeoutSec 20 -ErrorAction Stop
+        return $r
+    } catch {
+        $errTxt = ""
+        try {
+            $resp = $_.Exception.Response
+            if ($resp) {
+                $sr = New-Object IO.StreamReader($resp.GetResponseStream())
+                $errTxt = $sr.ReadToEnd()
+            }
+        } catch {}
+        if (-not $errTxt) { try { $errTxt = [string]$_.Exception.Message } catch {} }
+        return @{capture_error = $errTxt}
+    }
+}
+function Get-PaypalOrder([string]$token, [string]$orderId) {
+    try {
+        $r = Invoke-RestMethod -Uri "https://api-m.paypal.com/v2/checkout/orders/$orderId" -Method Get `
+            -Headers @{Authorization = "Bearer $token"} -TimeoutSec 20 -ErrorAction Stop
+        return $r
+    } catch { return $null }
+}
+function Find-CodeByPaypalOrder($d, [string]$orderId) {
+    try {
+        foreach ($p in @($d.codes.PSObject.Properties)) {
+            try { if ([string]$p.Value.paypal_order -ceq $orderId) { return [string]$p.Name } } catch {}
+        }
+    } catch {}
+    return ""
+}
+function New-AutoDeliveryCode($d, [string]$orderId, [string]$payerEmail, $captureObj) {
+    $chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    $code = ""
+    do { $code = ((1..4 | ForEach-Object { -join ((1..4 | ForEach-Object { $chars[(Get-Random -Max $chars.Length)] })) }) -join '-') } while ($d.codes.$code)
+    $als = New-IrmAlias $d
+    $sht = ""
+    try {
+        $fullLoader = $script:fixedPublicUrl + '/s/' + $als
+        $tu = Invoke-WebRequest -Uri ('https://tinyurl.com/api-create.php?url=' + [uri]::EscapeDataString($fullLoader)) -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $tc = ([string]$tu.Content).Trim()
+        if ($tc -match '^https://tinyurl\.com/[A-Za-z0-9]+$') { $sht = $tc }
+    } catch {}
+    $links = @(1..60 | ForEach-Object { "https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.$_.zip" })
+    $capId = ""
+    try { $capId = [string]$captureObj.purchase_units[0].payments.captures[0].id } catch {}
+    $d.codes | Add-Member NoteProperty $code @{links=$links;max_uses=1;duration=0;used_count=0;redeemed_by=@();pinned=$false;per_ip=0;mode='normal';category='cliente';name=$payerEmail;kind='irm';alias=$als;short=$sht;machine_ids=@();tokens=@();activated_at=$null;created_at=[DateTime]::UtcNow.ToString('o');paypal_order=$orderId;paypal_capture=$capId;payer_email=$payerEmail}
+    Save-Db $d
+    return $code
+}
+function Build-ClientDelivery($code, $info) {
+    $short = ""
+    try { $short = [string]$info.short } catch {}
+    $alias = ""
+    try { $alias = [string]$info.alias } catch {}
+    if ($short) { $irm = "irm $short | iex" }
+    elseif ($alias) { $irm = "irm " + $script:fixedPublicUrl + "/s/" + $alias + " | iex" }
+    else { $irm = "irm " + $script:fixedPublicUrl + "/api/irm/" + $code + " | iex" }
+    $p = @{code = $code}
+    try { if ([string]$info.name) { $p.name = [string]$info.name } } catch {}
+    $p.irm2 = $irm
+    $j = ($p | ConvertTo-Json -Compress)
+    $b = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($j)).TrimEnd('=').Replace('+','-').Replace('/','_')
+    return @{irm = $irm; url = "https://bastisssteamentrega.netlify.app/#cliente=$b"}
+}
 $pageHtml = @'
 <!DOCTYPE html>
 <html lang="es">
@@ -309,6 +796,7 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <div class="quick-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
 <button class="btn btn-success quickbtn" style="flex:1;min-width:220px;padding:16px 22px;font-size:15px" onclick="crearCodigoMensual()">Codigo Mensual</button>
 <button class="btn btn-primary quickbtn" style="flex:1;min-width:220px;padding:16px 22px;font-size:15px" onclick="crearCodigoPermanente()">Codigo Permanente</button>
+<button class="btn btn-success quickbtn" style="flex:1;min-width:220px;padding:16px 22px;font-size:15px" onclick="crearCodigoPacks()">Codigo Packs Nuevos (23)</button>
 </div>
 <div class="dcols" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 <div class="form-group">
@@ -403,12 +891,13 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <div id="codesIrm" style="margin-top:16px"><p style="color:#6a737d;text-align:center;padding:20px">Cargando...</p></div>
 </div>
 </div>
+<div class="panel"><div class="section-title">Errores y Chats IA</div><div id="errBox" style="background:#0a0e14;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px;font-size:11px;color:#9fb4d8;max-height:260px;overflow:auto;white-space:pre-wrap">Cargando...</div><pre id="chatBox" style="display:none;background:#0d1420;border:1px solid #263042;border-radius:10px;padding:12px;color:#cfe0f5;font-size:11px;white-space:pre-wrap;max-height:300px;overflow:auto;margin-top:10px"></pre></div>
 <div class="footer">Servidor PowerShell &bull; localhost.run Tunnel &bull; <span id="status">Conectado</span></div>
 </div>
 <script>
 function calcDur(){const d=+document.getElementById('durD').value||0,h=+document.getElementById('durH').value||0,m=+document.getElementById('durM').value||0,s=+document.getElementById('durS').value||0;const t=d*86400+h*3600+m*60+s;document.getElementById('duration').value=t;const e=document.getElementById('durTotal');e.textContent=t?t+'s':'Perm'}
 function pickDur(d,h,m,s){document.getElementById('durD').value=d;document.getElementById('durH').value=h;document.getElementById('durM').value=m;document.getElementById('durS').value=s;calcDur()}
-calcDur();loadCodes();
+calcDur();loadErrs();loadCodes();
 function copyPubUrl(){const t=document.getElementById('pubUrlSpan').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
 function copyPubUrlCf(){const t=document.getElementById('pubUrlCfSpan').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
 function showMsg(id,text,type){const e=document.getElementById(id);e.className='msg '+type;e.textContent=text;e.style.display='block';if(type==='success')setTimeout(()=>e.style.display='none',5000)}
@@ -423,6 +912,8 @@ async function create14LotesCode(){document.getElementById('newCode').value='';d
 function lotesLinks(){const l=[];for(let i=1;i<=60;i++){l.push('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.'+i+'.zip')}return l}
 async function crearCodigoRapido(plan,duration){const code=genCode();const links=lotesLinks();const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:1,per_ip:0,mode:'normal',duration,links,name:'grupo-'+plan,category:'cotidiano'})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo '+(plan==='mensual'?'MENSUAL':'PERMANENTE')+' creado: '+code,'success');document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';document.getElementById('createdCodeDisplay').scrollIntoView({behavior:'smooth',block:'center'});loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
 async function crearCodigoMensual(){await crearCodigoRapido('mensual',2592000)}
+function packLotesLinks(){const l=[];for(let i=1;i<=23;i++){l.push('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote-pack-'+i+'.zip')}return l}
+async function crearCodigoPacks(){const code=genCode();const links=packLotesLinks();const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:1,per_ip:0,mode:'normal',duration:0,links,name:'grupo-packs',category:'cotidiano'})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo PACKS NUEVOS creado: '+code,'success');document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';document.getElementById('createdCodeDisplay').scrollIntoView({behavior:'smooth',block:'center'});loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
 async function crearCodigoPermanente(){await crearCodigoRapido('permanente',0)}
 async function createPruebaCode(){const code=genCode();const links=[];for(let i=1;i<=60;i++){links.push('https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/lote.'+i+'.zip')};const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code, max_uses:1, per_ip:0, mode:'normal', links, duration:600, name:'PRUEBA', category:'cliente'})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo de prueba creado: '+code+' (10 min, 60 lotes)','success');document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
 function copyCreatedCode(){const t=document.getElementById('createdCodeText').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
@@ -436,6 +927,8 @@ function copyClientPage(btn){const c=btn.closest('.code-card');const code=c.data
 function cardIrm(code,info){const cmd=irmOneLiner(code,info);const st=info.used_count>=info.max_uses?'AGOTADO':(info.used_count+'/'+info.max_uses+' usos');let h='<div class="code-card" data-code="'+code+'" data-short="'+String(info.short||'').replace(/"/g,'&quot;')+'" data-name="'+String(info.name||'').replace(/"/g,'&quot;')+'"><div class="code">'+code+'</div><div class="meta">Usos: '+st+' &bull; Duracion: '+fmtDur(info.duration)+(info.mode==='ar'?' &bull; <b style="color:#ff9800">POR AR</b>':((info.mode==='ip'||(!info.mode&&info.per_ip>0))?' &bull; <b style="color:#f85149">POR IP'+(info.per_ip>0?' x'+info.per_ip:'')+'</b>':''))+(info.name?' &bull; Cliente: <b style="color:#00d4ff">'+String(info.name).replace(/</g,'&lt;')+'</b>':'')+'</div><div style="display:flex;gap:6px;margin:8px 0"><input type="text" readonly value="'+cmd.replace(/"/g,'&quot;')+'" style="flex:1;padding:8px;background:#0a0e14;border:1px solid #252c36;border-radius:6px;color:#00ff88;font-family:Consolas;font-size:11px"><button class="btn btn-sm btn-primary" onclick="copyIrm(this)">Copiar IRM</button></div><div class="card-actions"><button class="btn btn-sm btn-ghost" onclick="copyClientPage(this)">Pagina cliente</button><button class="btn btn-sm btn-danger" onclick="delCode(\''+code.replace(/'/g,"\\'")+'\')">Eliminar</button></div></div>';return h}
 function copyIrm(btn){const t=btn.previousElementSibling.value;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)});showMsg('irmMsg','IRM copiado','success')}
 async function createIrmCode(){const code=document.getElementById('irmCode').value.trim().toUpperCase()||genCode();const maxUses=+document.getElementById('irmMaxUses').value||1;const mode=document.getElementById('irmMode').value;const perIp=(mode==='ip')?(+document.getElementById('irmPerIpUses').value||1):0;const duration=+document.getElementById('irmDuration').value||0;const name=document.getElementById('irmName').value.trim();const links=lotesLinks();const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:maxUses,per_ip:perIp,mode:mode,links,duration,name,category:'cotidiano',kind:'irm'})});const data=await res.json();if(data.ok){showMsg('irmMsg','IRM creado: '+code,'success');document.getElementById('irmCode').value='';document.getElementById('irmName').value='';loadCodes()}else{showMsg('irmMsg',data.err,'error')}}
+async function loadErrs(){try{const r=await fetch('/api/last-errors');const d=await r.json();const b=document.getElementById('errBox');if(!d.ok||!d.lines||!d.lines.length){b.textContent='Sin errores registrados.';return}b.textContent=d.lines.join('\n')}catch(e){document.getElementById('errBox').textContent='Error cargando'}}
+async function fetchChat(cid){try{const r=await fetch('/api/ai-chat-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cid})});const d=await r.json();const b=document.getElementById('chatBox');b.style.display='block';b.textContent=(d.lines&&d.lines.length)?d.lines.join('\n'):('Sin chat registrado para '+cid)}catch(e){}}
 async function loadCodes(){try{const res=await fetch('/api/codes');const data=await res.json();const cot=document.getElementById('codesCotidiano');const cli=document.getElementById('codesClientes');const irm=document.getElementById('codesIrm');if(!data.codes||Object.keys(data.codes).length===0){cot.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos cotidianos</p>';cli.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos de clientes</p>';irm.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay códigos IRM</p>';return}
 let htmlC='<div class="codes-grid">',htmlK='<div class="codes-grid">',htmlI='<div class="codes-grid">';const sorted=Object.entries(data.codes).sort((a,b)=>(b[1].pinned?1:0)-(a[1].pinned?1:0));for(const[code,info]of sorted){const sc=info.used_count>=info.max_uses?'status-full':(info.used_count>0?'status-used':'status-available');const st=info.used_count>=info.max_uses?'AGOTADO':(info.used_count+'/'+info.max_uses+' usos');const cat=(info.category||'cotidiano');let card='<div class="code-card" data-code="'+code+'" data-short="'+String(info.short||'').replace(/"/g,'&quot;')+'" data-name="'+String(info.name||'').replace(/"/g,'&quot;')+'"><div class="code" style="display:flex;align-items:center;gap:8px"><span>'+(info.pinned?'&#128204; ':'')+code+'</span><button class="btn btn-sm btn-primary" onclick="copyExistingCode(\''+code.replace(/'/g,"\\'")+'\')">Copiar</button></div><div class="meta">Usos: <span class="'+sc+'">'+st+'</span>'+(info.name?' &bull; Cliente: <b style="color:#00d4ff">'+String(info.name).replace(/</g,'&lt;')+'</b>':'')+' &bull; Duracion: '+fmtDur(info.duration)+(info.mode==='ar'?' &bull; <b style="color:#ff9800">POR AR</b>':((info.mode==='ip'||(!info.mode&&info.per_ip>0))?' &bull; <b style="color:#f85149">POR IP'+(info.per_ip>0?' x'+info.per_ip:'')+'</b>':''))+' &bull; <b style="color:#8aa0c0">'+cat.toUpperCase()+'</b></div><div class="links-list">'+info.links.map(l=>'<a href="'+l+'" target="_blank">'+l+'</a>').join('')+'</div><div class="redeemed-list">IDs: '+(info.redeemed_by&&info.redeemed_by.length?info.redeemed_by.join(', '):'ninguno')+'</div><div class="redeemed-list">IPs: '+(info.redeemed_ips&&Object.keys(info.redeemed_ips).length?Object.keys(info.redeemed_ips).map(k=>k+' ('+info.redeemed_ips[k]+')').join(', '):'ninguna')+'</div><div class="card-actions">'
 card+='<button class="btn btn-sm btn-ghost" onclick="pinCode(\''+code.replace(/'/g,"\\'")+'\')">'+(info.pinned?'Desfijar':'Fijar')+'</button>'
@@ -718,7 +1211,15 @@ if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastC
             continue
         }
         # GET /api/codes - list all codes
-        if ($path -eq "/api/codes") {
+        if ($path -eq "/api/last-errors") {
+            $elf2 = Join-Path $PSScriptRoot "client_errors_token.txt"
+            $elines = @()
+            try { if (Test-Path -LiteralPath $elf2) { $elines=@(Get-Content -LiteralPath $elf2 -Tail 80 -Encoding UTF8) } } catch {}
+            $eb = @{ok=$true;lines=$elines} | ConvertTo-Json
+            Send-HttpResponse $client $eb "application/json; charset=utf-8"
+            continue
+        }
+if ($path -eq "/api/codes") {
             $d = Load-Db
             $body = @{ok=$true;codes=$d.codes} | ConvertTo-Json -Depth 10
             Send-HttpResponse $client $body "application/json; charset=utf-8"
@@ -755,7 +1256,7 @@ if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastC
             continue
         }
         # POST endpoints - need body
-        if ($path -in @("/api/create-code","/api/redeem-code","/api/token-links","/api/token-info","/api/delete-code","/api/delete-all-codes","/api/pin-code","/api/renew-code","/api/remove-redeemed","/api/wipe","/api/check-wipe","/api/clear-wipe","/api/install-ok")) {
+        if ($path -in @("/api/create-code","/api/redeem-code","/api/token-links","/api/token-info","/api/delete-code","/api/delete-all-codes","/api/pin-code","/api/renew-code","/api/remove-redeemed","/api/wipe","/api/check-wipe","/api/clear-wipe","/api/install-ok","/api/client-error","/api/ai-chat","/api/validate-code","/api/ai-chat-log","/api/ia-traza","/api/paypal-create-order","/api/paypal-capture","/api/paypal-webhook")) {
             $rawBody = $req.Body
             if (-not $rawBody) {
                 $contentLength = 0
@@ -794,7 +1295,69 @@ if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastC
             }
             try { $bodyData = $rawBody | ConvertFrom-Json } catch { $bodyData = $null }
             $respBody = '{"ok":false,"err":"Invalid"}'
-            if ($path -eq "/api/create-code" -and $bodyData) {
+            if ($path -eq "/api/ai-chat-log" -and $bodyData) {
+                $lgCid = ""
+                try { $lgCid = ([string]$bodyData.cid).Trim() } catch {}
+                $lgLines = @()
+                if ($lgCid) {
+                    try {
+                        $clf2 = Join-Path $PSScriptRoot "ai_chats_token.txt"
+                        if (Test-Path -LiteralPath $clf2) {
+                            $all2 = @(Get-Content -LiteralPath $clf2 -Encoding UTF8)
+                            $mine2 = @($all2 | Where-Object { $_ -match ('cid='+[regex]::Escape($lgCid)+' \|') })
+                            if ($mine2.Count -gt 40) { $mine2 = $mine2[($mine2.Count-40)..($mine2.Count-1)] }
+                            $lgLines = $mine2
+                        }
+                    } catch {}
+                }
+                $respBody = @{ok=$true;lines=$lgLines} | ConvertTo-Json
+                Send-HttpResponse $client $respBody "application/json; charset=utf-8"
+                continue
+            }
+if ($path -eq "/api/ia-traza" -and $bodyData) {
+                $trCid=""
+                try { $trCid=([string]$bodyData.client_id).Trim() } catch {}
+                $trAct=""
+                try { $trAct=[string]$bodyData.action } catch {}
+                $trGame=""
+                try { $trGame=[string]$bodyData.game } catch {}
+                try {
+                    $tx=@($bodyData.pasos)
+                    if($tx.Count -gt 30){ $tx=$tx[0..29] }
+                    $clfT=Join-Path $PSScriptRoot "ai_chats_token.txt"
+                    try { if((Test-Path -LiteralPath $clfT) -and ((Get-Item -LiteralPath $clfT).Length -gt 1048576)){ Copy-Item -LiteralPath $clfT -Destination ($clfT+'.bak') -Force; Remove-Item -LiteralPath $clfT -Force } } catch {}
+                    $tsT=(Get-Date -Format 'MM-dd HH:mm')
+                    foreach($ps in $tx){
+                        $pl=[string]$ps; if($pl.Length -gt 200){ $pl=$pl.Substring(0,200) }
+                        Add-Content -LiteralPath $clfT -Value ('['+$tsT+'] cid='+$trCid+' | t | ['+$trAct+'/'+$trGame+'] '+$pl) -Encoding UTF8
+                    }
+                } catch {}
+                $respBody = @{ok=$true} | ConvertTo-Json
+                Send-HttpResponse $client $respBody "application/json; charset=utf-8"
+                continue
+            }
+            if ($path -eq "/api/validate-code" -and $bodyData) {
+                $dVal = Load-Db
+                $valCode = ""
+                try { $valCode = ([string]$bodyData.code).ToUpper().Trim() } catch {}
+                if (-not $valCode) { $respBody = @{ok=$false;err="Falta codigo"} | ConvertTo-Json }
+                elseif (-not $dVal.codes.$valCode) { $respBody = @{ok=$false;exists=$false;err="Codigo invalido"} | ConvertTo-Json }
+                else {
+                    $valInfo = $dVal.codes.$valCode
+                    $valName = ""
+                    try { $valName = [string]$valInfo.name } catch {}
+                    $valGames = 0
+                    try { $valGames = @($valInfo.links).Count } catch {}
+                    $valDur = ""
+                    try { $valDur = [string]$valInfo.duration } catch {}
+                    $valCat = ""
+                    try { $valCat = [string]$valInfo.category } catch {}
+                    $respBody = @{ok=$true;exists=$true;name=$valName;games=$valGames;duration=$valDur;category=$valCat} | ConvertTo-Json
+                }
+                Send-HttpResponse $client $respBody "application/json; charset=utf-8"
+                continue
+            }
+if ($path -eq "/api/create-code" -and $bodyData) {
                 $d = Load-Db
                 $code = ""
                 try { $code = ([string]$bodyData.code).ToUpper().Trim() } catch {}
@@ -922,7 +1485,7 @@ if (($now - $script:lastCfStart).TotalSeconds -gt 180 -and ($now - $script:lastC
                     }
                 } catch {}
                 $respBody = (@{ok=$okI} | ConvertTo-Json)
-            } elseif ($path -eq "/api/token-links" -and $bodyData) {
+            } elseif ($path -eq "/api/client-error" -and $bodyData) { try { $ecid = ""; try { $ecid = ([string]$bodyData.client_id).Trim() } catch {}; $ekind = ""; try { $ekind = ([string]$bodyData.kind).Trim() } catch {}; $emsg = ""; try { $emsg = [string]$bodyData.msg } catch {}; if ($emsg.Length -gt 1500) { $emsg = $emsg.Substring(0, 1500) }; $ecode = ""; try { $ecode = ([string]$bodyData.code).Trim() } catch {}; $egame = ""; try { $egame = ([string]$bodyData.game).Trim() } catch {}; $elf = Join-Path $PSScriptRoot "client_errors_token.txt"; try { if ((Test-Path -LiteralPath $elf) -and ((Get-Item -LiteralPath $elf).Length -gt 2097152)) { Copy-Item -LiteralPath $elf -Destination ($elf + ".bak") -Force } } catch {}; Add-Content -LiteralPath $elf -Value ("[" + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + "] kind=" + $ekind + " cid=" + $ecid + " code=" + $ecode + " game=" + $egame + " msg=" + $emsg) -Encoding UTF8 } catch {}; $respBody = @{ok=$true} | ConvertTo-Json } elseif ($path -eq "/api/ai-chat" -and $bodyData) { $respBody = (AiChat-Handle $bodyData) }  elseif ($path -eq "/api/token-links" -and $bodyData) {
                 $d = Load-Db
                 $tok = ""
                 try { $tok = [string]$bodyData.token } catch {}
@@ -1043,6 +1606,75 @@ if ($d.codes.$code) {
                 $cid = $bodyData.client_id; $w = Load-Wipe; $shouldWipe = $w -contains $cid; $respBody = @{ok=$true;wipe=$shouldWipe} | ConvertTo-Json
             } elseif ($path -eq "/api/clear-wipe" -and $bodyData) {
                 $cid = $bodyData.client_id; $w = Load-Wipe; $w = @($w | Where-Object { $_ -ne $cid }); Save-Wipe $w; $respBody = @{ok=$true} | ConvertTo-Json
+            } elseif ($path -eq "/api/paypal-create-order") {
+                $tok = Get-PaypalAccessToken
+                if (-not $tok) { $respBody = @{ok=$false;err="PayPal sin credenciales"} | ConvertTo-Json }
+                else {
+                    $ord = New-PaypalOrder $tok
+                    if ($ord -and $ord.id) { $ap2 = ""; try { foreach($lk in @($ord.links)){ if([string]$lk.rel -eq "approve"){ $ap2=[string]$lk.href; break } } } catch {}; $respBody = @{ok=$true;orderId=[string]$ord.id;approveUrl=$ap2} | ConvertTo-Json }
+                    else { $respBody = @{ok=$false;err="No se pudo crear orden"} | ConvertTo-Json }
+                }
+            } elseif ($path -eq "/api/paypal-capture" -and $bodyData) {
+                $oid = ""
+                try { $oid = ([string]$bodyData.orderId).Trim() } catch {}
+                if (-not $oid) { try { $oid = ([string]$bodyData.orderID).Trim() } catch {} }
+                if (-not $oid) { $respBody = @{ok=$false;err="Falta orderId"} | ConvertTo-Json }
+                else {
+                    $d = Load-Db
+                    $existing = Find-CodeByPaypalOrder $d $oid
+                    if ($existing) {
+                        $dlv = Build-ClientDelivery $existing $d.codes.$existing
+                        $respBody = @{ok=$true;code=$existing;irm=$dlv.irm;url=$dlv.url;repeated=$true} | ConvertTo-Json
+                    } else {
+                        $tok = Get-PaypalAccessToken
+                        if (-not $tok) { $respBody = @{ok=$false;err="PayPal sin credenciales"} | ConvertTo-Json }
+                        else {
+                            $cap = Capture-PaypalOrder $tok $oid
+                            $status = ""
+                            try { $status = [string]$cap.status } catch {}
+                            $amt = ""
+                            try { $amt = [string]$cap.purchase_units[0].payments.captures[0].amount.value } catch {}
+                            $cur = ""
+                            try { $cur = [string]$cap.purchase_units[0].payments.captures[0].amount.currency_code } catch {}
+                            $payer = ""
+                            try { $payer = [string]$cap.payer.email_address } catch {}
+                            if ($status -ne "COMPLETED") {
+                                try {
+                                    $ord = Get-PaypalOrder $tok $oid
+                                    $oStatus = ""
+                                    try { $oStatus = [string]$ord.status } catch {}
+                                    if ($oStatus -eq "COMPLETED") {
+                                        $status = "COMPLETED"
+                                        try { if (-not $amt) { $amt = [string]$ord.purchase_units[0].amount.value } } catch {}
+                                        try { if (-not $cur) { $cur = [string]$ord.purchase_units[0].amount.currency_code } } catch {}
+                                        try { if (-not $payer) { $payer = [string]$ord.payer.email_address } } catch {}
+                                        try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PAYPAL-RETRY-OK order=$oid" -Encoding UTF8 } catch {}
+                                    } else {
+                                        $cerr = ""
+                                        try { $cerr = ([string]$cap.capture_error).Substring(0, [Math]::Min(200, ([string]$cap.capture_error).Length)) } catch {}
+                                        try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PAYPAL-CAPTURE-FAIL order=$oid capstatus=$status ostatus=$oStatus err=$cerr" -Encoding UTF8 } catch {}
+                                        try { $em = @{content="**ERROR COMPRA** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**Order:** $oid`n**CapStatus:** $status`n**OrderStatus:** $oStatus`n**Err:** $cerr"} | ConvertTo-Json; Invoke-RestMethod -Uri $wh -Method Post -Body $em -ContentType 'application/json' } catch {}
+                                    }
+                                } catch {}
+                            }
+                            if ($status -ne "COMPLETED") { $respBody = @{ok=$false;err="Pago no completado";orderId=$oid} | ConvertTo-Json }
+                            elseif ($amt -ne $script:paypalPrice -or $cur -ne $script:paypalCurrency) { $respBody = @{ok=$false;err="Monto invalido $amt $cur"} | ConvertTo-Json; try { $em2 = @{content="**ERROR COMPRA MONTO** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**Order:** $oid`n**Monto:** $amt $cur (esperado $($script:paypalPrice) $($script:paypalCurrency))"} | ConvertTo-Json; Invoke-RestMethod -Uri $wh -Method Post -Body $em2 -ContentType 'application/json' } catch {} }
+                            else {
+                                $d2 = Load-Db
+                                $code = New-AutoDeliveryCode $d2 $oid $payer $cap
+                                $dlv = Build-ClientDelivery $code $d2.codes.$code
+                                try {
+                                    $msg = @{content = "**VENTA 12 USD** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**Codigo:** $code`n**Order:** $oid`n**Payer:** $payer"} | ConvertTo-Json
+                                    Invoke-RestMethod -Uri 'https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM' -Method Post -Body $msg -ContentType 'application/json' -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+                                } catch {}
+                                $respBody = @{ok=$true;code=$code;irm=$dlv.irm;url=$dlv.url} | ConvertTo-Json
+                            }
+                        }
+                    }
+                }
+            } elseif ($path -eq "/api/paypal-webhook") {
+                try { Add-Content -LiteralPath $script:redLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PAYPAL-WEBHOOK $($req.Body.Substring(0,[Math]::Min(300,$req.Body.Length)))" -Encoding UTF8 } catch {}
+                $respBody = @{ok=$true} | ConvertTo-Json
             }
             Send-HttpResponse $client $respBody "application/json; charset=utf-8"
             continue
@@ -1053,7 +1685,6 @@ if ($d.codes.$code) {
         try { Send-HttpResponse $client (@{ok=$false;err="Error interno"} | ConvertTo-Json) "application/json" 500 } catch {}
     }
 }
-
 
 
 
