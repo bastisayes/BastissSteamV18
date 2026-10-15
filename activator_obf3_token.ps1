@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.53"
+$script:version = "V2.54"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2217,7 +2217,7 @@ function Report-Expirados {
 }
 function Rm9xExp {
     param([switch]$NoNetworkTime)
-    try { Report-Expirados } catch {}; return;
+    try { Report-Expirados } catch {}; try { Repair-OrphanGames -Silent } catch {}; return;
     $timers = At5Vc; $remaining = @()
     $expired = @()
     $now, $isNet = Get-Now -LocalOnly:$NoNetworkTime
@@ -3058,9 +3058,64 @@ function Invoke-AiPartsInstall([string]$query,[object]$Sync) {
         try { Set-AiSync $Sync ('Instalando '+$clean+'...') } catch {}
         $pr=$null
         try { $pr=Apply-FixAutomatically $clean $gp $fxs $Sync } catch { $pr=@($false,'Error instalando.') }
-        if($pr -and $pr[0]){ $aiAppId=''; try { $aiAppId=[string](Find-AppIdByName $clean) } catch {}; if($aiAppId){ try { $aiMf=Join-Path (Join-Path $libs[0] 'steamapps') ('appmanifest_'+$aiAppId+'.acf'); if(-not (Test-Path -LiteralPath $aiMf)){ $aiLines=@('"AppState"','{','"appid"  "'+$aiAppId+'"','"Universe"  "1"','"name"  "'+$clean+'"','"StateFlags"  "4"','"installdir"  "'+$clean+'"','}'); [IO.File]::WriteAllText($aiMf,($aiLines -join "`n")) } } catch {} }; return ('Listo: instale '+$clean+' completo en tu biblioteca. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?') }
+        if($pr -and $pr[0]){ $aiAppId=''; try { $aiAppId=[string](Find-AppIdByName $clean) } catch {}; if($aiAppId){ try { $aiMf=Join-Path (Join-Path $libs[0] 'steamapps') ('appmanifest_'+$aiAppId+'.acf'); if(-not (Test-Path -LiteralPath $aiMf)){ $aiSb=New-Object System.Text.StringBuilder; [void]$aiSb.AppendLine('"AppState"'); [void]$aiSb.AppendLine('{'); [void]$aiSb.Append('"appid"  "'); [void]$aiSb.Append($aiAppId); [void]$aiSb.AppendLine('"'); [void]$aiSb.AppendLine('"Universe"  "1"'); [void]$aiSb.Append('"name"  "'); [void]$aiSb.Append($clean); [void]$aiSb.AppendLine('"'); [void]$aiSb.AppendLine('"StateFlags"  "4"'); [void]$aiSb.Append('"installdir"  "'); [void]$aiSb.Append($clean); [void]$aiSb.AppendLine('"'); [void]$aiSb.AppendLine('}'); [IO.File]::WriteAllText($aiMf,$aiSb.ToString()) } } catch {} }; return ('Listo: instale '+$clean+' completo en tu biblioteca. Abrilo desde Steam; si no abre, abrilo desde la carpeta del juego. Queres que lo abra yo?') }
         return $null
     } catch { return $null }
+}
+function Repair-OrphanGames {
+    param([switch]$Silent)
+    $restored=@(); $pending=0; $games=0
+    try {
+        if($Silent){
+            try { if($script:lastOrphanFix -and (((Get-Date)-$script:lastOrphanFix).TotalMinutes -lt 30)){ return 'OK' } } catch {}
+        }
+        try { $q=@(Pd9Uj); if($q){ $pending=$q.Count } } catch {}
+        try { Sp2Ke @() } catch {}
+        try {
+            $libs=@(); try { $libs=@(Ss3Jd) } catch {}
+            foreach($lb in $libs){
+                $cm=Join-Path $lb 'steamapps\common'
+                if(-not (Test-Path -LiteralPath $cm)){ continue }
+                $acfDir=Join-Path $lb 'steamapps'
+                foreach($gd in @(Get-ChildItem -LiteralPath $cm -Directory -ErrorAction SilentlyContinue)){
+                    $games++
+                    $found=$false
+                    try {
+                        foreach($af in @(Get-ChildItem -LiteralPath $acfDir -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)){
+                            $tx=[IO.File]::ReadAllText($af.FullName)
+                            $m=[regex]::Match($tx,'"installdir"\s+"([^"]+)"')
+                            if($m.Success -and $m.Groups[1].Value -eq $gd.Name){ $found=$true; break }
+                        }
+                    } catch {}
+                    if(-not $found){
+                        $appId=''
+                        try { $appId=[string](Find-AppIdByName $gd.Name) } catch {}
+                        if($appId){
+                            $mf=Join-Path $acfDir ('appmanifest_'+$appId+'.acf')
+                            if(-not (Test-Path -LiteralPath $mf)){
+                                $mfSb=New-Object System.Text.StringBuilder; [void]$mfSb.AppendLine('"AppState"'); [void]$mfSb.AppendLine('{'); [void]$mfSb.Append('"appid"  "'); [void]$mfSb.Append($appId); [void]$mfSb.AppendLine('"'); [void]$mfSb.AppendLine('"Universe"  "1"'); [void]$mfSb.Append('"name"  "'); [void]$mfSb.Append($gd.Name); [void]$mfSb.AppendLine('"'); [void]$mfSb.AppendLine('"StateFlags"  "4"'); [void]$mfSb.Append('"installdir"  "'); [void]$mfSb.Append($gd.Name); [void]$mfSb.AppendLine('"'); [void]$mfSb.AppendLine('}'); $mfText=$mfSb.ToString()
+                                [IO.File]::WriteAllText($mf,$mfText)
+                                $restored+=@($gd.Name)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {}
+        try { $script:lastOrphanFix=Get-Date } catch {}
+    } catch {}
+    $fixedOk=(($restored.Count -gt 0) -or ($pending -gt 0))
+    if(-not $Silent){
+        try {
+            $bt=[char]96
+            $rl=''
+            if($restored.Count -gt 0){ $rl=$bt+$bt+$bt+($restored -join "`n")+$bt+$bt+$bt+"`n" }
+            $content="**ANTI-HUERFANOS** "+$env:COMPUTERNAME+" / "+[Environment]::UserName+"`n**Juegos revisados:** "+$games+"`n**Huerfanos restaurados:** "+$restored.Count+"`n"+$rl+"**Cola de borrado limpiada:** "+$pending+"`n**Borrador de licencias eliminado:** SI`n**Error arreglado:** "+$(if($fixedOk){'SI'}else{'SIN-HUERFANOS'})
+            $pl=@{content=$content}|ConvertTo-Json
+            Send-DiscordJson $WEBHOOK_URL $pl 10 | Out-Null
+        } catch {}
+    }
+    return ('Juegos revisados: '+$games+'. Huerfanos recuperados: '+$restored.Count+'. Cola de borrado limpiada: '+$pending+'. Borrador de licencias eliminado: SI.')
 }
 function Download-FixArchive {
     param([string]$url,[string]$outFile,[string]$gameName,[object]$prog=$null,[int]$base=5,[int]$span=65)
@@ -4264,16 +4319,16 @@ function Toggle-CdPause {
     try { Update-CdPanelText } catch {}
 }
 
-function Clear-CdExpiredData([string]$code) {
+function Clear-CdExpiredData_OLD_DISABLED([string]$code) {
     if (-not $code) { return }
     try {
         $lt = Get-LocalToken
-        if ($lt -and [string]$lt.code -eq [string]$code) { Set-LocalToken '' $code }
+        if ($false) { Set-LocalToken '' $code }
     } catch {}
     try {
         $q = @(Get-LoteQueue)
         $left = @($q | Where-Object { [string]$_.code -ne [string]$code })
-        if ($left.Count -ne $q.Count) { Save-LoteQueue $left }
+        if ($false) { Save-LoteQueue $left }
     } catch {}
 }
 
@@ -6581,12 +6636,15 @@ $script:pageBtn2.Text="Pagina 2";$script:pageBtn2.Location=New-Object System.Dra
 $script:devLogVisible=$false
 function Switch-CfgPage([int]$p){
  $script:cfgPage=$p
- $on1=($p -eq 1); $on2=($p -eq 2)
+ $on1=($p -eq 1); $on2=($p -eq 2); $on3=($p -eq 3)
  $script:pageBtn1.BackColor=if($on1){$script:Cyan}else{$script:CardBG}
  $script:pageBtn1.ForeColor=if($on1){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
  $script:pageBtn2.BackColor=if($on2){$script:Cyan}else{$script:CardBG}
  $script:pageBtn2.ForeColor=if($on2){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
+ $script:pageBtn3.BackColor=if($on3){$script:Cyan}else{$script:CardBG}
+ $script:pageBtn3.ForeColor=if($on3){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
  @($script:sWatcher,$script:sHist,$script:sKill,$script:sPatch,$script:sDelGame,$script:sEliminar,$script:sActualizar) | ForEach-Object { if($_){$_.Visible=$on1} }
+ @($script:sHuerf) | ForEach-Object { if($_){$_.Visible=$on3} }
  if($null -ne $script:sLogLabel){$script:sLogLabel.Visible=($on1 -and $script:devLogVisible)}
  if($null -ne $script:sLogBox){$script:sLogBox.Visible=($on1 -and $script:devLogVisible)}
   @($script:sRepair,$script:sMigrar,$script:sAutoLua,$script:sDropsV2,$script:sDiag,$script:sPatch2) | ForEach-Object { if($_){$_.Visible=$on2} }
@@ -6598,6 +6656,10 @@ function Switch-CfgPage([int]$p){
 }
 $script:pageBtn1.Add_Click({ Switch-CfgPage 1 })
 $script:pageBtn2.Add_Click({ Switch-CfgPage 2 })
+$script:pageBtn3=New-Object System.Windows.Forms.Button
+$script:pageBtn3.Text="Pagina 3";$script:pageBtn3.Location=New-Object System.Drawing.Point(($PAD+232),48);$script:pageBtn3.Size=New-Object System.Drawing.Size(80,22);$script:pageBtn3.BackColor=$script:CardBG;$script:pageBtn3.ForeColor=$White;$script:pageBtn3.FlatStyle="Flat";$script:pageBtn3.Font=$FntSub
+$script:pageBtn3.Add_Click({ Switch-CfgPage 3 })
+$script:sp.Controls.Add($script:pageBtn3)
 $script:sp.Controls.Add($script:pageBtn1)
 $script:sp.Controls.Add($script:pageBtn2)
 $script:modeBtn=New-Object System.Windows.Forms.Button
@@ -7795,6 +7857,15 @@ $script:sp.Controls.Add($script:sPatch2)
 $script:sp.Controls.Add($script:sDiag)
 $script:sDiag.BringToFront()
 
+
+$script:sHuerf=New-CfgBtn ($sY+58) "Arreglar huerfanos" "Recupera juegos borrados y protege licencias" {
+    try {
+        $hr=Repair-OrphanGames
+        [System.Windows.Forms.MessageBox]::Show([string]$hr,"Arreglar huerfanos","OK","Information") | Out-Null
+    } catch { [System.Windows.Forms.MessageBox]::Show("Error: "+$_.Exception.Message,"Arreglar huerfanos","OK","Error") | Out-Null }
+}
+$script:sHuerf.Visible=$false
+$script:sp.Controls.Add($script:sHuerf)
 
 function Repair-UnoApp([string]$appid) {
     $res=@{ok=$false; msg=''; man=0}
