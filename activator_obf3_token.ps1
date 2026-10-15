@@ -12,7 +12,14 @@ Add-Type -AssemblyName System.Drawing
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 $global:ErrorActionPreference = 'SilentlyContinue'
-
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
+try {
+    $lm=[string]$ExecutionContext.SessionState.LanguageMode
+    if($lm -ne '' -and $lm -ne 'FullLanguage'){
+        [System.Windows.Forms.MessageBox]::Show("Windows esta limitando PowerShell (modo "+$lm+"). Pausa tu antivirus 10 minutos (o desactiva Smart App Control) y volve a abrir el programa.","BastissSteam","OK","Warning") | Out-Null
+    }
+} catch {}
 # --- V1.7 FIX rutas 8.3 / perfil inexistente (evita "No existe ningun objeto en la ruta de acceso") ---
 function ConvertTo-BsaLongPath { param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
@@ -208,7 +215,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.57"
+$script:version = "V2.58"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5466,7 +5473,7 @@ function Start-AiChatSend {
                     if($answer -and -not [bool]$answer.ok -and $answer.err){ return @{ok=$true;reply=[string]$answer.err;action='';game='';watext=''} }
                 } catch { if($attemptTimer.Elapsed.TotalSeconds -ge 3){break} }
             }
-            return @{ok=$false;reply="No pude conectarme ahora. Probá de nuevo o escribinos por WhatsApp."}
+            return @{ok=$false;reply="No pude conectarme al servidor. Revisa tu internet, la hora de Windows y que el antivirus no bloquee la app; si sigue, escribinos por WhatsApp."}
         }).AddArgument([string[]]$urls).AddArgument([string]$payload)
         $handle=$ps.BeginInvoke()
         $st.job=@{ ps=$ps; handle=$handle; question=$q }
