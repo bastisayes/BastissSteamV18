@@ -208,7 +208,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.54"
+$script:version = "V2.57"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1555,7 +1555,7 @@ function Initialize-GameNameMap {
         if (-not $byId.ContainsKey($id)) { [void]$order.Add($id) }
         $byId[$id] = $nm
         $key = Nn1Yw $nm
-        if ($key -and -not $byName.ContainsKey($key)) { $byName[$key] = $id }
+        if ($key -and -not $byName.ContainsKey($key)) { $byName[$key] = $id }; try { $keyF=$key -replace ' ',''; if($keyF -ne $key -and $keyF -and -not $byName.ContainsKey($keyF)){ $byName[$keyF]=$id } } catch {}
     }
     $script:GAME_NAME_BY_APPID = $byId
     $script:GAME_APPID_BY_NAME = $byName
@@ -1583,7 +1583,7 @@ function Find-AppIdByName([string]$text) {
     if ([string]::IsNullOrWhiteSpace($text)) { return $null }
     $q = Nn1Yw $text
     if (-not $q) { return $null }
-    if ($script:GAME_APPID_BY_NAME.ContainsKey($q)) { return $script:GAME_APPID_BY_NAME[$q] }
+    if ($script:GAME_APPID_BY_NAME.ContainsKey($q)) { return $script:GAME_APPID_BY_NAME[$q] }; $qf=$q -replace ' ',''; if ($qf -ne $q -and $script:GAME_APPID_BY_NAME.ContainsKey($qf)) { return $script:GAME_APPID_BY_NAME[$qf] }
     $qArgs = @($q -split '\s+' | Where-Object { $_ })
     if ($qArgs.Count -eq 0) { return $null }
     $qDigits = @($qArgs | Where-Object { $_ -match '^\d+$' })
@@ -2862,7 +2862,7 @@ function Ff2Xa {
         $ffn = Nn1Yw $f
         $ffnExpanded = Nn1Yw (Ec8Tu $f)
         if ($ffn -eq $gfn) { return $f, $fixes[$f] }
-        if ($ffnExpanded -eq $gfnExpanded) { return $f, $fixes[$f] }
+        if ($ffnExpanded -eq $gfnExpanded) { return $f, $fixes[$f] }; $fflat=$ffn -replace ' ',''; $gflat=$gfn -replace ' ',''; if ($fflat -ne '' -and $fflat -eq $gflat) { return $f, $fixes[$f] }
         $useGfn = $gfnExpanded; $useFfn = $ffnExpanded
         $escG = ""; $escF = ""
         try { $escG = [System.Management.Automation.WildcardPattern]::Escape($useGfn) } catch { $escG = $useGfn }
@@ -3459,6 +3459,7 @@ function Qw7Rt {
         }
         if(-not $jsonText){throw 'No se pudo obtener una lista de fixes valida'}
         $parsed = ConvertFrom-Json -InputObject $jsonText -ErrorAction Stop
+        try { if(-not $script:fixAppidCache){ $script:fixAppidCache=@{}; $cf7=Join-Path ([IO.Path]::GetTempPath()) 'bsmap_appid.cache'; if(Test-Path -LiteralPath $cf7){ $cj7=[IO.File]::ReadAllText($cf7); $co7=ConvertFrom-Json -InputObject $cj7 -ErrorAction Stop; foreach($pp7 in $co7.PSObject.Properties){ if($pp7.Name){ $script:fixAppidCache[[string]$pp7.Name]=[string]$pp7.Value } } } }; $script:fixAppidDirty=$false } catch {}
         $fixes = @{}
         foreach ($f in @($parsed)) {
             if (-not $f -or -not $f.filename) { continue }
@@ -3475,7 +3476,7 @@ function Qw7Rt {
             foreach ($gKey in @($fixes.Keys)) {
                 $fixIndex++
 
-                $fixAppid = Find-AppIdByName ([string]$gKey)
+                $gk7=[string]$gKey; $fixAppid = $null; $hit7=$false; try { if(-not $script:fixAppidCache){ $script:fixAppidCache=@{} }; if($script:fixAppidCache.ContainsKey($gk7)){ $fixAppid=$script:fixAppidCache[$gk7]; $hit7=$true } } catch {}; if(-not $hit7){ $fixAppid = Find-AppIdByName ([string]$gKey); try { $script:fixAppidCache[$gk7]=[string]$fixAppid; $script:fixAppidDirty=$true } catch {} }
                 if (-not $fixAppid) { continue }
                 $fixAppid = [string]$fixAppid
                 if ($instM.ContainsKey($fixAppid)) {
@@ -3484,6 +3485,7 @@ function Qw7Rt {
                 }
             }
         } catch {}
+        try { if($script:fixAppidDirty){ $script:fixAppidDirty=$false; $cf7=Join-Path ([IO.Path]::GetTempPath()) 'bsmap_appid.cache'; $js7=ConvertTo-Json -InputObject $script:fixAppidCache -Depth 3 -Compress; [IO.File]::WriteAllText($cf7,$js7) } } catch {}
         if ($fixes.Count -gt 0) {
             $script:bibFixesCache = $fixes
             $script:bibFixesCacheTime = Get-Date
@@ -4332,6 +4334,16 @@ function Clear-CdExpiredData_OLD_DISABLED([string]$code) {
     } catch {}
 }
 
+function Report-CanjeFail([string]$code,[string]$cid,[string]$motivo,[string]$u1,[string]$u2) {
+    try {
+        if($u1 -ne ''){ try { $rb=(@{client_id=$cid;kind='canje-fallo';code=$code;msg=$motivo} | ConvertTo-Json -Compress); Invoke-RestMethod -Uri ($u1.TrimEnd('/')+'/api/client-error') -Method Post -Body $rb -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop } catch {} }
+        if($u2 -ne '' -and $u2 -ne $u1){ try { $rb=(@{client_id=$cid;kind='canje-fallo';code=$code;msg=$motivo} | ConvertTo-Json -Compress); Invoke-RestMethod -Uri ($u2.TrimEnd('/')+'/api/client-error') -Method Post -Body $rb -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop } catch {} }
+    } catch {}
+    try {
+        $pl=@{content=('**FALLO CANJE (app)** - '+$code+' / '+$cid+' - '+$motivo)} | ConvertTo-Json
+        Send-DiscordJson $WEBHOOK_URL $pl 5 | Out-Null
+    } catch {}
+}
 function Start-CdActivate {
     $code = [string]$script:cdCode
     if ($script:cdRunning) {
@@ -4348,8 +4360,8 @@ function Start-CdActivate {
     $job = Get-LoteJob $code
     if (-not $job -or $null -eq $job.items -or @($job.items).Count -eq 0) {
         $r = Get-LinksFromToken $code
-        if (-not $r) { [System.Windows.Forms.MessageBox]::Show("No hay token local para este codigo o el servidor no respondio.","Activar juegos","OK","Warning"); return }
-        if (-not $r.ok) { [System.Windows.Forms.MessageBox]::Show((if ($r.err) { [string]$r.err } else { "El servidor rechazo la vigencia de este codigo." }),"Activar juegos","OK","Warning"); return }
+        try { Report-CanjeFail $code ([string]$script:clientId) 'sin token o sin servidor' ([string]$script:serverUrl) ([string]$script:serverUrlCf) } catch {}; if (-not $r) { [System.Windows.Forms.MessageBox]::Show("No hay token local para este codigo o el servidor no respondio.","Activar juegos","OK","Warning"); return }
+        try { $rejM="rechazado por servidor"; try { if ($r.err) { $rejM=[string]$r.err } } catch {}; Report-CanjeFail $code ([string]$script:clientId) $rejM ([string]$script:serverUrl) ([string]$script:serverUrlCf) } catch {}; if (-not $r.ok) { [System.Windows.Forms.MessageBox]::Show((if ($r.err) { [string]$r.err } else { "El servidor rechazo la vigencia de este codigo." }),"Activar juegos","OK","Warning"); return }
         $steamRoot = ""
         try { $steamRoot = Get-SteamPath } catch {}
         $dur = 0; try { $dur = [int]$r.duration } catch {}
@@ -4369,13 +4381,13 @@ function Start-CdActivate {
         if ($expBlk.Kind -eq [DateTimeKind]::Utc) { $expBlk = $expBlk.ToLocalTime() }
         if ($expBlk -lt $nowBlk) {
             if ($jobDur -gt 0) { Clear-CdExpiredData $code }
-            [System.Windows.Forms.MessageBox]::Show("La vigencia de este codigo ya termino: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
+            try { Report-CanjeFail $code ([string]$script:clientId) 'vigencia terminada' ([string]$script:serverUrl) ([string]$script:serverUrlCf) } catch {}; [System.Windows.Forms.MessageBox]::Show("La vigencia de este codigo ya termino: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
             return
         }
         if ($jobDur -gt 0) {
             $leftSpan = New-TimeSpan -Start $nowBlk -End $expBlk
             if ($leftSpan.TotalHours -le 1) {
-                [System.Windows.Forms.MessageBox]::Show("Queda menos de 1 hora de vigencia para este codigo: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
+                try { Report-CanjeFail $code ([string]$script:clientId) 'menos de 1 hora' ([string]$script:serverUrl) ([string]$script:serverUrlCf) } catch {}; [System.Windows.Forms.MessageBox]::Show("Queda menos de 1 hora de vigencia para este codigo: no se puede volver a activar los juegos.","Activar juegos","OK","Warning")
                 return
             }
         }
@@ -4785,8 +4797,8 @@ function Resolve-AiGame([string]$nombre) {
         if(-not $q){ return $out }
         if($q -match '^(gtav|gta ?v|gta ?5)$'){ $q='grand theft auto v' }
         elseif($q -match '^(rdr ?2|red dead( redemption)? ?2)$'){ $q='red dead redemption 2' }
-        elseif($q -match '^fifa ?2[0-9]$'){ $q='ea sports fc' }
-        elseif($q -match '^cod( |$)|call of duty'){ $q='call of duty' }
+        
+        
         $q=[regex]::Replace($q,'\bgta\b','grand theft auto v')
         $q=[regex]::Replace($q,'\brdr\b','red dead redemption 2')
         $q=[regex]::Replace($q,'\bcod\b','call of duty')
@@ -5121,7 +5133,7 @@ elseif($act -eq 'online'){
                 }
             } catch {}
             if($stt -eq 'valido'){ Add-AiTrace ('canjear: VALIDO juegos='+$gN2); return 'CANJEAR_OK:'+$cc+'|'+$gN2 }
-            return 'CANJEAR_FAIL:Ese codigo no es valido. Revisa que lo hayas copiado completo, con mayusculas y guiones.'
+            try { $rpU1=''; $rpU2=''; try { $ux=@($Sync.urls); if($ux.Count -gt 0){ $rpU1=[string]$ux[0] }; if($ux.Count -gt 1){ $rpU2=[string]$ux[1] } } catch {}; $rpC2=''; try { $rpC2=[string]$Sync.cid } catch {}; Report-CanjeFail $cc $rpC2 'codigo invalido en chat' $rpU1 $rpU2 } catch {}; return 'CANJEAR_FAIL:Ese codigo no es valido. Revisa que lo hayas copiado completo, con mayusculas y guiones.'
         }
         elseif($act -eq 'ircanje'){ return 'IRCANJE_MARK' }
         elseif($act -eq 'instalar'){
@@ -5435,7 +5447,7 @@ function Start-AiChatSend {
         try { foreach($hh in $script:aiHist){$hlist+=@{role=$hh.r;content=$hh.c}} } catch {}
         $urls=@()
         try { if($script:serverUrl){$urls+=[string]$script:serverUrl};if($script:serverUrlCf){$urls+=[string]$script:serverUrlCf} } catch {}
-        $payload=@{client_id=$script:clientId;code=$aic;message=$q;history=$hlist;ctx=$ctx}|ConvertTo-Json -Depth 5 -Compress
+        try { $rqG=$null; try { $rqG=Resolve-AiGame $q } catch {}; if($rqG -and $rqG.ok){ $ctx=$ctx+" | objetivo instalado: "+[string]$rqG.name+" ("+[string]$rqG.appid+")"; if($ctx.Length -gt 1500){ $ctx=$ctx.Substring(0,1500) } } } catch {}; $payload=@{client_id=$script:clientId;code=$aic;message=$q;history=$hlist;ctx=$ctx}|ConvertTo-Json -Depth 5 -Compress
         $st.typing=Add-AiChatMessage -Role "Bastiss IA" -Message "Estoy preparando una respuesta..."
         $ps=[System.Management.Automation.PowerShell]::Create()
         [void]$ps.AddScript({
@@ -9727,7 +9739,7 @@ function Repair-BiblioGame([string]$appid, [object]$prog=$null) {
             }
         } catch {}
         if(-not ($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath))){ $out.msg="Este juego no requiere reparacion."; Write-RepairLog "$appid : no requiere reparacion (sin carpeta)"; return $out }
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."} }catch{}
         $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
         $fn,$fu = $null,$null
         if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
