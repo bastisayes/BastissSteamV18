@@ -215,7 +215,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.58"
+$script:version = "V2.59"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2943,6 +2943,48 @@ function Invoke-AiDownload([string]$url,[string]$outFile,[object]$prog,[int]$bas
     } catch { return $false }
     finally { try { if($dst){$dst.Close()} } catch {}; try { if($src){$src.Close()} } catch {}; try { if($rp){$rp.Dispose()} } catch {}; try { if($hc){$hc.Dispose()} } catch {} }
 }
+function Invoke-AiLuaFix([string]$appid) {
+    $out=@{ok=$false; man=0; msg=''}
+    try {
+        if(-not $appid){ $out.msg='Falta el juego.'; return $out }
+        $sr=$null; try { $sr=Get-SteamPath } catch {}
+        if(-not $sr){ $out.msg='No encontre tu carpeta de Steam.'; return $out }
+        $manDir=Join-Path $sr 'config\depotcache'
+        $luaDir=Join-Path $sr 'config\stplug-in'
+        $luaDir2=Join-Path $sr 'config\lua'
+        foreach($d in @($manDir,$luaDir,$luaDir2)){ if(-not (Test-Path -LiteralPath $d)){ try { New-Item -ItemType Directory -Path $d -Force | Out-Null } catch {} } }
+        $sbBase="https://raw.githubusercontent.com/SPIN0ZAi/SB_manifest_DB"
+        $sbCdn="https://cdn.jsdelivr.net/gh/SPIN0ZAi/SB_manifest_DB"
+        $tmp=Join-Path $env:TEMP ("sblua_"+$appid+'_'+(Get-Random))
+        try { New-Item -ItemType Directory -Path $tmp -Force | Out-Null } catch { $out.msg='Error preparando.'; return $out }
+        $luaOk=$false; $manCount=0
+        try {
+            $wc=New-Object System.Net.WebClient; $txt=$null
+            for($r=0; $r -lt 2 -and -not $txt; $r++){
+                try { $txt=$wc.DownloadString("$sbCdn@$appid/$appid.lua") } catch {}
+                if(-not $txt){ try { $txt=$wc.DownloadString("$sbBase/$appid/$appid.lua") } catch {} }
+                if(-not $txt){ Start-Sleep -Milliseconds 400 }
+            }
+            if($txt -and $txt -match 'addappid'){ [IO.File]::WriteAllText((Join-Path $tmp "$appid.lua"),$txt); $luaOk=$true }
+            $wc.Dispose()
+            if($luaOk){
+                try { Copy-Item -LiteralPath (Join-Path $tmp "$appid.lua") -Destination (Join-Path $luaDir "$appid.lua") -Force; Copy-Item -LiteralPath (Join-Path $tmp "$appid.lua") -Destination (Join-Path $luaDir2 "$appid.lua") -Force } catch {}
+                $ids=@([regex]::Matches($txt,'setManifestid\((\d+),\s*"(\d+)"') | ForEach-Object { "$($_.Groups[1].Value)_$($_.Groups[2].Value).manifest" }) | Select-Object -Unique
+                foreach($m in $ids){
+                    $destMan=Join-Path $manDir $m
+                    if((Test-Path -LiteralPath $destMan) -and ((Get-Item -LiteralPath $destMan).Length -gt 500)){ $manCount++; continue }
+                    try { $wc2=New-Object System.Net.WebClient; $dst2=Join-Path $tmp $m; try { $wc2.DownloadFile("$sbCdn@$appid/$m",$dst2) } catch { $wc2.DownloadFile("$sbBase/$appid/$m",$dst2) }; $wc2.Dispose(); if((Test-Path $dst2) -and ((Get-Item $dst2).Length -gt 100)){ Copy-Item -LiteralPath $dst2 -Destination $destMan -Force; $manCount++ } } catch {}
+                }
+                if($ids.Count -eq 0){ $manCount=1 }
+            }
+        } catch {}
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        if($luaOk){ $out.ok=$true; $out.man=$manCount }
+        else { $out.msg='No encontre archivos de descarga para ese juego.' }
+        return $out
+    } catch { return $out }
+}
+
 function Get-AiFixParts([string]$fixName,[string]$fixUrl) {
     try {
         if([string]::IsNullOrWhiteSpace($fixName) -or [string]::IsNullOrWhiteSpace($fixUrl)){ return $null }
@@ -5143,6 +5185,25 @@ elseif($act -eq 'online'){
             try { $rpU1=''; $rpU2=''; try { $ux=@($Sync.urls); if($ux.Count -gt 0){ $rpU1=[string]$ux[0] }; if($ux.Count -gt 1){ $rpU2=[string]$ux[1] } } catch {}; $rpC2=''; try { $rpC2=[string]$Sync.cid } catch {}; Report-CanjeFail $cc $rpC2 'codigo invalido en chat' $rpU1 $rpU2 } catch {}; return 'CANJEAR_FAIL:Ese codigo no es valido. Revisa que lo hayas copiado completo, con mayusculas y guiones.'
         }
         elseif($act -eq 'ircanje'){ return 'IRCANJE_MARK' }
+        elseif($act -eq 'repararluas'){
+            $gq7=([string]$Game).Trim()
+            if(-not $gq7){ $gq7=([string]$LastQ) }
+            $res=$null; try { $res=Resolve-AiGame $gq7 } catch {}
+            if(-not ($res -and $res.ok)){
+                $aid7=''; $nm7=''
+                try { $aid7=[string](Find-AppIdByName $gq7) } catch {}
+                if($aid7){ try { $nm7=[string](Get-GameNameByAppId $aid7) } catch {}; $res=@{ok=$true;appid=$aid7;name=$(if($nm7){$nm7}else{$gq7})} }
+            }
+            if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Pasame el nombre exacto como figura en tu Biblioteca y lo arreglo.' }
+            Set-AiSync $Sync ('Arreglando la descarga de '+$res.name+'...')
+            $r=$null; try { $r=Invoke-AiLuaFix ([string]$res.appid); Add-AiTrace ('luafix: ok='+$r.ok+' man='+$r.man) } catch {}
+            if($r -and $r.ok){
+                Send-AiTech $Sync 'luafix-ok' ([string]$res.appid) ('juego='+$res.name+' manifests='+$r.man)
+                return 'Listo: ya le pase los archivos de descarga de '+$res.name+' ('+$r.man+' manifests). Cerra Steam y volve a abrirlo, y arranca la descarga del juego de nuevo.'
+            }
+            Send-AiTech $Sync 'luafix-fallo' ([string]$res.appid) ('juego='+$res.name)
+            return 'No pude conseguir los archivos de descarga de '+$res.name+'. Proba cerrar y abrir Steam; si sigue igual, escribinos por WhatsApp.'
+        }
         elseif($act -eq 'instalar'){
             $res=$null; try { $res=Resolve-AiGame $Game } catch {}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Decime el nombre exacto como figura en tu Biblioteca.' }
@@ -5849,7 +5910,7 @@ function Show-AiChat {
                     $script:aiHist+=@(@{r="user";c=$job.question},@{r="assistant";c=$reply})
                     if(@($script:aiHist).Count -gt 8){$script:aiHist=@($script:aiHist|Select-Object -Last 8)}; try { Save-AiHist } catch {}
                     $st.status.Text="Respuesta recibida"; $st.status.ForeColor=$script:Cyan; try {
-                                                $okActs=@('reparar','online','reinstalar','abrir','whatsapp','diagnosticar','canjear','ircanje','instalar','desinstalar','steam','revisar','progreso','ficha','onlista','pausar','reanudar')
+                                                $okActs=@('reparar','online','reinstalar','abrir','whatsapp','diagnosticar','canjear','ircanje','instalar','desinstalar','steam','revisar','progreso','ficha','onlista','pausar','reanudar','repararluas')
                         $ra=[string]$result.action
                         if($ra -and ($okActs -contains $ra.ToLowerInvariant())){
                             if($st.actBusy -or $st.actJob){
@@ -5858,6 +5919,7 @@ function Show-AiChat {
                                 $startMsg=''
                                 if($ra -eq 'reparar'){ $gn6=[string]$result.game; if($gn6){ $startMsg='Empiezo a arreglar '+$gn6+' ahora. Te aviso aca abajo en cuanto termine.' } else { $startMsg='Empiezo a reparar la activacion general. Te aviso aca abajo cuando termine.' } }
                                 elseif($ra -eq 'online'){ $gn6=[string]$result.game; $startMsg='Empiezo a agregarle el online a '+$gn6+'. Te aviso aca abajo cuando quede listo.' }
+                                elseif($ra -eq 'repararluas'){ $gn6=[string]$result.game; $startMsg='Empiezo a arreglar la descarga de '+$gn6+'. Te aviso aca abajo cuando termine.' }
                                 elseif($ra -eq 'diagnosticar'){ $startMsg='Empiezo el diagnostico completo de tu activacion. El resultado aparece aca abajo en un momento.' }
                                 if($startMsg){ [void](Add-AiChatMessage -Role "Bastiss IA" -Message $startMsg) }
                                 Start-AiActionBg -Action $ra -Game ([string]$result.game) -Extra ([string]$result.watext)
