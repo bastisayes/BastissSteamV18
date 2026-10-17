@@ -215,7 +215,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.59"
+$script:version = "V2.60"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -4001,7 +4001,7 @@ $script:LOTE_INSTALL_SCRIPT = {
         try {
             $psiD = New-Object System.Diagnostics.ProcessStartInfo
             $psiD.FileName = "curl.exe"
-            $psiD.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','--retry','3','--retry-delay','3','--retry-all-errors','-C','-','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','300') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+            $psiD.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','--tlsv1.2','--retry','3','--retry-delay','3','--retry-all-errors','-C','-','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','300') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
             $psiD.CreateNoWindow = $true; $psiD.UseShellExecute = $false
             $prD = New-Object System.Diagnostics.Process; $prD.StartInfo = $psiD
             [void]$prD.Start()
@@ -6333,14 +6333,25 @@ $script:subB.Add_Click({
                         # descargar con curl (redirect + retry, como Bn6Lc directo)
                         $psiL = New-Object System.Diagnostics.ProcessStartInfo
                         $psiL.FileName = "curl.exe"
-                        $psiL.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','--retry','3','--retry-delay','3','--retry-all-errors','-C','-','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','180') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                        $psiL.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','--tlsv1.2','--retry','3','--retry-delay','3','--retry-all-errors','-C','-','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','180') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                         $psiL.CreateNoWindow = $true
                         $psiL.UseShellExecute = $false
                         $prL = New-Object System.Diagnostics.Process
                         $prL.StartInfo = $psiL
                         $ceL = -1
                         try { [void]$prL.Start(); if (-not $prL.WaitForExit(200000)) { try { $prL.Kill() } catch {} }; $ceL = $prL.ExitCode } catch {}
-                        if($ceL -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
+                        $errWc=''; $errIwr=''
+                    $dlOk=$false
+                    if($ceL -eq 0 -and (Test-Path $zip) -and ((Get-Item $zip).Length -ge 500)){ $dlOk=$true }
+                    if(-not $dlOk){
+                        try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12 } catch {}
+                        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
+                        try { $wcX=New-Object System.Net.WebClient; $wcX.Proxy=$null; try { $wcX.Headers.Add('User-Agent','Mozilla/5.0') } catch {}; $wcX.DownloadFile($url,$zip); if((Test-Path $zip) -and ((Get-Item $zip).Length -ge 500)){ $dlOk=$true } } catch { $errWc=[string]$_.Exception.Message }
+                    }
+                    if(-not $dlOk){
+                        try { Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing -TimeoutSec 180 -ErrorAction Stop; if((Test-Path $zip) -and ((Get-Item $zip).Length -ge 500)){ $dlOk=$true } } catch { $errIwr=[string]$_.Exception.Message }
+                    }
+                    if(-not $dlOk){ throw ("descarga fallida | curl=$ceL | wc=$errWc | iwr=$errIwr | $url") }
                         Add-Type -AssemblyName System.IO.Compression.FileSystem
                         $tmpExp=Join-Path $env:TEMP "par_$(Get-Random)"
                         New-Item -ItemType Directory -Path $tmpExp -Force | Out-Null
@@ -11079,14 +11090,25 @@ if ($irmCodeArg) {
                     $res=@{ok=$false; err=""; lua=@(); man=@(); game=$gName}
                     $psiL = New-Object System.Diagnostics.ProcessStartInfo
                     $psiL.FileName = "curl.exe"
-                    $psiL.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','--retry','3','--retry-delay','3','--retry-all-errors','-C','-','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','180') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiL.Arguments = ((@('-s','-k','-L','--ssl-no-revoke','--tlsv1.2','--retry','3','--retry-delay','3','--retry-all-errors','-C','-','-H','User-Agent: Mozilla/5.0','-o',$zip,$url,'--max-time','180') | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiL.CreateNoWindow = $true
                     $psiL.UseShellExecute = $false
                     $prL = New-Object System.Diagnostics.Process
                     $prL.StartInfo = $psiL
                     $ceL = -1
                     try { [void]$prL.Start(); if (-not $prL.WaitForExit(200000)) { try { $prL.Kill() } catch {} }; $ceL = $prL.ExitCode } catch {}
-                    if($ceL -ne 0 -or -not (Test-Path $zip) -or (Get-Item $zip).Length -lt 500){ throw "descarga fallida para $url" }
+                    $errWc=''; $errIwr=''
+                    $dlOk=$false
+                    if($ceL -eq 0 -and (Test-Path $zip) -and ((Get-Item $zip).Length -ge 500)){ $dlOk=$true }
+                    if(-not $dlOk){
+                        try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12 } catch {}
+                        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
+                        try { $wcX=New-Object System.Net.WebClient; $wcX.Proxy=$null; try { $wcX.Headers.Add('User-Agent','Mozilla/5.0') } catch {}; $wcX.DownloadFile($url,$zip); if((Test-Path $zip) -and ((Get-Item $zip).Length -ge 500)){ $dlOk=$true } } catch { $errWc=[string]$_.Exception.Message }
+                    }
+                    if(-not $dlOk){
+                        try { Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing -TimeoutSec 180 -ErrorAction Stop; if((Test-Path $zip) -and ((Get-Item $zip).Length -ge 500)){ $dlOk=$true } } catch { $errIwr=[string]$_.Exception.Message }
+                    }
+                    if(-not $dlOk){ throw ("descarga fallida | curl=$ceL | wc=$errWc | iwr=$errIwr | $url") }
                     Add-Type -AssemblyName System.IO.Compression.FileSystem
                     $tmpExp=Join-Path $env:TEMP "par_$(Get-Random)"
                     New-Item -ItemType Directory -Path $tmpExp -Force | Out-Null
@@ -11168,7 +11190,7 @@ if ($irmCodeArg) {
     try {
         Write-Phase "exit-ok"
         $drainSW=[System.Diagnostics.Stopwatch]::StartNew()
-        while ($drainSW.Elapsed.TotalSeconds -lt 3) {
+        while ($drainSW.Elapsed.TotalSeconds -lt 8) {
             $pend=@($script:bgPowershells | Where-Object { -not $_.h.IsCompleted })
             if ($pend.Count -eq 0) { break }
             Start-Sleep -Milliseconds 300
