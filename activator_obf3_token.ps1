@@ -5199,7 +5199,7 @@ elseif($act -eq 'online'){
             $r=$null; try { $r=Invoke-AiLuaFix ([string]$res.appid); Add-AiTrace ('luafix: ok='+$r.ok+' man='+$r.man) } catch {}
             if($r -and $r.ok){
                 Send-AiTech $Sync 'luafix-ok' ([string]$res.appid) ('juego='+$res.name+' manifests='+$r.man)
-                return 'Listo: ya le pase los archivos de descarga de '+$res.name+' ('+$r.man+' manifests). Cerra Steam y volve a abrirlo, y arranca la descarga del juego de nuevo.'
+                return 'Listo, ya te lo arregle.'
             }
             Send-AiTech $Sync 'luafix-fallo' ([string]$res.appid) ('juego='+$res.name)
             return 'No pude conseguir los archivos de descarga de '+$res.name+'. Proba cerrar y abrir Steam; si sigue igual, escribinos por WhatsApp.'
