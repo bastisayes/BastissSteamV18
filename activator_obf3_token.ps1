@@ -209,7 +209,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.60"
+$script:version = "V2.61"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -5912,7 +5912,7 @@ function Show-AiChat {
                             } else {
                                 $startMsg=''
                                 if($ra -eq 'reparar'){ $gn6=[string]$result.game; if($gn6){ $startMsg='Empiezo a arreglar '+$gn6+' ahora. Te aviso aca abajo en cuanto termine.' } else { $startMsg='Empiezo a reparar la activacion general. Te aviso aca abajo cuando termine.' } }
-                                elseif($ra -eq 'online'){ $gn6=[string]$result.game; $startMsg='Empiezo a agregarle el online a '+$gn6+'. Te aviso aca abajo cuando quede listo.' }
+                                elseif($ra -eq 'online'){ $gn6=[string]$result.game; $startMsg='Dejame ver si '+$gn6+' tiene online disponible. Te aviso aca abajo en un momento.' }
                                 elseif($ra -eq 'repararluas'){ $gn6=[string]$result.game; $startMsg='Empiezo a arreglar la descarga de '+$gn6+'. Te aviso aca abajo cuando termine.' }
                                 elseif($ra -eq 'diagnosticar'){ $startMsg='Empiezo el diagnostico completo de tu activacion. El resultado aparece aca abajo en un momento.' }
                                 if($startMsg){ [void](Add-AiChatMessage -Role "Bastiss IA" -Message $startMsg) }
