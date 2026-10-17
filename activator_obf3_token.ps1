@@ -14,12 +14,6 @@ $ErrorActionPreference = 'SilentlyContinue'
 $global:ErrorActionPreference = 'SilentlyContinue'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
-try {
-    $lm=[string]$ExecutionContext.SessionState.LanguageMode
-    if($lm -ne '' -and $lm -ne 'FullLanguage'){
-        [System.Windows.Forms.MessageBox]::Show("Windows esta limitando PowerShell (modo "+$lm+"). Pausa tu antivirus 10 minutos (o desactiva Smart App Control) y volve a abrir el programa.","BastissSteam","OK","Warning") | Out-Null
-    }
-} catch {}
 # --- V1.7 FIX rutas 8.3 / perfil inexistente (evita "No existe ningun objeto en la ruta de acceso") ---
 function ConvertTo-BsaLongPath { param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
