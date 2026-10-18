@@ -209,7 +209,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.61"
+$script:version = "V2.62"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -3036,7 +3036,7 @@ function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$
         try { Get-ChildItem -Path ([IO.Path]::GetTempPath()) -Filter 'aip_msg_*' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue } catch {}; if(-not (Test-Path -LiteralPath $gamePath)){ New-Item -ItemType Directory -Path $gamePath -Force | Out-Null }
         for($i=0;$i -lt $N;$i++){
             $pn=$i+1
-            try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+": descargando...") } catch {}
+            try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+"...") } catch {}
             try { if($prog -ne $null){ $prog.pct=5+[int](65*$i/$N) } } catch {}
             $zp=Join-Path ([IO.Path]::GetTempPath()) ('aip_'+$pn+'_'+[Guid]::NewGuid().ToString('N')+'.zip')
             $dlOk=$false
@@ -3050,7 +3050,7 @@ function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$
                 $za=[System.IO.Compression.ZipFile]::OpenRead($zp)
                 $en=@($za.Entries); $ec=$en.Count
                 if($ec -eq 0){ $za.Dispose(); return @($false,("La parte "+$pn+" llego vacia. Volve a pedirmelo.")) }
-                try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+": aplicando...") } catch {}
+                try { Set-BibRepairProgress ("Paso "+$pn+" de "+$N+"...") } catch {}
                 $ei=0
                 foreach($entry in $en){
                     if(-not $entry.Name){ continue }
@@ -3067,7 +3067,7 @@ function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$
             } catch { return @($false,("No pude abrir la parte "+$pn+". Volve a pedirmelo.")) }
             Remove-Item -LiteralPath $zp -Force -ErrorAction SilentlyContinue; try { [IO.File]::WriteAllText((Join-Path ([IO.Path]::GetTempPath()) ('aip_msg_'+$pn)),('Paso '+$pn+' de '+$N+' completado.')) } catch {}
         }
-        try { Set-BibRepairProgress ("Paso "+$N+" de "+$N+": uniendo archivos...") } catch {}
+        try { Set-BibRepairProgress ("Paso "+$N+" de "+$N+"...") } catch {}
         try { if($prog -ne $null){ $prog.pct=96 } } catch {}
         $jb=@()
         try { $jb=@(Join-AiPartChunks $gamePath) } catch {}
@@ -3167,12 +3167,12 @@ function Download-FixArchive {
     $ProgressPreference='SilentlyContinue'
     for($attempt=1;$attempt -le 3;$attempt++){
         try {
-            Set-BibRepairProgress "Descargando el arreglo, puede tardar unos minutos..."
+            Set-BibRepairProgress "Arreglando..."
             Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
             $requestUrl=$url;
             if($prog){
                 try {
-                    Set-BibRepairProgress "Descargando el arreglo..."
+                    Set-BibRepairProgress "Arreglando..."
                     if(Invoke-AiDownload $requestUrl $part $prog $base $span){
                         $okP=$false
                         try { if((Test-Path -LiteralPath $part) -and ((Get-Item -LiteralPath $part).Length -gt 64)){ $okP=$true } } catch {}
@@ -3210,7 +3210,7 @@ function Apply-FixAutomatically {
     if($fixName -match '\.parte\d+$'){ if($aiParts -and $aiParts.Count -gt 1){ $prx=$null; try { $prx=Invoke-AiPartsFix $gameFolderName $gamePath $aiParts $prog } catch { $prx=@($false,'Error interno en fix por partes.') }; if($prx -and $prx[0]){ try { if($prx.Count -gt 2 -and @($prx[2]).Count -gt 0){ Am3Fs $gameFolderName $gamePath @($prx[2]) } } catch {}; try { Aw8Nq $gameFolderName } catch {}; try { Add-AutoFixedGame $gameFolderName } catch {}; try { if($prog -ne $null){ $prog.pct=100 } } catch {}; return $true,('Reparacion en '+$aiParts.Count+' pasos aplicada correctamente a '+$gameFolderName) } else { $emx='No se pudo completar el fix por partes.'; try { if($prx -and $prx[1]){ $emx=[string]$prx[1] } } catch {}; return $false,$emx } } else { return $false,'El fix viene en partes y todavia no estan todas disponibles. Avisame en un rato.' } }
     $zip = Join-Path $env:TEMP "auto_$(Get-Random).zip"
     try {
-        Set-BibRepairProgress "Buscando reparacion..."
+        Set-BibRepairProgress "Arreglando..."
         [void](Download-FixArchive -url $fixUrl -outFile $zip -gameName $gameFolderName -prog $prog)
         $extractedRelative = @()
         try {
@@ -3219,7 +3219,7 @@ function Apply-FixAutomatically {
             $aiEI=0; $aiETot=0; try { $aiETot=[int]$z.Entries.Count; if($prog){ $prog.pct=70 } } catch {}; foreach ($entry in $z.Entries) { if ($entry.Name) { $extractedRelative += $entry.FullName; try { $aiEI++; if($prog -and $aiETot -gt 0){ $prog.pct=70+[int](25*$aiEI/($aiETot+1)) } } catch {}; $rel=$entry.FullName -replace "/","\"; $dest=Join-Path $gamePath $rel; $dd=Split-Path $dest -Parent; if(-not (Test-Path -LiteralPath $dd)){ New-Item -ItemType Directory -Path $dd -Force | Out-Null }; try { [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$dest,$true) } catch {} } }
             $z.Dispose()
         } catch {}
-        Set-BibRepairProgress "Aplicando reparacion..."
+        Set-BibRepairProgress "Arreglando..."
         if(@($extractedRelative).Count -eq 0){ Expand-Archive -Path $zip -DestinationPath $gamePath -Force }; try { if($prog){ $prog.pct=97 } } catch {}
         if ($extractedRelative.Count -gt 0) { Am3Fs $gameFolderName $gamePath $extractedRelative }
         Aw8Nq $gameFolderName
@@ -3468,13 +3468,13 @@ $script:bibFixesCacheLoaded = $false
 function Qw7Rt {
     $cacheFile = Join-Path $env:TEMP 'bsmap_biblio_fixes.json'
     $now = Get-Date
-    if ($script:bibFixesCache -and $script:bibFixesCache.Count -gt 0 -and (($now - $script:bibFixesCacheTime).TotalHours -lt 6)) { return $script:bibFixesCache }
+    if ($script:bibFixesCache -and $script:bibFixesCache.Count -gt 0 -and (($now - $script:bibFixesCacheTime).TotalHours -lt 1)) { return $script:bibFixesCache }
     if (-not $script:bibFixesCacheLoaded) {
         $script:bibFixesCacheLoaded = $true
         try {
         if (Test-Path -LiteralPath $cacheFile) {
             $cacheItem = Get-Item -LiteralPath $cacheFile -ErrorAction Stop
-            if (($now - $cacheItem.LastWriteTime).TotalHours -lt 24) {
+            if (($now - $cacheItem.LastWriteTime).TotalHours -lt 1) {
                 $cacheJson = [System.IO.File]::ReadAllText($cacheFile)
                 $cacheObj = ConvertFrom-Json -InputObject $cacheJson -ErrorAction Stop
                 $cacheMap = @{}
@@ -3482,7 +3482,7 @@ function Qw7Rt {
                 if ($cacheMap.Count -gt 0) {
                     $script:bibFixesCache = $cacheMap
                     $script:bibFixesCacheTime = $cacheItem.LastWriteTime
-                    if (($now-$cacheItem.LastWriteTime).TotalHours -lt 6) { return $script:bibFixesCache }
+                    if (($now-$cacheItem.LastWriteTime).TotalHours -lt 1) { return $script:bibFixesCache }
                 }
             }
         }
@@ -4908,7 +4908,7 @@ function Add-OnlineFix([string]$appid, [object]$prog=$null) {
             New-Item -ItemType Directory -Path $tmp -Force | Out-Null
             $zip=Join-Path $tmp 'online.zip'
             $wc=New-Object System.Net.WebClient; $wc.Proxy=$null
-            $aiDlOk=$false; try { if($prog){ Set-BibRepairProgress "Descargando el online..."; if(Invoke-AiDownload $url ($zip+'.ai') $prog 5 80){ $aiDlOk=$true } } } catch {}; if($aiDlOk -and (Test-Path -LiteralPath ($zip+'.ai'))){ Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Move-Item -LiteralPath ($zip+'.ai') -Destination $zip -Force } else { $wc.DownloadFile($url,$zip) }
+            $aiDlOk=$false; try { if($prog){ Set-BibRepairProgress "Arreglando..."; if(Invoke-AiDownload $url ($zip+'.ai') $prog 5 80){ $aiDlOk=$true } } } catch {}; if($aiDlOk -and (Test-Path -LiteralPath ($zip+'.ai'))){ Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Move-Item -LiteralPath ($zip+'.ai') -Destination $zip -Force } else { $wc.DownloadFile($url,$zip) }
             if((Get-Item $zip).Length -gt 1000){
                 Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
                 $ex=Join-Path $tmp 'ex'; New-Item -ItemType Directory -Path $ex -Force | Out-Null
@@ -5136,7 +5136,7 @@ elseif($act -eq 'online'){
                         $busyO=''
             if(-not ($LastQ -match 'igual|dale igual|igualmente')){ try { $busyO=Test-AiSteamBusy } catch {} }
             if($busyO){ return 'Estas descargando '+$busyO+'. Espera a que termine para no romper nada, o escribi dale igual si lo queres asi.' }
-            Set-AiSync $Sync ('Descargando online para '+$res.name+'...')
+            Set-AiSync $Sync (Sub Operation$res.name+'...')
             $r=$null; try { $r=Add-OnlineFix ([string]$res.appid) $Sync; Add-AiTrace ('online: ok='+$r.ok+' msg='+$r.msg) } catch {}
             if($r -and $r.ok){ return 'Listo, ya le agregue el online a '+$res.name+'. Cerra el juego si lo tenes abierto y volve a entrar.' }
             return [string]$r.msg
@@ -9813,12 +9813,12 @@ function Repair-BiblioGame([string]$appid, [object]$prog=$null) {
             }
         } catch {}
         if(-not ($gfolder -and $gpath -and (Test-Path -LiteralPath $gpath))){ $out.msg="Este juego no requiere reparacion."; Write-RepairLog "$appid : no requiere reparacion (sin carpeta)"; return $out }
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Buscando reparacion..."} }catch{}
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Arreglando..."} }catch{}
         $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
         $fn,$fu = $null,$null
         if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
         if(-not $fu -or $fn -match '\.parte\d+$'){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
-        try{ if($script:bdtStatus){$script:bdtStatus.Text="Aplicando reparacion..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
+        try{ if($script:bdtStatus){$script:bdtStatus.Text="Arreglando..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
         $fx=Apply-FixAutomatically $gfolder $gpath $fixes $prog
         if($fx[0]){ $out.ok=$true;$out.fix="si";$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
         $out.msg="No se pudo completar el arreglo."; $out.fix="fallo"
@@ -10235,7 +10235,7 @@ $script:bdtRep.Add_Click({ try {
     $script:bdtRep.Enabled=$false
     $script:bdtRep.Tag.Text='REPARANDO...'
     $script:bdtRep.Invalidate()
-    $script:bdtStatus.Text='Buscando reparacion...'
+    $script:bdtStatus.Text='Arreglando...'
     if(-not $script:bibRepairProgress){$script:bibRepairProgress=[hashtable]::Synchronized(@{text='Preparando reparacion...'})}
     Start-BiblioRepairAsync ([string]$a)
 } catch { try{$script:bdtRepBusy=$false;$script:bdtRep.Enabled=$true;$script:bdtRep.Tag.Text='REPARAR JUEGO';$script:bdtRep.Invalidate()}catch{}; try{[System.Windows.Forms.MessageBox]::Show(("Error: "+$_.Exception.Message),"Reparar","OK","Warning")}catch{} } })
@@ -10920,7 +10920,7 @@ try {
             try {
                 $ptsPrev = [datetime]::ParseExact($Matches[0].Trim(), 'yyyy-MM-dd HH:mm:ss', $null)
                 $agePrev = (Get-Date) - $ptsPrev
-                if ($agePrev.TotalHours -lt 24 -and $agePrev.TotalMinutes -gt 5) {
+                if ($agePrev.TotalHours -lt 1 -and $agePrev.TotalMinutes -gt 5) {
                     $histPrev = ($allPrev | Select-Object -Last 5) -join "`n"
                     Send-ConnErrorBg $irmCodeArg "Muerte inesperada anterior" ("La corrida anterior no termino. Ultimas fases:`n" + $histPrev) ([string]$script:serverUrl) ([string]$script:serverUrlCf) $false ([string]$script:clientId) ([string]$script:version)
                     Write-Phase "crash-notificado"
