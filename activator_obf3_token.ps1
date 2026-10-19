@@ -1,4 +1,4 @@
-﻿function S([string]$b) {
+function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
 }
 $script:obfKey = [Convert]::FromBase64String("QmFzdGlzc1N0ZWFt")
@@ -5467,11 +5467,11 @@ function Normalize-AiReply {
     try {
         if (-not $Text) { return "No pude preparar una respuesta. Probá de nuevo o escribinos por WhatsApp." }
         $Text=$Text -replace "`r`n?","`n"
-        $Text=[regex]::Replace($Text,'[\u200B-\u200F\u2060\uFEFF\uFFFD]','')
-        $Text=[regex]::Replace($Text,'(?<=\s)[A-ZÁÉÍÓÚÜÑ](?=[¡¿])','')
-        $Text=[regex]::Replace($Text,'\*\*|__|`','')
-        $Text=[regex]::Replace($Text,'[ \t]{2,}',' ')
-        $Text=[regex]::Replace($Text,'\n{3,}',"`n`n").Trim()
+        $Text=$Text -replace "`r`n?","`n"
+        $Text=[regex]::Replace($Text,"[\u00C0-\u00FF]","")
+        $Text=$Text -replace "\*\*|__|``",""
+        $Text=$Text -replace "[ \t]{2,}"," "
+        $Text=[regex]::Replace($Text,"\n{3,}","`n`n").Trim()
         if ($Text.Length -gt 900) { $Text=$Text.Substring(0,900).Trim() }
         return $Text
     } catch { return $Text }
