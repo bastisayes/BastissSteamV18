@@ -209,7 +209,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.62"
+$script:version = "V2.63"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -2003,6 +2003,51 @@ function Add-DefenderExclusion {
         return $true
     } catch { return $false }
 }
+
+
+function Repair-SafeExclusions {
+    $paths = @()
+    try { $sr = Get-SteamPath; if ($sr) { $paths += $sr; $paths += (Join-Path $sr 'steamapps\common'); $paths += (Join-Path $sr 'steamapps\downloading') } } catch {}
+    try { foreach ($lib in @(Ss3Jd)) { if ($lib) { $paths += $lib; $paths += (Join-Path $lib 'steamapps\common'); $paths += (Join-Path $lib 'steamapps\downloading') } } } catch {}
+    $paths += (Join-Path $env:LOCALAPPDATA 'BastissSteam')
+    $paths += (Join-Path $env:APPDATA 'BastissSteam')
+    try { if ($PSScriptRoot) { $paths += $PSScriptRoot } } catch {}
+    foreach ($d in @('C:\Program Files (x86)\Steamm','C:\Program Files (x86)\Steam','D:\SteamLibrary')) { if (Test-Path -LiteralPath $d) { $paths += $d } }
+    $paths = @($paths | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique)
+    if ($paths.Count -eq 0) { return $false }
+    $existing = @()
+    try { $existing = @((Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath) } catch {}
+    if (-not $existing -or $existing.Count -eq 0) { try { $existing = @((Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths' -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
+    $need = @()
+    foreach ($p in $paths) { if ($existing -notcontains $p -and -not (Test-DefExclFlag $p)) { $need += $p } }
+    if ($need.Count -eq 0) { foreach ($p in $paths) { Save-DefExclFlag $p }; $script:defenderExclusionsDone = $true; return $true }
+    $bat = Join-Path $env:TEMP 'bsmap_safe_excl.bat'
+    $bl = @('@echo off')
+    foreach ($p in $need) { $bl += "powershell -NoProfile -Command `"Add-MpPreference -ExclusionPath '$p' -ErrorAction SilentlyContinue`" 2>nul" }
+    $bl += 'exit /b 0'
+    try { Set-Content -LiteralPath $bat -Value $bl -Encoding ASCII -Force } catch { return $false }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'cmd.exe'
+        $psi.Arguments = "/c `"$bat`""
+        $psi.Verb = 'RunAs'
+        $psi.WindowStyle = 'Hidden'
+        $psi.UseShellExecute = $true
+        $pp = [System.Diagnostics.Process]::Start($psi)
+        $pp.WaitForExit(60000) | Out-Null
+    } catch {}
+    Start-Sleep -Milliseconds 400
+    try { Remove-Item -LiteralPath $bat -Force -ErrorAction SilentlyContinue } catch {}
+    $after = @()
+    try { $after = @((Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath) } catch {}
+    if (-not $after -or $after.Count -eq 0) { try { $after = @((Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths' -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
+    $okCount = 0
+    foreach ($p in $paths) { if ($after -contains $p) { $okCount++; Save-DefExclFlag $p } }
+    if ($okCount -ge $need.Count) { $script:defenderExclusionsDone = $true }
+    return ($okCount -ge $need.Count)
+}
+
+
 
 
 $TIMERS_FILE = Join-Path $env:LOCALAPPDATA (S("YnNtYXBfdGltZXJzLmpzb24="))
@@ -6730,7 +6775,7 @@ function Switch-CfgPage([int]$p){
  $script:pageBtn3.BackColor=if($on3){$script:Cyan}else{$script:CardBG}
  $script:pageBtn3.ForeColor=if($on3){[System.Drawing.Color]::White}else{[System.Drawing.Color]::FromArgb(180,180,180)}
  @($script:sWatcher,$script:sHist,$script:sKill,$script:sPatch,$script:sDelGame,$script:sEliminar,$script:sActualizar) | ForEach-Object { if($_){$_.Visible=$on1} }
- @($script:sHuerf) | ForEach-Object { if($_){$_.Visible=$on3} }
+@($script:sHuerf,$script:sSafe) | ForEach-Object { if($_){$_.Visible=$on3} }
  if($null -ne $script:sLogLabel){$script:sLogLabel.Visible=($on1 -and $script:devLogVisible)}
  if($null -ne $script:sLogBox){$script:sLogBox.Visible=($on1 -and $script:devLogVisible)}
   @($script:sRepair,$script:sMigrar,$script:sAutoLua,$script:sDropsV2,$script:sDiag,$script:sPatch2) | ForEach-Object { if($_){$_.Visible=$on2} }
@@ -7952,6 +7997,10 @@ $script:sHuerf=New-CfgBtn ($sY+58) "Arreglar huerfanos" "Recupera juegos borrado
 }
 $script:sHuerf.Visible=$false
 $script:sp.Controls.Add($script:sHuerf)
+
+$script:sSafe=New-CfgBtn ($sY+116) "Arreglar Safe" "Agrega exclusiones del antivirus" { try { Repair-SafeExclusions | Out-Null } catch {} }
+$script:sSafe.Visible=$false
+$script:sp.Controls.Add($script:sSafe)
 
 function Repair-UnoApp([string]$appid) {
     $res=@{ok=$false; msg=''; man=0}
@@ -11329,7 +11378,6 @@ if ($script:fixesJob) { try { Remove-Job $script:fixesJob -Force -ErrorAction Si
 if ($script:downloadPendingFixes) { foreach ($d in $script:downloadPendingFixes.Values) { try { if ($d.dlJob) { Remove-Job $d.dlJob -Force -ErrorAction SilentlyContinue } } catch {} } }
 if ($script:logoBmp) { $script:logoBmp.Dispose() };if ($script:tiktokBmp) { $script:tiktokBmp.Dispose() };if ($script:discordBmp) { $script:discordBmp.Dispose() };if ($ib) { $ib.Dispose() }
 if ($script:singleMutex) { try { $script:singleMutex.ReleaseMutex(); $script:singleMutex.Dispose() } catch {} }
-
 
 
 
