@@ -209,7 +209,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.63"
+$script:version = "V2.64"
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1544,20 +1544,27 @@ function Initialize-GameNameMap {
     $raw = ''
     foreach ($fx in $files) { try { $raw += "`n" + [System.IO.File]::ReadAllText($fx) } catch {} }
     if (-not $raw.Trim()) { $raw = $script:GAME_NAME_DATA }
-    foreach ($line in ($raw -split "`r?`n")) {
-        $line = $line.Trim()
-        if (-not $line) { continue }
-        $m = [regex]::Match($line, '^(.*?)\s*\((\d+)\)\s*$')
-        if (-not $m.Success) { continue }
-        $nm = $m.Groups[1].Value.Trim()
-        $id = $m.Groups[2].Value
-        if (-not $id -or -not $nm) { continue }
-        if (($nm -match '\(no data\)') -and $byId.ContainsKey($id)) { continue }
-        if (-not $byId.ContainsKey($id)) { [void]$order.Add($id) }
-        $byId[$id] = $nm
-        $key = Nn1Yw $nm
-        if ($key -and -not $byName.ContainsKey($key)) { $byName[$key] = $id }; try { $keyF=$key -replace ' ',''; if($keyF -ne $key -and $keyF -and -not $byName.ContainsKey($keyF)){ $byName[$keyF]=$id } } catch {}
-    }
+        $rxMap=[regex]::new('^(.*?)\s*\((\d+)\)\s*$','Compiled'); $rxMn=[regex]::new('\p{Mn}','Compiled'); $rxBad=[regex]::new('[^a-z0-9 ]','Compiled')
+        $capN=60000; $cntN=0
+        foreach ($line in ($raw -split "`r?`n")) {
+            if ($cntN -ge $capN) { break }
+            $line = $line.Trim()
+            if (-not $line) { continue }
+            $m = $rxMap.Match($line)
+            if (-not $m.Success) { continue }
+            $nm = $m.Groups[1].Value.Trim()
+            $id = $m.Groups[2].Value
+            if (-not $id -or -not $nm) { continue }
+            if ($byId.ContainsKey($id)) { continue }
+            $cntN++
+            [void]$order.Add($id)
+            $byId[$id] = $nm
+            if ($nm -match '\(no data\)') { continue }
+            $key = ''
+            try { $nn = $nm.Normalize([System.Text.NormalizationForm]::FormD); $key = $rxBad.Replace($rxMn.Replace($nn,''),'').ToLower().Trim() } catch { try { $key = Nn1Yw $nm } catch {} }
+            if ($key -and -not $byName.ContainsKey($key)) { $byName[$key] = $id }
+            try { $keyF = $key -replace ' ',''; if ($keyF -ne $key -and $keyF -and -not $byName.ContainsKey($keyF)) { $byName[$keyF] = $id } } catch {}
+        }
     $script:GAME_NAME_BY_APPID = $byId
     $script:GAME_APPID_BY_NAME = $byName
     $script:GAME_APPID_LIST = @($order)
@@ -9147,6 +9154,9 @@ function Update-BiblioNamesFromCache {
     try {
         $cache=Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt'
         if(-not (Test-Path -LiteralPath $cache)){ return }
+        $clen=0; try { $clen=(Get-Item -LiteralPath $cache).Length } catch {}
+        try { if ($null -ne $script:bibCacheLastLen -and $script:bibCacheLastLen -eq $clen) { return } } catch {}
+        $script:bibCacheLastLen=$clen
         $all=@(Get-Content -LiteralPath $cache -ErrorAction SilentlyContinue)
         if(-not $all -or $all.Count -eq 0){ return }
         $from=0; try{ $from=[int]$script:bibNameCacheFrom }catch{}
@@ -9630,7 +9640,7 @@ $script:bibTimer.Add_Tick({
                         try { $script:GAME_NAME_BY_APPID[$nameId]=$resolvedName } catch {}
                         try { $nameKey=Nn1Yw $resolvedName; if($nameKey -and -not $script:GAME_APPID_BY_NAME.ContainsKey($nameKey)){$script:GAME_APPID_BY_NAME[$nameKey]=$nameId} } catch {}
                         try { if ($script:bibBoxes[$nameId] -and $script:bibBoxes[$nameId].Parent -and $script:bibBoxes[$nameId].Parent.Controls.Count -gt 1) { $script:bibBoxes[$nameId].Parent.Controls[1].Text=$resolvedName } } catch {}
-                        try { Add-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt') -Value ($resolvedName + ' (' + $nameId + ')') -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+                        try { $knownIn=$false; try { if ($script:GAME_NAME_BY_APPID -and $script:GAME_NAME_BY_APPID.ContainsKey($nameId)) { $knownIn=$true } } catch {}; if (-not $knownIn) { Add-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'BastissSteam\lua_nombres_cache.txt') -Value ($resolvedName + ' (' + $nameId + ')') -Encoding UTF8 -ErrorAction SilentlyContinue } } catch {}
                         break
                     }
                 }
@@ -11378,7 +11388,6 @@ if ($script:fixesJob) { try { Remove-Job $script:fixesJob -Force -ErrorAction Si
 if ($script:downloadPendingFixes) { foreach ($d in $script:downloadPendingFixes.Values) { try { if ($d.dlJob) { Remove-Job $d.dlJob -Force -ErrorAction SilentlyContinue } } catch {} } }
 if ($script:logoBmp) { $script:logoBmp.Dispose() };if ($script:tiktokBmp) { $script:tiktokBmp.Dispose() };if ($script:discordBmp) { $script:discordBmp.Dispose() };if ($ib) { $ib.Dispose() }
 if ($script:singleMutex) { try { $script:singleMutex.ReleaseMutex(); $script:singleMutex.Dispose() } catch {} }
-
 
 
 
