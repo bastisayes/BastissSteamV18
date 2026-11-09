@@ -3148,21 +3148,24 @@ function Join-AiPartChunks([string]$gamePath) {
     $result=New-Object System.Collections.ArrayList
     foreach($stem in @($map.Keys)){
         $chunks=@($map[$stem] | Sort-Object)
-        $target=$stem
         $nums=@($chunks | ForEach-Object { [int]$_.Substring($_.Length-3) })
-        $seqOk=$true
-        for($k=0;$k -lt $nums.Count;$k++){ if($nums[$k] -ne ($k+1)){ $seqOk=$false; break } }
-        if(-not $seqOk){ continue }
-        $dest=$null
+        for($k=0;$k -lt $nums.Count;$k++){ if($nums[$k] -ne ($k+1)){ throw 'Faltan partes del archivo.' } }
+        $tempFile=$stem+'.jntmp'
         try {
-            $dest=[System.IO.File]::Open($target,[System.IO.FileMode]::Create,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None)
-            foreach($c in $chunks){
-                $src=[System.IO.File]::OpenRead($c)
-                try { $src.CopyTo($dest) } finally { $src.Dispose() }
-            }
-        } finally { if($dest){ $dest.Dispose() } }
+            $dest=$null
+            try {
+                $dest=[System.IO.File]::Open($tempFile,[System.IO.FileMode]::Create,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None)
+                foreach($c in $chunks){
+                    $src=[System.IO.File]::OpenRead($c)
+                    try { $src.CopyTo($dest) } finally { $src.Dispose() }
+                }
+                $dest.Flush()
+            } finally { if($dest){ $dest.Dispose() } }
+            if(Test-Path -LiteralPath $stem){ Remove-Item -LiteralPath $stem -Force }
+            Move-Item -LiteralPath $tempFile -Destination $stem -Force
+        } finally { if(Test-Path -LiteralPath $tempFile){ Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue } }
         foreach($c in $chunks){ Remove-Item -LiteralPath $c -Force -ErrorAction SilentlyContinue }
-        [void]$result.Add($target)
+        [void]$result.Add($stem)
     }
     return $result.ToArray()
 }function Invoke-AiPartsFix([string]$gameFolderName,[string]$gamePath,[string[]]$partUrls,[object]$prog) {
