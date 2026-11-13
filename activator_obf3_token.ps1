@@ -342,12 +342,12 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.69"
+$script:version = "V2.70"
 $script:canjeAuditWebhook = 'https://discord.com/api/webhooks/1570668934162677791/HujQSYiyNrU3WhoVtHuH1B3s9VNgK2YSOp7Dy3TdVaKg7heUOqTgYja5n7F0uHcn1fak'
 $script:canjeAuditWorkerSource = @'
 param([string]$pending,[string]$webhook)
 $ErrorActionPreference='Stop'
-function Save-DeliveryState($file,$item){$tmp=$file+'.tmp';[IO.File]::WriteAllText($tmp,($item|ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($false)));[IO.File]::Copy($tmp,$file,$true);[IO.File]::Delete($tmp)}
+function Save-DeliveryState($file,$item){$tmp=$file+'.tmp';[IO.File]::WriteAllText($tmp,($item|ConvertTo-Json -Depth 16),(New-Object Text.UTF8Encoding($false)));[IO.File]::Copy($tmp,$file,$true);[IO.File]::Delete($tmp)}
 for($round=0;$round -lt 6;$round++){
     $files=@(Get-ChildItem -LiteralPath $pending -Filter '*.json'|Select-Object -First 20)
     if(-not $files.Count){break}
@@ -356,7 +356,7 @@ for($round=0;$round -lt 6;$round++){
         if(-not($item.PSObject.Properties.Name -contains 'code')){continue}
         if(-not $item.server_done){
             try{
-                $body=@{kind='canje-audit';code=$item.code;msg=($item.record|ConvertTo-Json -Depth 5 -Compress)}|ConvertTo-Json -Compress
+                $body=@{kind='canje-audit';code=$item.code;msg=($item.record|ConvertTo-Json -Depth 12 -Compress)}|ConvertTo-Json -Compress
                 $ack=Invoke-RestMethod -Uri ($item.target.TrimEnd('/')+'/api/client-error') -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 3
                 if($ack.ok -eq $true){$item.server_done=$true;Save-DeliveryState $file.FullName $item}
             }catch{}
@@ -365,10 +365,15 @@ for($round=0;$round -lt 6;$round++){
         if(-not $item.discord_done){
             try{
                 $r=$item.record
-                $text=@('ERROR DE CANJE / ACTIVACIÓN',('Código exacto: '+$item.code),('Fecha/hora UTC: '+$r.at),('Fecha/hora local: '+$r.local_at),('Versión: '+$r.version),('Servidor intentado: '+$r.endpoint),('Etapa: '+$r.stage),('Error: '+$r.reason),('Token recibido: '+$r.token_received),('Enlaces recibidos: '+$r.links_count),('Sistema: '+$r.os),('Equipo (hash): '+$r.client_hash),('ID: '+$r.id)) -join "`n"
-                if($text.Length -gt 1950){$text=$text.Substring(0,1950)}
-                $payload=@{content=$text;allowed_mentions=@{parse=@()}}|ConvertTo-Json -Depth 4 -Compress
-                Invoke-RestMethod -Uri $webhook -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($payload)) -TimeoutSec 5|Out-Null
+                $text=@('ERROR DE CANJE / ACTIVACIÓN',('Código (últimos 4): '+$r.code_suffix),('Fecha/hora UTC: '+$r.at),('Fecha/hora local: '+$r.local_at),('Versión: '+$r.version),('Servidor intentado: '+$r.endpoint),('Etapa: '+$r.stage),('Error: '+$r.reason),('Token recibido: '+$r.token_received),('Enlaces recibidos: '+$r.links_count),('Sistema: '+$r.os),('Equipo (hash): '+$r.client_hash),('ID: '+$r.id),('Diagnóstico: '+($r.diagnostic|ConvertTo-Json -Depth 10 -Compress))) -join "`n"
+                # Conservar el diagnóstico completo en mensajes numerados.
+                $count=[int][Math]::Ceiling($text.Length/1700.0)
+                for($part=0;$part -lt $count;$part++){
+                    $chunk=$text.Substring($part*1700,[Math]::Min(1700,$text.Length-$part*1700))
+                    $payload=@{content=("[Reporte "+$r.id+" · "+($part+1)+"/"+$count+"]`n"+$chunk);allowed_mentions=@{parse=@()}}|ConvertTo-Json -Depth 4 -Compress
+                    Invoke-RestMethod -Uri $webhook -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($payload)) -TimeoutSec 5|Out-Null
+                    if($part+1 -lt $count){Start-Sleep -Milliseconds 600}
+                }
                 $item.discord_done=$true;Save-DeliveryState $file.FullName $item
             }catch{}
         }
@@ -405,12 +410,19 @@ function Write-ClientCanjeAudit([string]$stage,[string]$code,[string]$endpoint,$
         if($reason.Length -gt 1200){$reason=$reason.Substring(0,1200)}
         $safeEndpoint='';try{$u=[uri]$endpoint;$safeEndpoint=$u.GetLeftPart([UriPartial]::Path)}catch{}
         $record=@{id=[guid]::NewGuid().ToString('N');at=[DateTime]::UtcNow.ToString('o');version=[string]$script:version;local_at=[DateTimeOffset]::Now.ToString('o');discord_direct=$true;stage=$stage;endpoint=$safeEndpoint;code_hash=$codeHash;code_suffix=$suffix;client_hash=$clientHash;ok=($result.ok -eq $true);token_received=[bool]$result.token;links_count=$(if($null -ne $result.links){@($result.links).Count}else{0});reason=$reason;os=[Environment]::OSVersion.VersionString}
-        $json=$record|ConvertTo-Json -Compress
+        $frames=@(Get-PSCallStack | Select-Object FunctionName,ScriptName,ScriptLineNumber)
+        $diagnostic=@{source_file=[string]$frames[1].ScriptName;source_line=$frames[1].ScriptLineNumber;function=[string]$frames[1].FunctionName;call_stack=$frames;transport=$result.diagnostic;runtime=[string]$PSVersionTable.PSVersion;process_id=$PID;is_64bit=[Environment]::Is64BitProcess;test=($stage -eq 'diagnostic_test')}
+        $diagJson=$diagnostic|ConvertTo-Json -Depth 10 -Compress
+        if($code.Length -ge 4){$diagJson=$diagJson.Replace($code,'[codigo]')}
+        $diagJson=$diagJson -replace '(?i)https://(?:canary\.|ptb\.)?discord(?:app)?\.com/api/webhooks/[^\s"\\]+','[webhook redactado]'
+        $diagJson=$diagJson -replace '(?i)(token|secret|authorization)(["\s:=]+)[^\s,}"]+','$1$2[redactado]'
+        $record.diagnostic=$diagJson|ConvertFrom-Json
+        $json=$record|ConvertTo-Json -Depth 12 -Compress
         [IO.File]::AppendAllText((Join-Path $dir ('canje-'+[DateTime]::UtcNow.ToString('yyyy-MM')+'.jsonl')),$json+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
         $target=if($safeEndpoint){([uri]$safeEndpoint).GetLeftPart([UriPartial]::Authority)}else{[string]$script:serverUrl}
         $isFailure=($record.reason -and $record.ok -ne $true -and $stage -ne 'redeem_start')
         $item=@{target=$target;code=$code.Trim().ToUpperInvariant();record=$record;server_done=$false;discord_done=(-not $isFailure)}
-        [IO.File]::WriteAllText((Join-Path $pending ($record.id+'.json')),($item|ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($false)))
+        [IO.File]::WriteAllText((Join-Path $pending ($record.id+'.json')),($item|ConvertTo-Json -Depth 16),(New-Object Text.UTF8Encoding($false)))
         Start-CanjeAuditWorker
     }catch{}
 }
@@ -2000,7 +2012,7 @@ function Send-Diagnostics {
                 $hn = ([uri]$su).Host
                 if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$($script:serverIp)") }
             }
-$crT = Invoke-CurlHidden (@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($resolveArg) + @('-X','POST','-H','Content-Type: application/json','--data-binary','{}',"$su/api/redeem-code",'--max-time','15','-o',$tmpOut)) 20
+$crT = Invoke-CurlHidden (@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($resolveArg) + @('-X','POST','-H','Content-Type: application/json','--data-binary','{}',"$su/api/redeem-code",'--max-time','15','-o',$tmpOut)) 20
 $lines += "**Test tunnel /api/redeem-code:** curl exit $($crT.exit) (serverIp: $($script:serverIp))"
             Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
         } catch { $lines += "**Test tunnel:** error - $($_.Exception.Message)" }
@@ -6667,7 +6679,7 @@ $script:subB.Add_Click({
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','7','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','7','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -6689,7 +6701,9 @@ $script:subB.Add_Click({
                             $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
-                            return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
+                            $er=$_; $chain=@(); $ex=$er.Exception
+                            while($ex){$chain+=@{type=$ex.GetType().FullName;message=$ex.Message;hresult=$ex.HResult};$ex=$ex.InnerException}
+                            return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($er.Exception.Message)"; diagnostic=@{operation='redeem_https_post';curl_exit=$ce;curl_stderr=$curlErr;server_ip=$serverIp;timeout_seconds=6;exception_chain=$chain;error_id=$er.FullyQualifiedErrorId;category=[string]$er.CategoryInfo;worker_line=$er.InvocationInfo.ScriptLineNumber;worker_offset=$er.InvocationInfo.OffsetInLine;worker_command=[string]$er.InvocationInfo.MyCommand;worker_stack=$er.ScriptStackTrace;line_scope='worker relative; source_line is the original script caller'} }
                         }
                     }
                     if ($respRaw -match "^\s*<") { return [pscustomobject]@{ err = "Servidor devolvio HTML (error 500): $($respRaw.Substring(0,200))" } }
@@ -11693,7 +11707,7 @@ if ($irmCodeArg) {
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-s','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','7','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','7','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -11715,7 +11729,9 @@ if ($irmCodeArg) {
                             $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 6 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
-                            return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($_.Exception.Message)" }
+                            $er=$_; $chain=@(); $ex=$er.Exception
+                            while($ex){$chain+=@{type=$ex.GetType().FullName;message=$ex.Message;hresult=$ex.HResult};$ex=$ex.InnerException}
+                            return [pscustomobject]@{ err = "curl exit $ce URL: $reqUrl | serverIp: $serverIp | curl-err: $curlErr | IWR-fallback-err: $($er.Exception.Message)"; diagnostic=@{operation='redeem_https_post';curl_exit=$ce;curl_stderr=$curlErr;server_ip=$serverIp;timeout_seconds=6;exception_chain=$chain;error_id=$er.FullyQualifiedErrorId;category=[string]$er.CategoryInfo;worker_line=$er.InvocationInfo.ScriptLineNumber;worker_offset=$er.InvocationInfo.OffsetInLine;worker_command=[string]$er.InvocationInfo.MyCommand;worker_stack=$er.ScriptStackTrace;line_scope='worker relative; source_line is the original script caller'} }
                         }
                     }
                     if ($respRaw -match "^\s*<") { return [pscustomobject]@{ err = "Servidor devolvio HTML (error 500): $($respRaw.Substring(0,200))" } }
