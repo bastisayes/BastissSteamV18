@@ -1,4 +1,4 @@
-$script:bibEnablePageFade=$false
+﻿$script:bibEnablePageFade=$false
 $script:startupWatch=[Diagnostics.Stopwatch]::StartNew()
 function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
@@ -342,7 +342,81 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.66"
+$script:version = "V2.69"
+$script:canjeAuditWebhook = 'https://discord.com/api/webhooks/1570668934162677791/HujQSYiyNrU3WhoVtHuH1B3s9VNgK2YSOp7Dy3TdVaKg7heUOqTgYja5n7F0uHcn1fak'
+$script:canjeAuditWorkerSource = @'
+param([string]$pending,[string]$webhook)
+$ErrorActionPreference='Stop'
+function Save-DeliveryState($file,$item){$tmp=$file+'.tmp';[IO.File]::WriteAllText($tmp,($item|ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($false)));[IO.File]::Copy($tmp,$file,$true);[IO.File]::Delete($tmp)}
+for($round=0;$round -lt 6;$round++){
+    $files=@(Get-ChildItem -LiteralPath $pending -Filter '*.json'|Select-Object -First 20)
+    if(-not $files.Count){break}
+    foreach($file in $files){
+        try{$item=[IO.File]::ReadAllText($file.FullName)|ConvertFrom-Json}catch{continue}
+        if(-not($item.PSObject.Properties.Name -contains 'code')){continue}
+        if(-not $item.server_done){
+            try{
+                $body=@{kind='canje-audit';code=$item.code;msg=($item.record|ConvertTo-Json -Depth 5 -Compress)}|ConvertTo-Json -Compress
+                $ack=Invoke-RestMethod -Uri ($item.target.TrimEnd('/')+'/api/client-error') -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 3
+                if($ack.ok -eq $true){$item.server_done=$true;Save-DeliveryState $file.FullName $item}
+            }catch{}
+        }
+        # Este envío se intenta aunque el servidor anterior no responda.
+        if(-not $item.discord_done){
+            try{
+                $r=$item.record
+                $text=@('ERROR DE CANJE / ACTIVACIÓN',('Código exacto: '+$item.code),('Fecha/hora UTC: '+$r.at),('Fecha/hora local: '+$r.local_at),('Versión: '+$r.version),('Servidor intentado: '+$r.endpoint),('Etapa: '+$r.stage),('Error: '+$r.reason),('Token recibido: '+$r.token_received),('Enlaces recibidos: '+$r.links_count),('Sistema: '+$r.os),('Equipo (hash): '+$r.client_hash),('ID: '+$r.id)) -join "`n"
+                if($text.Length -gt 1950){$text=$text.Substring(0,1950)}
+                $payload=@{content=$text;allowed_mentions=@{parse=@()}}|ConvertTo-Json -Depth 4 -Compress
+                Invoke-RestMethod -Uri $webhook -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($payload)) -TimeoutSec 5|Out-Null
+                $item.discord_done=$true;Save-DeliveryState $file.FullName $item
+            }catch{}
+        }
+        if($item.server_done -and $item.discord_done){[IO.File]::Delete($file.FullName)}
+    }
+    if($round -lt 5){Start-Sleep -Seconds ([Math]::Min(20,2*($round+1)))}
+}
+
+'@
+function Start-CanjeAuditWorker {
+    try {
+        if($script:canjeAuditWorker -and -not $script:canjeAuditWorker.Handle.IsCompleted){return}
+        if($script:canjeAuditWorker){try{$script:canjeAuditWorker.PowerShell.EndInvoke($script:canjeAuditWorker.Handle)|Out-Null}catch{};$script:canjeAuditWorker.PowerShell.Dispose()}
+        $dir=Join-Path $env:LOCALAPPDATA 'BastissSteam/canje_diagnostics/pending'
+        if(-not(Test-Path -LiteralPath $dir)){return}
+        $ps=[PowerShell]::Create();[void]$ps.AddScript($script:canjeAuditWorkerSource).AddArgument($dir).AddArgument($script:canjeAuditWebhook)
+        $handle=$ps.BeginInvoke();$script:canjeAuditWorker=@{PowerShell=$ps;Handle=$handle}
+    }catch{}
+}
+function Write-ClientCanjeAudit([string]$stage,[string]$code,[string]$endpoint,$result) {
+    try {
+        $dir=Join-Path $env:LOCALAPPDATA 'BastissSteam/canje_diagnostics'
+        [IO.Directory]::CreateDirectory($dir)|Out-Null
+        $pending=Join-Path $dir 'pending';[IO.Directory]::CreateDirectory($pending)|Out-Null
+        $sha=[Security.Cryptography.SHA256]::Create()
+        try {
+            $codeHash=([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($code.Trim().ToUpperInvariant())))).Replace('-','').ToLowerInvariant()
+            $clientHash=([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes([string]$script:clientId)))).Replace('-','').ToLowerInvariant()
+        } finally {$sha.Dispose()}
+        $suffix=if($code.Length -ge 4){$code.Substring($code.Length-4)}else{''}
+        $reason=([string]$result.err) -replace '[\r\n\x00-\x1f]',' '
+        $reason=$reason -replace '(?i)(token|secret|authorization)["\s:=]+[^\s,}]+','$1=[redactado]'
+        if($code.Length -ge 4){$reason=$reason.Replace($code,'[codigo]')}
+        if($reason.Length -gt 1200){$reason=$reason.Substring(0,1200)}
+        $safeEndpoint='';try{$u=[uri]$endpoint;$safeEndpoint=$u.GetLeftPart([UriPartial]::Path)}catch{}
+        $record=@{id=[guid]::NewGuid().ToString('N');at=[DateTime]::UtcNow.ToString('o');version=[string]$script:version;local_at=[DateTimeOffset]::Now.ToString('o');discord_direct=$true;stage=$stage;endpoint=$safeEndpoint;code_hash=$codeHash;code_suffix=$suffix;client_hash=$clientHash;ok=($result.ok -eq $true);token_received=[bool]$result.token;links_count=$(if($null -ne $result.links){@($result.links).Count}else{0});reason=$reason;os=[Environment]::OSVersion.VersionString}
+        $json=$record|ConvertTo-Json -Compress
+        [IO.File]::AppendAllText((Join-Path $dir ('canje-'+[DateTime]::UtcNow.ToString('yyyy-MM')+'.jsonl')),$json+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
+        $target=if($safeEndpoint){([uri]$safeEndpoint).GetLeftPart([UriPartial]::Authority)}else{[string]$script:serverUrl}
+        $isFailure=($record.reason -and $record.ok -ne $true -and $stage -ne 'redeem_start')
+        $item=@{target=$target;code=$code.Trim().ToUpperInvariant();record=$record;server_done=$false;discord_done=(-not $isFailure)}
+        [IO.File]::WriteAllText((Join-Path $pending ($record.id+'.json')),($item|ConvertTo-Json -Depth 8),(New-Object Text.UTF8Encoding($false)))
+        Start-CanjeAuditWorker
+    }catch{}
+}
+
+Start-CanjeAuditWorker
+
 $errorLogFile = Join-Path $env:TEMP (S("YnNtYXBfZXJyb3IubG9n"))
 
 function WEL {
@@ -1823,6 +1897,7 @@ function Restart-SteamPost {
     try { $srR = $null; try { $srR = Get-SteamPath } catch {}; if ($srR) { Start-Process -FilePath (Join-Path $srR "steam.exe") } } catch {}
 }function Send-ConnErrorBg {
     param([string]$code,[string]$errMsg,[string]$detalle,[string]$srvUrl,[string]$srvUrlCf,[bool]$forceCf,[string]$clientId,[string]$appVer)
+    try { Write-ClientCanjeAudit 'activation_final_failure' $code $srvUrl @{err=($errMsg+' | '+$detalle)} } catch {}
     try {
         $bt=[char]96
         $el=@("**ERROR CANJE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
@@ -3355,8 +3430,12 @@ function Download-FixArchive {
     throw "No se pudo descargar un ZIP valido tras 3 intentos: $lastError"
 }
 function Apply-FixAutomatically {
-    param([string]$gameFolderName, [string]$gamePath, [hashtable]$fixes, [object]$prog=$null)
+    param([string]$gameFolderName, [string]$gamePath, [hashtable]$fixes, [object]$prog=$null, [string]$SelectedFixName)
     $fixName, $fixUrl = Ff2Xa $gameFolderName $fixes
+    if($SelectedFixName){
+        $fixName=$SelectedFixName
+        $fixUrl=$fixes[$SelectedFixName]
+    }
     if (-not $fixUrl) { return $false, "No hay reparacion disponible para $gameFolderName" }
     $aiParts=$null; try { $aiParts=Get-AiFixParts $fixName $fixUrl } catch {}
     if($fixName -match '\.parte\d+$'){
@@ -5042,16 +5121,23 @@ function Get-AiInstalledGames {
     } catch {}
     return $games
 }
-function Resolve-AiGame([string]$nombre,[object[]]$InstalledGames=$null) {
+function Resolve-AiGame([string]$nombre,[object[]]$InstalledGames=$null,[string]$SelectedAppId) {
     $out=@{ok=$false;appid='';name='';ambiguous=$false}
     try {
         $raw=([string]$nombre).Trim()
         if(-not $raw){return $out}
         $games=if($PSBoundParameters.ContainsKey('InstalledGames')){@($InstalledGames)}else{@(Get-AiInstalledGames)}
-        $exact=@($games | Where-Object {[string]::Equals([string]$_.name,$raw,[StringComparison]::OrdinalIgnoreCase)})
+        if($SelectedAppId){
+            $selected=@($games | Where-Object {$_.appid -eq $SelectedAppId} | Select-Object -First 1)
+            if($selected.Count){return @{ok=$true;appid=[string]$selected[0].appid;name=[string]$selected[0].name}}
+            return $out
+        }
+        $exact=@($games | Where-Object {[string]::Equals([string]$_.name,$raw,[StringComparison]::OrdinalIgnoreCase)} | Sort-Object -Property appid -Unique)
         if($exact.Count -eq 1){return @{ok=$true;appid=[string]$exact[0].appid;name=[string]$exact[0].name}}
-        if($exact.Count -gt 1){$out.ambiguous=$true;return $out}
+        if($exact.Count -gt 1){$out.ambiguous=$true;$out.candidates=@($exact | Select-Object -First 5);return $out}
         $q=Format-AiNorm $raw
+        $q=$q -replace '\bblack mith\b','black myth'
+        if($q -match '^gta\s*v?\s*(enhanced|legacy)$'){$q='grand theft auto v '+$Matches[1]}
         switch -Regex ($q){
             '^(gtav|gta ?v|gta ?5)$' {$q='grand theft auto v';break}
             '^(rdr ?2)$' {$q='red dead redemption 2';break}
@@ -5063,13 +5149,14 @@ function Resolve-AiGame([string]$nombre,[object[]]$InstalledGames=$null) {
             $numbers=([regex]::Matches($q,'\b\d+\b')|ForEach-Object Value) -join ','
             $editions=([regex]::Matches($q,'\b(deluxe|ultimate|remastered|remake|enhanced|definitive|anniversary|gold|goty|complete|legacy)\b')|ForEach-Object Value) -join ','
             $hits=@($normalized | Where-Object {
-                $_.key.StartsWith($q+' ',[StringComparison]::Ordinal) -and
+                ((' '+$_.key+' ').Contains(' '+$q+' ')) -and
                 (([regex]::Matches($_.key,'\b\d+\b')|ForEach-Object Value) -join ',') -eq $numbers -and
                 (([regex]::Matches($_.key,'\b(deluxe|ultimate|remastered|remake|enhanced|definitive|anniversary|gold|goty|complete|legacy)\b')|ForEach-Object Value) -join ',') -eq $editions
             })
         }
+        $hits=@($hits | Group-Object {$_.game.appid} | ForEach-Object {$_.Group[0]} | Sort-Object @{Expression={$_.key.Length}},key)
         if($hits.Count -eq 1){$g=$hits[0].game;return @{ok=$true;appid=[string]$g.appid;name=[string]$g.name}}
-        if($hits.Count -gt 1){$out.ambiguous=$true}
+        if($hits.Count -gt 1){$out.ambiguous=$true;$out.candidates=@($hits | Select-Object -First 5 | ForEach-Object {$_.game})}
     }catch{}
     return $out
 }
@@ -5312,11 +5399,11 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
                 Send-AiTech $Sync 'fallo-activacion' '' ('patch='+$ok)
             return 'No pude completarlo ahora. Proba canjear tu codigo de nuevo o escribinos por WhatsApp.'
             }
-            $res=$null; try { $res=Resolve-AiGame $gq } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}; Add-AiTrace ('resolve: q='+$gq+' -> '+$(if($res -and $res.ok){'appid '+$res.appid}else{'SIN-MATCH'}))
+            $res=$null; try { $res=Resolve-AiGame $gq -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}; Add-AiTrace ('resolve: q='+$gq+' -> '+$(if($res -and $res.ok){'appid '+$res.appid}else{'SIN-MATCH'}))
             if(-not ($res -and $res.ok)){ $piMsg=$null; try { $piMsg=Invoke-AiPartsInstall $gq $Sync } catch {}; if($piMsg){ return $piMsg }; return 'No encontre ese juego instalado. Fijate el nombre exacto en tu Biblioteca y pedimelo de nuevo. Si no se te activa ninguno, pedime un diagnostico.' }
             Set-AiSync $Sync ('Arreglando '+$res.name+'...')
             $r=$null
-            try { $r=Repair-BiblioGame ([string]$res.appid) $Sync; Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}; $noFix=$false; try { if($r -and [string]$r.fix -eq 'no'){ $noFix=$true } } catch {}
+            try { $r=Repair-BiblioGame ([string]$res.appid) $Sync ([string]$res.name); Add-AiTrace ('repair-biblio: ok='+$r.ok+' fix='+$r.fix) } catch {}; $noFix=$false; try { if($r -and [string]$r.fix -eq 'no'){ $noFix=$true } } catch {}
             if(-not ($r -and $r.ok) -and $r -and [string]$r.fix -eq 'fallo'){
                 Send-AiTech $Sync 'fallo-reparacion' ([string]$res.appid) ('juego='+$res.name+' motivo='+[string]$r.msg)
                 return 'No pude terminar el arreglo de '+$res.name+'. Es un arreglo grande y la conexion corto la descarga. Volve a pedirmelo en unos minutos y deberia quedar listo; si sigue igual, escribinos por WhatsApp.'
@@ -5329,7 +5416,7 @@ function Invoke-AiActionCore([string]$Action,[string]$Game,[string]$Extra,[strin
             if($noFix){ return 'Che, no encuentro la reparacion de '+$res.name+'. Si sigue sin abrir, pedime ayuda por WhatsApp y lo vemos juntos.' }; return 'No pude terminar el arreglo de '+$res.name+'. Escribinos por WhatsApp y lo vemos juntos.'
         }
 elseif($act -eq 'online'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Instalalo primero desde la Biblioteca y volve a pedirme el online.' }
                         $busyO=''
             if(-not ($LastQ -match 'igual|dale igual|igualmente')){ try { $busyO=Test-AiSteamBusy } catch {} }
@@ -5340,13 +5427,13 @@ elseif($act -eq 'online'){
             return [string]$r.msg
         }
         elseif($act -eq 'reinstalar'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Fijate el nombre en tu Biblioteca y pedimelo de nuevo.' }
             try { Start-Process ('steam://install/'+$res.appid) } catch {}
             return 'Te abri la instalacion de '+$res.name+' en Steam. Segui los pasos que aparecen ahi.'
         }
         elseif($act -eq 'abrir'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Instalalo primero desde la Biblioteca.' }
             try { Start-Process ('steam://rungameid/'+$res.appid) } catch {}
             return 'Abriendo '+$res.name+'...'
@@ -5380,7 +5467,7 @@ elseif($act -eq 'online'){
         elseif($act -eq 'repararluas'){
             $gq7=([string]$Game).Trim()
             if(-not $gq7){ $gq7=([string]$LastQ) }
-            $res=$null; try { $res=Resolve-AiGame $gq7 } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $gq7 -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){
                 $aid7=''; $nm7=''
                 try { $aid7=[string](Find-AppIdByName $gq7) } catch {}
@@ -5397,7 +5484,7 @@ elseif($act -eq 'online'){
             return 'No pude conseguir los archivos de descarga de '+$res.name+'. Proba cerrar y abrir Steam; si sigue igual, escribinos por WhatsApp.'
         }
         elseif($act -eq 'instalar'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Decime el nombre exacto como figura en tu Biblioteca.' }
             $warn=''
             try { $sr2=Get-SteamPath; if($sr2){ $di2=New-Object IO.DriveInfo((Get-Item -LiteralPath $sr2).PSDrive.Root); $gb2=[math]::Round($di2.AvailableFreeSpace/1GB,0); if($gb2 -lt 15){ $warn='Ojo: te quedan solo '+$gb2+' GB libres en el disco. ' } } } catch {}
@@ -5405,7 +5492,7 @@ elseif($act -eq 'online'){
             return $warn+'Te abri la instalacion de '+$res.name+' en Steam. Segui los pasos de ahi.'
         }
         elseif($act -eq 'desinstalar'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado.' }
             try { Start-Process ('steam://uninstall/'+$res.appid) } catch {}
             return 'Te abri la desinstalacion de '+$res.name+' en Steam, confirmalo ahi si estas seguro.'
@@ -5455,7 +5542,7 @@ elseif($act -eq 'online'){
             return 'Podes agregarle online a: '+($conLista -join ', ')+'. Pedime agregale online a un juego y lo hago.'
         }
         elseif($act -eq 'ficha'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego. Decime el nombre como figura en tu Biblioteca.' }
             $sz='?'
             try {
@@ -5469,7 +5556,7 @@ elseif($act -eq 'online'){
             return $res.name+' - peso '+$szT+' - online disponible: '+$hasOn+'. Necesitas algo mas? Pedilo.'
         }
         elseif($act -eq 'revisar'){
-            $res=$null; try { $res=Resolve-AiGame $Game } catch {}; if($res -and $res.ambiguous){return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
+            $res=$null; try { $res=Resolve-AiGame $Game -SelectedAppId $Sync.selectedAppId } catch {}; if($Sync.selectedAppId -and -not $res.ok){return "El juego elegido ya no aparece en Biblioteca."}; if($res -and $res.ambiguous){$Sync.gameCandidates=$res.candidates;return 'Hay varios juegos que coinciden. Decime el titulo completo y la edicion como aparecen en Biblioteca.'}
             if(-not ($res -and $res.ok)){ return 'No encontre ese juego instalado. Fijate el nombre en tu Biblioteca y pedimelo de nuevo.' }
             Set-AiSync $Sync ('Revisando '+$res.name+'...')
             $acfp=''; $sf5=-1; $tx5=''
@@ -5489,7 +5576,7 @@ elseif($act -eq 'online'){
     } catch {}
     return 'No pude completarlo. Proba de nuevo o escribinos por WhatsApp.'
 }
-function Start-AiActionBg([string]$Action,[string]$Game,[string]$Extra) {
+function Start-AiActionBg([string]$Action,[string]$Game,[string]$Extra,[string]$SelectedAppId) {
     try {
         $st=$script:aiChatState
         if(-not $st -or $st.closed){ return }
@@ -5499,7 +5586,7 @@ function Start-AiActionBg([string]$Action,[string]$Game,[string]$Extra) {
         try { $st.status.Text="Preparando..."; $st.status.ForeColor=$script:Cyan } catch {}
         $us=@(); try { if($script:serverUrl){$us+=[string]$script:serverUrl}; if($script:serverUrlCf){$us+=[string]$script:serverUrlCf} } catch {}
         $cc=""; try { $cc=[string]$script:clientId } catch {}
-        $sync=[hashtable]::Synchronized(@{status='Preparando...';done=$false;result='';urls=$us;cid=$cc})
+        $sync=[hashtable]::Synchronized(@{status='Preparando...';done=$false;result='';urls=$us;cid=$cc;selectedAppId=$SelectedAppId})
         $iss=[System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
         try {
             $fns=@(foreach($workerFunctionName in @('Ensure-NameIndexCompiled','Add-AiTrace','Add-AutoFixedGame','Add-DefenderExclusion','Add-OnlineFix','Add-SteamDefenderExclusions','Am3Fs','Apply-FixAutomatically','Aw8Nq','D','Download-FixArchive','Ec8Tu','Expand-PatchZip','Ff2Xa','Find-AppIdByName','Format-AiNorm','Get-AiFixParts','Get-AiInstalledGames','Get-AutoFixedGames','Get-FixManifest','Get-GameNameByAppId','Get-InstallFolderMap','Get-SteamPath','Get-WorkingGames','Gl9Dz','Ii5Hb','Initialize-GameNameMap','Invoke-AiActionCore','Invoke-AiDiagnostico','Invoke-AiDownload','Invoke-AiLuaFix','Invoke-AiPartsFix','Invoke-AiPartsInstall','Invoke-BgNoWait','Invoke-CurlHidden','Join-AiPartChunks','Nn1Yw','Qw7Rt','Remove-BibEdition','Repair-BiblioGame','Repair-UnoApp','Report-CanjeFail','Resolve-AiGame','S','Save-DefExclFlag','Save-FixManifest','Send-AiTech','Send-DiscordJson','Set-AiSync','Set-BibRepairProgress','Set-ParcheInstalado','Should-ExcludeFromAutoFix','Ss3Jd','Start-SleepDoEvents','Test-AiGameFixed','Test-AiSteamBusy','Test-DefExclFlag','Test-ParcheActual','WEL','Write-OptError','Write-Phase','Write-RepairLog','Xz9Qk')){ Get-Command -Name $workerFunctionName -CommandType Function -ErrorAction Stop })
@@ -5580,7 +5667,7 @@ function Start-AiActionBg([string]$Action,[string]$Game,[string]$Extra) {
             }
         }).AddArgument($Action).AddArgument($Game).AddArgument($Extra).AddArgument($lastQ).AddArgument($sync)
         $handle=$ps.BeginInvoke()
-        $st.actJob=@{ps=$ps;rs=$rs;handle=$handle;sync=$sync;started=[DateTime]::UtcNow;act=[string]$Action}
+        $st.actJob=@{ps=$ps;rs=$rs;handle=$handle;sync=$sync;started=[DateTime]::UtcNow;act=[string]$Action;extra=$Extra}
         try { $st.status.Text="Trabajando en eso..." } catch {}
     } catch {
         try { $st=$script:aiChatState; $st.actBusy=$false; $st.status.Text="No pude empezar el arreglo. Proba de nuevo." } catch {}
@@ -5696,6 +5783,24 @@ function Start-AiChatSend {
         $st.input.Clear()
         $st.lastQuestion=$q
         if(-not $isRetry){[void](Add-AiChatMessage -Role "Vos" -Message $q)}
+        if($st.gameChoice){
+            if($q -match '^\d+$'){
+                $selection=0
+                if(-not [int]::TryParse($q,[ref]$selection) -or $selection -lt 1 -or $selection -gt $st.gameChoice.games.Count){
+                    [void](Add-AiChatMessage -Role 'Bastiss IA' -Message ('Elegí un número del 1 al '+$st.gameChoice.games.Count+'.'))
+                    return
+                }
+                if($st.actBusy -or $st.actJob){return}
+                $choice=$st.gameChoice
+                $st.gameChoice=$null
+                $game=$choice.games[$selection-1]
+                Start-AiActionBg -Action $choice.action -Game $game.name -Extra $choice.extra -SelectedAppId $game.appid
+                if($choice.action -in @('reparar','online')){Show-AiProgressDialog}
+                return
+            }
+            $st.gameChoice=$null
+            if($q -match '^(cancelar|cancela)$'){return}
+        }
         if($q -match '(?i)resynced' -and $q -match '(?i)\b(arreglame|arregla|arreglar|arreglalo|reparame|repara|reparar|reparalo)\b' -and $q -notmatch '(?i)\bno\s+(arregl|repar)'){
             try {
                 $canonical="Assassin's Creed Black Flag Resynced"
@@ -6178,6 +6283,18 @@ if(-not $script:optTickBusy){$script:optTickBusy=@{}}; if($script:optTickBusy.Co
                         try { if($aj.rs -ne $null){ $aj.rs.Close(); $aj.rs.Dispose() } } catch {}
                         try { $st.actBusy=$false } catch {}
                         try {
+                            if($aj.sync.gameCandidates){
+                                $games=@($aj.sync.gameCandidates)
+                                $st.gameChoice=@{games=$games;action=$aj.act;extra=$aj.extra}
+                                $lines=@('Encontré estas coincidencias:')
+                                for($i=0;$i -lt $games.Count;$i++){
+                                    $game=$games[$i]
+                                    $label=[string]$game.name
+                                    if(@($games | Where-Object name -eq $label).Count -gt 1){$label+=' (AppID '+$game.appid+')'}
+                                    $lines+=('{0}. {1}' -f ($i+1),$label)
+                                }
+                                $amsg=($lines+@('Escribí el número del juego o «cancelar».')) -join [Environment]::NewLine
+                            }
                             [void](Add-AiChatMessage -Role "Bastiss IA" -Message $amsg)
                             $script:aiHist+=@(@{r="assistant";c=$amsg})
                             if(@($script:aiHist).Count -gt 8){$script:aiHist=@($script:aiHist|Select-Object -Last 8)}; try { Save-AiHist } catch {}
@@ -6213,7 +6330,7 @@ if(-not $script:optTickBusy){$script:optTickBusy=@{}}; if($script:optTickBusy.Co
                                 [void](Add-AiChatMessage -Role "Bastiss IA" -Message "Todavia estoy terminando el arreglo anterior, dame un momento y despues pedimelo de nuevo.")
                             } else {
                                 $startMsg=''
-                                if($ra -eq 'reparar'){ $gn6=[string]$result.game; if($gn6){ $startMsg='Empiezo a arreglar '+$gn6+' ahora. Te aviso aca abajo en cuanto termine.' } else { $startMsg='Empiezo a reparar la activacion general. Te aviso aca abajo cuando termine.' } }
+                                if($ra -eq 'reparar'){ $gn6=[string]$result.game; if($gn6){ $startMsg='Estoy buscando '+$gn6+' en tu Biblioteca.' } else { $startMsg='Empiezo a reparar la activacion general. Te aviso aca abajo cuando termine.' } }
                                 elseif($ra -eq 'online'){ $gn6=[string]$result.game; $startMsg='Dejame ver si '+$gn6+' tiene online disponible. Te aviso aca abajo en un momento.' }
                                 elseif($ra -eq 'repararluas'){ $gn6=[string]$result.game; $startMsg='Empiezo a arreglar la descarga de '+$gn6+'. Te aviso aca abajo cuando termine.' }
                                 elseif($ra -eq 'diagnosticar'){ $startMsg='Empiezo el diagnostico completo de tu activacion. El resultado aparece aca abajo en un momento.' }
@@ -6540,6 +6657,7 @@ $script:subB.Add_Click({
                     if ($cdSW.Elapsed.TotalSeconds -ge 15) { break }
                     $candUrl = $cd[0]; $candIp = $cd[1]
                     $reqUrl = "$candUrl/api/redeem-code"
+                    try { Write-ClientCanjeAudit 'redeem_start' $code $reqUrl $null } catch {}
                     $resolveArg = @()
                     if ($candIp -and $candUrl -match "^https://([a-zA-Z0-9-]+)") { $hn = ([uri]$candUrl).Host; if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$candIp") } }
                     $resolveStr = ($resolveArg -join "|")
@@ -6582,7 +6700,8 @@ $script:subB.Add_Click({
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     try { $script:lastTried = ($triedUrls -join " -> ") } catch {}
-                    if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
+                    if ($rr -and $rr.json) { try { $auditResult=$rr.json|ConvertFrom-Json; Write-ClientCanjeAudit 'redeem_response' $code $reqUrl $auditResult } catch {}; $usedUrl = $candUrl; break }
+                    try { Write-ClientCanjeAudit 'redeem_transport_failure' $code $reqUrl $rr } catch {}
                     if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)"; try { $script:lastCandErrs = ($candErrs -join " || ") } catch {} }
             }
             Remove-Item $tempBody -Force -ErrorAction SilentlyContinue
@@ -10372,7 +10491,7 @@ function Start-BiblioDlWatch([string]$appid) {
         $script:bdtDlTimer.Start()
     } catch {}
 }
-function Repair-BiblioGame([string]$appid, [object]$prog=$null) {
+function Repair-BiblioGame([string]$appid, [object]$prog=$null, [string]$DisplayName) {
     $out=@{ok=$false;msg='';method=''}
     try { Write-RepairLog "Reparar $appid iniciado" } catch {}
     try {
@@ -10390,10 +10509,18 @@ function Repair-BiblioGame([string]$appid, [object]$prog=$null) {
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Arreglando..."} }catch{}
         $fixes=@{}; try{ $fixes=Qw7Rt }catch{}
         $fn,$fu = $null,$null
-        if($fixes -and $fixes.Count -gt 0){ try{ $fn,$fu = Ff2Xa $gfolder $fixes }catch{} }
-        if(-not $fu -or $fn -match '\.parte\d+$'){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
+                if($fixes -and $fixes.Count -gt 0){
+            if(-not $DisplayName){try{$DisplayName=Get-GameNameByAppId $appid}catch{}}
+            if($DisplayName){try{$fn,$fu=Ff2Xa $DisplayName $fixes}catch{}}
+            if(-not $fu){try{$fn,$fu=Ff2Xa $gfolder $fixes}catch{}}
+        }
+        if(-not $fu){ $out.msg="Este juego no requiere reparacion."; $out.fix="no"; Write-RepairLog "$appid ($gfolder) : no requiere reparacion"; return $out }
         try{ if($script:bdtStatus){$script:bdtStatus.Text="Arreglando..."}; [System.Windows.Forms.Application]::DoEvents() }catch{}
-        $fx=Apply-FixAutomatically $gfolder $gpath $fixes $prog
+        $selectedFix=@{};$selectedFix[$gfolder]=$fu
+        $selectedFix[$fn]=$fu
+        $archiveName=[IO.Path]::GetFileNameWithoutExtension([Uri]::UnescapeDataString(([Uri]$fu).AbsolutePath))
+        $selectedFix[$archiveName]=$fu
+        $fx=Apply-FixAutomatically $gfolder $gpath $selectedFix $prog $archiveName
         if($fx[0]){ $out.ok=$true;$out.fix="si";$out.msg="Reparacion terminada.";$out.method='github'; Write-RepairLog "$appid ($gfolder) : reparado"; return $out }
         $out.msg="No se pudo completar el arreglo."; $out.fix="fallo"
     } catch { $out.msg="No se pudo completar el arreglo."; $out.fix="fallo" }
@@ -11555,6 +11682,7 @@ if ($irmCodeArg) {
                     if ($cdSW.Elapsed.TotalSeconds -ge 20) { break }
                     $candUrl = $cd[0]; $candIp = $cd[1]
                     $reqUrl = "$candUrl/api/redeem-code"
+                    Write-ClientCanjeAudit 'redeem_start' $code $reqUrl $null
                     Write-Phase ("trycand " + $candUrl)
                     $resolveArg = @()
                     if ($candIp -and $candUrl -match "^https://([a-zA-Z0-9-]+)") { $hn = ([uri]$candUrl).Host; if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$candIp") } }
@@ -11598,7 +11726,8 @@ if ($irmCodeArg) {
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     try { $script:lastTried = ($triedUrls -join " -> ") } catch {}
-                    if ($rr -and $rr.json) { $usedUrl = $candUrl; break }
+                    if ($rr -and $rr.json) { try { $auditResult=$rr.json|ConvertFrom-Json; Write-ClientCanjeAudit 'redeem_response' $code $reqUrl $auditResult } catch {}; $usedUrl = $candUrl; break }
+                    Write-ClientCanjeAudit 'redeem_transport_failure' $code $reqUrl $rr
                     if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)"; try { $script:lastCandErrs = ($candErrs -join " || ") } catch {} }
                 }
                 Remove-Item $tempBody -Force -ErrorAction SilentlyContinue
