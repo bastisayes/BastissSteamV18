@@ -5179,8 +5179,9 @@ function Add-OnlineFix([string]$appid, [object]$prog=$null) {
         if(-not $script:olIdx){
             try { $script:olIdx=Invoke-RestMethod -Uri 'https://github.com/bastisayes/Fixes-steam/releases/download/onlinefix/online-index.json' -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop } catch {}
         }
+        if(-not $script:olIdx){ $out.msg="No pude consultar el catálogo online. Probá de nuevo."; return $out }
         $fn=$null; try { $fn=$script:olIdx.$appid } catch {}
-        if(-not $fn){ $out.msg='Este juego no tiene online disponible por ahora. Si lo queres jugar con amigos escribinos por WhatsApp.'; return $out }
+        if(-not $fn){ $out.msg='Este juego no figura en el catálogo de paquetes online.'; return $out }
         $gdir=''
         try {
             $libs=@(); try { $libs=@(Ss3Jd) } catch {}
@@ -5196,7 +5197,7 @@ function Add-OnlineFix([string]$appid, [object]$prog=$null) {
             }
         } catch {}
         if(-not $gdir){ $out.msg='El juego no esta instalado todavia. Instalalo desde la Biblioteca y volve a pedirme.'; return $out }
-        $okOne=$false
+        $okOne=$false; $tmp=$null; $stage="download"
         try {
             $fv=[string]$fn; $tag='onlinefix'
             if($fv -match '^([^/]+)/(.+)$'){ $tag=$Matches[1]; $fv=$Matches[2] }
@@ -5206,24 +5207,40 @@ function Add-OnlineFix([string]$appid, [object]$prog=$null) {
             $zip=Join-Path $tmp 'online.zip'
             $wc=New-Object System.Net.WebClient; $wc.Proxy=$null
             $aiDlOk=$false; try { if($prog){ Set-BibRepairProgress "Arreglando..."; if(Invoke-AiDownload $url ($zip+'.ai') $prog 5 80){ $aiDlOk=$true } } } catch {}; if($aiDlOk -and (Test-Path -LiteralPath ($zip+'.ai'))){ Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Move-Item -LiteralPath ($zip+'.ai') -Destination $zip -Force } else { $wc.DownloadFile($url,$zip) }
+            $stage="extract"
             if((Get-Item $zip).Length -gt 1000){
                 Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
                 $ex=Join-Path $tmp 'ex'; New-Item -ItemType Directory -Path $ex -Force | Out-Null
                 [System.IO.Compression.ZipFile]::ExtractToDirectory($zip,$ex)
                 $items=@(Get-ChildItem -LiteralPath $ex -Force); $aiON=0; try { $aiON=@($items).Count } catch {}; $aiOI=0; try { if($prog){ $prog.pct=90 } } catch {}
                 if($items.Count -eq 1 -and $items[0].PSIsContainer){ $src=$items[0].FullName } else { $src=$ex }
+                $stage="copy"
                 foreach($e2 in (Get-ChildItem -LiteralPath $src -Force)){ $aiOI++; try { if($prog -and $aiON -gt 0){ $prog.pct=90+[int](10*$aiOI/($aiON+1)) } } catch {}
                     $dst=Join-Path $gdir $e2.Name
                     if($e2.PSIsContainer){
                         if(-not (Test-Path -LiteralPath $dst)){ New-Item -ItemType Directory -Path $dst -Force | Out-Null }
-                        Copy-Item -LiteralPath (Join-Path $e2.FullName '*') -Destination $dst -Recurse -Force -ErrorAction Stop
+                        foreach($child in (Get-ChildItem -LiteralPath $e2.FullName -Force -ErrorAction Stop)){
+                            Copy-Item -LiteralPath $child.FullName -Destination $dst -Recurse -Force -ErrorAction Stop
+                        }
                     } else { Copy-Item -LiteralPath $e2.FullName -Destination $dst -Force -ErrorAction Stop }
                 }
+                if(-not @(Get-ChildItem -LiteralPath $src -Recurse -File -Force -ErrorAction Stop).Count){throw "El archivo online no contiene archivos."}
                 $okOne=$true
             }
-            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
-        } catch {}
-        if($okOne){ $out.ok=$true; $out.msg='Online agregado.' } else { $out.msg='No pude descargar el online ahora. Proba de nuevo en un rato o escribinos por WhatsApp.' }
+        } catch {
+        } finally {
+            if($tmp -and (Test-Path -LiteralPath $tmp -PathType Container)){
+                $tempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+                $resolvedTemp=(Resolve-Path -LiteralPath $tmp).ProviderPath
+                if([IO.Path]::GetDirectoryName($resolvedTemp) -ieq $tempRoot -and [IO.Path]::GetFileName($resolvedTemp) -match '^olson-[0-9a-f]{32}$'){
+                    Remove-Item -LiteralPath $resolvedTemp -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        if($okOne){ $out.ok=$true; $out.msg='Online agregado.' }
+        elseif($stage -eq 'extract'){ $out.msg='El paquete online está incompleto o no se puede extraer.' }
+        elseif($stage -eq 'copy'){ $out.msg='No pude copiar todos los archivos del online a la carpeta del juego.' }
+        else { $out.msg='No pude descargar el paquete online. Probá de nuevo.' }
         return $out
     } catch { return $out }
 }
@@ -5868,26 +5885,27 @@ function Start-AiChatSend {
         [void]$ps.AddScript({
             param($urlList,$bodyJson)
             $answer=$null
-            $deadline=[DateTime]::UtcNow.AddSeconds(32)
-            foreach($base in $urlList){
+            $deadline=[DateTime]::UtcNow.AddSeconds(40)
+            foreach($base in @($urlList + 'https://natbox.tailbe072e.ts.net' | ForEach-Object { $_.TrimEnd('/') } | Select-Object -Unique)){
                 $remaining=[int][Math]::Floor(($deadline-[DateTime]::UtcNow).TotalSeconds)
                 if($remaining -le 0){break}
                 $attemptTimer=[System.Diagnostics.Stopwatch]::StartNew()
                 try {
                     $requestBytes=[System.Text.Encoding]::UTF8.GetBytes([string]$bodyJson)
-                    $requestTimeout=[Math]::Min(16,$remaining)
+                    $requestTimeout=[Math]::Min(12,$remaining)
                     $answer=Invoke-RestMethod -Uri ($base.TrimEnd("/")+"/api/ai-chat") -Method Post -Body $requestBytes -ContentType "application/json; charset=utf-8" -TimeoutSec $requestTimeout -ErrorAction Stop
                     if($answer -and $answer.ok -and $answer.reply){return @{ok=$true;reply=[string]$answer.reply;action=[string]$answer.action;game=[string]$answer.game;watext=[string]$answer.watext}}
-                    if($answer -and -not [bool]$answer.ok -and $answer.err){ return @{ok=$false;reply=('El servidor no pudo responder: '+[string]$answer.err);kind='server';action='';game='';watext=''} }
-                } catch { $lastNetworkError=$_.Exception.Message; continue }
+                    if($answer -and -not [bool]$answer.ok -and $answer.err){ $serverFailed=$true; continue }
+                } catch { if($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -ge 400){$serverFailed=$true}; continue }
             }
-            return @{ok=$false;reply="No pude conectarme al servidor. Revisa tu internet, la hora de Windows y que el antivirus no bloquee la app; si sigue, escribinos por WhatsApp."}
+            if($serverFailed){return @{ok=$false;reply="La IA no pudo responder en este momento. Tocá Reintentar.";kind="server"}}
+            return @{ok=$false;reply="No pude conectarme al chat. Tocá Reintentar.";kind="network"}
         }).AddArgument([string[]]$urls).AddArgument([string]$payload)
         $handle=$ps.BeginInvoke()
         $st.job=@{ ps=$ps; handle=$handle; question=$q }
         $st.input.Focus()
     } catch {
-        try { $st=$script:aiChatState; $st.busy=$false; $st.send.Enabled=$true; $st.send.Tag.Text="Enviar"; try{$st.send.Invalidate()}catch{}; $st.status.Text="No pude enviar la consulta. Probá de nuevo o escribinos por WhatsApp."; $st.status.ForeColor=[System.Drawing.Color]::FromArgb(255,170,120) } catch {}
+        try { $st=$script:aiChatState; $st.busy=$false; $st.send.Enabled=$true; $st.send.Tag.Text="Enviar"; try{$st.send.Invalidate()}catch{}; $st.status.Text="No pude enviar la consulta. Probá de nuevo."; $st.status.ForeColor=[System.Drawing.Color]::FromArgb(255,170,120) } catch {}
     }
 }
 
@@ -6354,9 +6372,9 @@ if(-not $script:optTickBusy){$script:optTickBusy=@{}}; if($script:optTickBusy.Co
                     } catch {}
                 } else {
             $st.retryQuestion=[string]$job.question
-            $msg="No pude conectarme ahora. Probá de nuevo o escribinos por WhatsApp."; if($result -and $result.reply){$msg=[string]$result.reply}
+            $msg="No pude conectarme al chat. Tocá Reintentar."; if($result -and $result.reply){$msg=[string]$result.reply}
                     [void](Add-AiChatMessage -Role "Bastiss IA" -Message $msg)
-                    $st.status.Text="No pude conectar · WhatsApp está disponible"; if($result -and $result.kind -eq 'server'){$st.status.Text="El servidor no pudo responder"}; $st.status.ForeColor=[System.Drawing.Color]::FromArgb(255,170,120)
+                    $st.status.Text="No pude conectar · Reintentá la consulta"; if($result -and $result.kind -eq 'server'){$st.status.Text="El servidor no pudo responder"}; $st.status.ForeColor=[System.Drawing.Color]::FromArgb(255,170,120)
                 }
                 $st.busy=$false; $st.send.Enabled=$true; $st.send.Tag.Text=$(if($st.retryQuestion){"Reintentar"}else{"Enviar"}); try{$st.send.Invalidate()}catch{}; $st.input.Focus()
             } catch {}
