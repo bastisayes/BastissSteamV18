@@ -1,4 +1,4 @@
-﻿$script:bibEnablePageFade=$false
+$script:bibEnablePageFade=$false
 $script:startupWatch=[Diagnostics.Stopwatch]::StartNew()
 function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
@@ -6736,7 +6736,21 @@ $script:subB.Add_Click({
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     try { $script:lastTried = ($triedUrls -join " -> ") } catch {}
-                    if ($rr -and $rr.json) { try { $auditResult=$rr.json|ConvertFrom-Json; Write-ClientCanjeAudit 'redeem_response' $code $reqUrl $auditResult } catch {}; $usedUrl = $candUrl; break }
+                    if ($rr -and $rr.json) {
+                        $auditResult = $null
+                        try { $auditResult = $rr.json | ConvertFrom-Json; Write-ClientCanjeAudit 'redeem_response' $code $reqUrl $auditResult } catch {}
+                        if ($auditResult -and $auditResult.ok) { $usedUrl = $candUrl; break }
+                        $responseErr = ''; $responseType = ''
+                        try { $responseErr = ([string]$auditResult.err).Trim() } catch {}
+                        try { $responseType = ([string]$auditResult.error_type).Trim().ToLowerInvariant() } catch {}
+                        $codeMissing = ($responseType -eq 'code_not_found' -or $responseErr -match '^(?i)c[oó]digo inv[aá]lido$')
+                        if ($codeMissing -and $triedUrls.Count -lt $cands.Count) {
+                            try { Write-ClientCanjeAudit 'redeem_secondary_fallback' $code $reqUrl @{reason='code_not_found';next_endpoint_available=$true} } catch {}
+                            continue
+                        }
+                        $usedUrl = $candUrl
+                        break
+                    }
                     try { Write-ClientCanjeAudit 'redeem_transport_failure' $code $reqUrl $rr } catch {}
                     if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)"; try { $script:lastCandErrs = ($candErrs -join " || ") } catch {} }
             }
@@ -11768,7 +11782,21 @@ if ($irmCodeArg) {
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
                     try { $script:lastTried = ($triedUrls -join " -> ") } catch {}
-                    if ($rr -and $rr.json) { try { $auditResult=$rr.json|ConvertFrom-Json; Write-ClientCanjeAudit 'redeem_response' $code $reqUrl $auditResult } catch {}; $usedUrl = $candUrl; break }
+                    if ($rr -and $rr.json) {
+                        $auditResult = $null
+                        try { $auditResult = $rr.json | ConvertFrom-Json; Write-ClientCanjeAudit 'redeem_response' $code $reqUrl $auditResult } catch {}
+                        if ($auditResult -and $auditResult.ok) { $usedUrl = $candUrl; break }
+                        $responseErr = ''; $responseType = ''
+                        try { $responseErr = ([string]$auditResult.err).Trim() } catch {}
+                        try { $responseType = ([string]$auditResult.error_type).Trim().ToLowerInvariant() } catch {}
+                        $codeMissing = ($responseType -eq 'code_not_found' -or $responseErr -match '^(?i)c[oó]digo inv[aá]lido$')
+                        if ($codeMissing -and $triedUrls.Count -lt $cands.Count) {
+                            try { Write-ClientCanjeAudit 'redeem_secondary_fallback' $code $reqUrl @{reason='code_not_found';next_endpoint_available=$true} } catch {}
+                            continue
+                        }
+                        $usedUrl = $candUrl
+                        break
+                    }
                     Write-ClientCanjeAudit 'redeem_transport_failure' $code $reqUrl $rr
                     if ($rr -and $rr.err) { $candErrs += "[$candUrl] $($rr.err)"; try { $script:lastCandErrs = ($candErrs -join " || ") } catch {} }
                 }
