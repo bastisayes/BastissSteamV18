@@ -342,7 +342,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.71"
+$script:version = "V2.72"
 $script:canjeAuditWebhook = 'https://discord.com/api/webhooks/1570668934162677791/HujQSYiyNrU3WhoVtHuH1B3s9VNgK2YSOp7Dy3TdVaKg7heUOqTgYja5n7F0uHcn1fak'
 $script:canjeAuditWorkerSource = @'
 param([string]$pending,[string]$webhook)
@@ -6676,7 +6676,14 @@ $script:subB.Add_Click({
                     if ($secPair) { $cands += ,$secPair }
                     else { throw "Probando de otra manera: no hay URL secundaria configurada." }
                 }
-                else { if ($primPair[0]) { $cands += ,$primPair }; if ($secPair) { $cands += ,$secPair } }
+                else {
+                    if ($primPair[0]) { $cands += ,$primPair }
+                    if ($secPair) { $cands += ,$secPair }
+                    # Respaldo directo en la VPS: evita quedar atado al túnel del servidor local
+                    # cuando el hostname primario devuelve 502 o agota el tiempo.
+                    $vpsPair = @('https://natbox.tailbe072e.ts.net', '')
+                    if ($vpsPair[0] -and $vpsPair[0] -ne $primPair[0] -and (-not $secPair -or $vpsPair[0] -ne $secPair[0])) { $cands += ,$vpsPair }
+                }
                 $seenCandidates = @{}; $uniqueCandidates = @()
                 foreach ($candidate in $cands) { $key=([string]$candidate[0]).TrimEnd('/').ToLowerInvariant(); if ($key -and -not $seenCandidates.ContainsKey($key)) { $seenCandidates[$key]=$true; $uniqueCandidates+=,$candidate } }
                 $cands = $uniqueCandidates
@@ -6947,7 +6954,7 @@ $script:rp.Invalidate(); RfC
         if ($errors -and $errors.Count -gt 0) { $detalle += "`n`nJuegos fallados:`n" + ($errors -join "`n") }
         try { Send-ConnErrorBg $code $errMsg $detalle ([string]$script:serverUrl) ([string]$script:serverUrlCf) ([bool]$forceCf) ([string]$script:clientId) ([string]$script:version) } catch {}
         try { Send-PatchStatus $code "ERROR $errMsg / $($errors -join '; ')" } catch {}
-        $lblR.Text="No se pudo canjear. Se envio el reporte."
+        $lblR.Text="Error: $errMsg (se envió el reporte)"
         [System.Windows.Forms.Application]::DoEvents()
     }
 })
