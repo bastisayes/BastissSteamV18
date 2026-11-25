@@ -1,4 +1,4 @@
-$script:bibEnablePageFade=$false
+﻿$script:bibEnablePageFade=$false
 $script:startupWatch=[Diagnostics.Stopwatch]::StartNew()
 function S([string]$b) {
     try { return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) } catch { return $b }
@@ -342,7 +342,7 @@ function New-BufferedPanel {
 
 
 
-$script:version = "V2.72"
+$script:version = "V2.73"
 $script:canjeAuditWebhook = 'https://discord.com/api/webhooks/1570668934162677791/HujQSYiyNrU3WhoVtHuH1B3s9VNgK2YSOp7Dy3TdVaKg7heUOqTgYja5n7F0uHcn1fak'
 $script:canjeAuditWorkerSource = @'
 param([string]$pending,[string]$webhook)
@@ -4682,6 +4682,13 @@ function Report-CanjeFail([string]$code,[string]$cid,[string]$motivo,[string]$u1
         Send-DiscordJson $WEBHOOK_URL $pl 5 | Out-Null
     } catch {}
 }
+function Test-RetryableRedeemResponse([string]$ErrorType,[string]$ErrorText) {
+    $type = ([string]$ErrorType).Trim().ToLowerInvariant()
+    if ($type -in @('server_unavailable','temporarily_unavailable','service_unavailable','server_busy','rate_limited','timeout','upstream_error','upstream_unavailable','http_5xx')) { return $true }
+    $message = [string]$ErrorText
+    if ($message -match '(?i)(servidor central temporalmente no disponible|servidor(?: central)?\s+(?:est[aá]\s+)?ocupado|no se pudo iniciar la consulta|temporarily unavailable|service unavailable|bad gateway|gateway timeout|upstream(?: server)?\s+(?:error|unavailable)|too many requests|rate.?limit|(?:http|status|error)\s*[:=]?\s*(?:429|502|503|504)|timed?\s*out|timeout|tiempo de espera|conexi[oó]n.*agot[oó] el tiempo)') { return $true }
+    return $false
+}
 function Start-CdActivate {
     $code = [string]$script:cdCode
     if ($script:cdRunning) {
@@ -6707,7 +6714,7 @@ $script:subB.Add_Click({
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','12','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','30','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -6717,7 +6724,7 @@ $script:subB.Add_Click({
                     $ce = -1
                     try {
                         [void]$prR.Start()
-                        if (-not $prR.WaitForExit(14000)) { try { $prR.Kill() } catch {} }
+                        if (-not $prR.WaitForExit(32000)) { try { $prR.Kill() } catch {} }
                         $ce = $prR.ExitCode
                         try { $curlOut = @($prR.StandardError.ReadToEnd() -split "`r?`n") } catch {}
                     } catch {}
@@ -6726,7 +6733,7 @@ $script:subB.Add_Click({
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             $er=$_; $chain=@(); $ex=$er.Exception
@@ -6738,7 +6745,7 @@ $script:subB.Add_Click({
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 26
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 45
                     if (-not $rr) { $rr=[pscustomobject]@{err="Se agoto el tiempo de espera del canje en $candUrl; la aceptacion aun no esta confirmada.";diagnostic=@{operation="redeem_worker_timeout";endpoint=$reqUrl;timeout_seconds=26;elapsed_seconds=[math]::Round($cdSW.Elapsed.TotalSeconds,2)}} }
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
@@ -6751,8 +6758,10 @@ $script:subB.Add_Click({
                         try { $responseErr = ([string]$auditResult.err).Trim() } catch {}
                         try { $responseType = ([string]$auditResult.error_type).Trim().ToLowerInvariant() } catch {}
                         $codeMissing = ($responseType -eq 'code_not_found' -or $responseErr -match '^(?i)c[oó]digo inv[aá]lido$')
-                        if ($codeMissing -and $triedUrls.Count -lt $cands.Count) {
-                            try { Write-ClientCanjeAudit 'redeem_secondary_fallback' $code $reqUrl @{reason='code_not_found';next_endpoint_available=$true} } catch {}
+                        $retryableResponse = Test-RetryableRedeemResponse $responseType $responseErr
+                        $responseFallbackReason = if ($codeMissing) { 'code_not_found' } else { 'transient_server_error' }
+                        if (($codeMissing -or $retryableResponse) -and $triedUrls.Count -lt $cands.Count) {
+                            try { Write-ClientCanjeAudit 'redeem_secondary_fallback' $code $reqUrl @{reason=$responseFallbackReason;next_endpoint_available=$true;error_type=$responseType} } catch {}
                             continue
                         }
                         $usedUrl = $candUrl
@@ -11583,14 +11592,32 @@ function Ensure-CleanupTask {
 }
 function Ensure-ExpiryWatcher {
     try {
-        $selfExe = [Environment]::GetCommandLineArgs()[0]
-        if (-not $selfExe -or -not (Test-Path $selfExe)) { return }
-        $existing = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'BastissSteamActivator*' -and $_.CommandLine -match '-expiry' })
+        $scriptPath = $PSCommandPath
+        $entryPath = [Environment]::GetCommandLineArgs()[0]
+        $isScript = $scriptPath -and (Test-Path -LiteralPath $scriptPath) -and ([IO.Path]::GetExtension($scriptPath) -ieq '.ps1')
+        if ($isScript) {
+            $hostPath = (Get-Process -Id $PID -ErrorAction Stop).Path
+            $watchArgs = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -expiry' -f $scriptPath
+            $runValue = '"{0}" {1}' -f $hostPath,$watchArgs
+            $watchIdentity = $scriptPath
+            $watchExe = $hostPath
+        } else {
+            $selfExe = $entryPath
+            if (-not $selfExe -or -not (Test-Path -LiteralPath $selfExe)) { return }
+            $watchArgs = '-expiry'
+            $runValue = '"{0}" -expiry' -f $selfExe
+            $watchIdentity = $selfExe
+            $watchExe = $selfExe
+        }
+        $existing = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.CommandLine -match '(?i)(?:^|\s)-expiry(?:\s|$)' -and
+            ($_.CommandLine.IndexOf($watchIdentity,[StringComparison]::OrdinalIgnoreCase) -ge 0)
+        })
         if ($existing.Count -eq 0) {
-            try { Start-Process -FilePath $selfExe -ArgumentList '-expiry' -WindowStyle Hidden -ErrorAction Stop } catch {}
+            try { Start-Process -FilePath $watchExe -ArgumentList $watchArgs -WindowStyle Hidden -ErrorAction Stop | Out-Null } catch {}
         }
         try {
-            Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'BastissSteamExpiry' -Value ('"{0}" -expiry' -f $selfExe) -Type String -Force -ErrorAction Stop
+            Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'BastissSteamExpiry' -Value $runValue -Type String -Force -ErrorAction Stop
         } catch {}
     } catch {}
 }
@@ -11753,7 +11780,7 @@ if ($irmCodeArg) {
                     $ra = @(); if ($resolveStr) { $ra = @($resolveStr -split '\|') }
                     $psiR = New-Object System.Diagnostics.ProcessStartInfo
                     $psiR.FileName = "curl.exe"
-                    $psiR.Arguments = ((@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','12','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
+                    $psiR.Arguments = ((@('-sS','-k','--ssl-no-revoke','--tlsv1.2','--noproxy','*') + @($ra) + @('-X','POST','-H','Content-Type: application/json','--data-binary',"@$tempBody",$reqUrl,'--connect-timeout','4','--max-time','30','-o',$tempResp) | ForEach-Object { if ($_ -match '\s') { '"' + ($_ -replace '"','\"') + '"' } else { $_ } }) -join ' ')
                     $psiR.CreateNoWindow = $true
                     $psiR.UseShellExecute = $false
                     $psiR.RedirectStandardError = $true
@@ -11763,7 +11790,7 @@ if ($irmCodeArg) {
                     $ce = -1
                     try {
                         [void]$prR.Start()
-                        if (-not $prR.WaitForExit(14000)) { try { $prR.Kill() } catch {} }
+                        if (-not $prR.WaitForExit(32000)) { try { $prR.Kill() } catch {} }
                         $ce = $prR.ExitCode
                         try { $curlOut = @($prR.StandardError.ReadToEnd() -split "`r?`n") } catch {}
                     } catch {}
@@ -11772,7 +11799,7 @@ if ($irmCodeArg) {
                     if (-not $respRaw) {
                         $curlErr = (($curlOut | Where-Object { $_ -is [string] }) -join " | ").Trim()
                         try {
-                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
+                            $iwr = Invoke-WebRequest -Uri $reqUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
                             $respRaw = $iwr.Content
                         } catch {
                             $er=$_; $chain=@(); $ex=$er.Exception
@@ -11784,7 +11811,7 @@ if ($irmCodeArg) {
                     try { $resp = $respRaw | ConvertFrom-Json } catch { return [pscustomobject]@{ err = "Respuesta invalida del servidor: $respRaw" } }
                     if ($null -eq $resp -or $resp -is [string] -or $resp -is [int] -or $resp -is [array]) { return [pscustomobject]@{ err = "Respuesta invalida del servidor (json primitivo): $respRaw" } }
                     return [pscustomobject]@{ json = ($resp | ConvertTo-Json -Depth 6 -Compress) }
-                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 26
+                } @($reqUrl, $body, $tempBody, $tempResp, $resolveStr, [string]$candIp) -TimeoutSec 45
                     if (-not $rr) { $rr=[pscustomobject]@{err="Se agoto el tiempo de espera del canje en $candUrl; la aceptacion aun no esta confirmada.";diagnostic=@{operation="redeem_worker_timeout";endpoint=$reqUrl;timeout_seconds=26;elapsed_seconds=[math]::Round($cdSW.Elapsed.TotalSeconds,2)}} }
                     Remove-Item $tempResp -Force -ErrorAction SilentlyContinue
                     $triedUrls += $candUrl
@@ -11797,8 +11824,10 @@ if ($irmCodeArg) {
                         try { $responseErr = ([string]$auditResult.err).Trim() } catch {}
                         try { $responseType = ([string]$auditResult.error_type).Trim().ToLowerInvariant() } catch {}
                         $codeMissing = ($responseType -eq 'code_not_found' -or $responseErr -match '^(?i)c[oó]digo inv[aá]lido$')
-                        if ($codeMissing -and $triedUrls.Count -lt $cands.Count) {
-                            try { Write-ClientCanjeAudit 'redeem_secondary_fallback' $code $reqUrl @{reason='code_not_found';next_endpoint_available=$true} } catch {}
+                        $retryableResponse = Test-RetryableRedeemResponse $responseType $responseErr
+                        $responseFallbackReason = if ($codeMissing) { 'code_not_found' } else { 'transient_server_error' }
+                        if (($codeMissing -or $retryableResponse) -and $triedUrls.Count -lt $cands.Count) {
+                            try { Write-ClientCanjeAudit 'redeem_secondary_fallback' $code $reqUrl @{reason=$responseFallbackReason;next_endpoint_available=$true;error_type=$responseType} } catch {}
                             continue
                         }
                         $usedUrl = $candUrl
